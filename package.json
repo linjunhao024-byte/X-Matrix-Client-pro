@@ -1,0 +1,22 @@
+{
+  "name": "x-matrix-client-pro",
+  "version": "1.0.0",
+  "description": "X-Matrix Client Pro - 代理工具管理客户端",
+  "main": "main.py",
+  "scripts": {
+    "dev": "npx tailwindcss -i ./input.css -o ./static/css/output.css --watch",
+    "build": "npx tailwindcss -i ./input.css -o ./static/css/output.css --minify",
+    "build:prod": "NODE_ENV=production npx tailwindcss -i ./input.css -o ./static/css/output.css --minify",
+    "watch": "npx tailwindcss -i ./input.css -o ./static/css/output.css --watch"
+  },
+  "keywords": [
+    "proxy",
+    "client",
+    "tailwindcss"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "tailwindcss": "^3.4.0"
+  }
+}

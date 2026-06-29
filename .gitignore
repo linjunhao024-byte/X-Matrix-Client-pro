@@ -1,0 +1,15 @@
+/build
+/data
+/dist
+/webview_cache
+/geoip.dat
+/geosite.dat
+/input.css
+/release
+/tailwind.config.js
+/tailwindcss-windows-x64.exe
+/test_api.py
+/v2rayN-master
+/X-Matrix.spec
+/__pycache__
+*.exe
