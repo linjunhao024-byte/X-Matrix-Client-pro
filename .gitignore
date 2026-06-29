@@ -1,15 +1,69 @@
+# 构建产物
 /build
-/data
 /dist
-/webview_cache
+/release
+*.spec
+
+# 用户数据 (不提交)
+/data/config.json
+/data/tunnels.json
+/data/stats.json
+/data/xmatrix.db
+/data/speedtest/
+
+# 运行时缓存
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.webview_cache/
+webview_cache/
+
+# 日志文件
+*.log
+js_console.log
+
+# IDE 配置
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# 临时文件
+*.tmp
+*.bak
+*.cache
+
+# Tailwind CSS 输出 (由构建工具生成)
+/static/css/output.css
+/static/css/output.css.map
+
+# Node.js
+node_modules/
+package-lock.json
+
+# 第三方工具
+/v2rayN-master/
+
+# 代理核心二进制文件 (太大，不提交)
+*.exe
+!tailwindcss-windows-x64.exe
+
+# Geo 数据文件 (太大，不提交)
 /geoip.dat
 /geosite.dat
-/input.css
-/release
-/tailwind.config.js
-/tailwindcss-windows-x64.exe
-/test_api.py
-/v2rayN-master
-/X-Matrix.spec
-/__pycache__
-*.exe
+
+# Claude AI 配置
+.claude/
+
+# 测试文件
+test_*.py
+*_test.py
+
+# 报告文件
+*.md
+!README.md
