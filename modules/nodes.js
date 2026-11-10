@@ -551,9 +551,12 @@ window.XMatrixNodes = {
         async shareNode(index) {
           try {
             const res = await window.pywebview.api.export_uri(index);
-            if (res && res.success) {
+            if (res && res.success && res.uri) {
               this.qrModal.uri = res.uri;
               this.qrModal.show = true;
+            } else if (res && res.success) {
+              this.qrModal.uri = '';
+              this.showToast('该节点没有可分享的链接（不支持扫码导入）', 'error');
             } else {
               this.showToast(('导出失败：') + ((res && res.error) || '未知错误'), 'error');
             }

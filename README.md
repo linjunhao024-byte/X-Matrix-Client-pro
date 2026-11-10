@@ -200,7 +200,7 @@ git clone https://github.com/linjunhao024-byte/X-Matrix-Client-pro.git
 cd X-Matrix-Client-pro
 
 # 2. 安装 Python 依赖
-pip install pywebview pystray Pillow
+pip install -r requirements.txt
 
 # 3. 直接运行
 python main.py
@@ -392,7 +392,7 @@ git clone https://github.com/linjunhao024-byte/X-Matrix-Client-pro.git
 cd X-Matrix-Client-pro
 
 # 2. 安装 Python 依赖
-pip install pywebview pystray Pillow
+pip install -r requirements.txt
 
 # 3. 安装 Node.js 依赖（可选，用于 Tailwind CSS 开发）
 npm install

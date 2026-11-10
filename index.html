@@ -2916,7 +2916,8 @@
           <p class="text-xs text-gray-400 mt-1" x-text="'使用代理客户端扫描下方二维码'"></p>
         </div>
         <div class="flex justify-center px-6 pb-2">
-          <img :src="'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(qrModal.uri)" alt="QR Code" class="w-[220px] h-[220px] rounded-lg border border-gray-100" loading="eager">
+          <img x-show="qrModal.uri" :src="qrModal.uri ? 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(qrModal.uri) : ''" alt="QR Code" class="w-[220px] h-[220px] rounded-lg border border-gray-100" loading="eager">
+          <div x-show="!qrModal.uri" class="w-[220px] h-[220px] rounded-lg border border-gray-100 flex items-center justify-center text-xs text-gray-400" x-text="'该节点不支持扫码导入'"></div>
         </div>
         <div class="px-6 pb-2">
           <p class="text-[11px] text-gray-400 font-mono truncate text-center" x-text="qrModal.uri"></p>

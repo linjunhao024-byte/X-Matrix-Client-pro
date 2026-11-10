@@ -1,0 +1,6 @@
+# X-Matrix Client 运行依赖（Windows 桌面端）
+# 安装：pip install -r requirements.txt
+pywebview>=4.0
+pystray>=0.19
+Pillow>=9.0
+PyYAML>=6.0

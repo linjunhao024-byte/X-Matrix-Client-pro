@@ -67,3 +67,8 @@ test_*.py
 # 报告文件
 *.md
 !README.md
+
+# Python 虚拟环境（本地开发）
+.venv/
+.venv*/
+venv/
