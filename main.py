@@ -30,6 +30,24 @@ HTML_FILE: str = os.path.join(_RES, "index.html")
 from xmatrix.api import XMatrixAPI
 
 
+def _setup_logging() -> None:
+    """把日志同时写到控制台与 data/logs/app.log（滚动，单文件 2MB / 保留 3 份）。"""
+    from logging.handlers import RotatingFileHandler
+    log_dir = os.path.join(DATA_DIR, "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    fmt = logging.Formatter("[%(asctime)s] [%(levelname)s] %(message)s", "%Y-%m-%d %H:%M:%S")
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    if root.handlers:
+        return
+    fh = RotatingFileHandler(os.path.join(log_dir, "app.log"), maxBytes=2 * 1024 * 1024, backupCount=3, encoding="utf-8")
+    fh.setFormatter(fmt)
+    root.addHandler(fh)
+    sh = logging.StreamHandler()
+    sh.setFormatter(fmt)
+    root.addHandler(sh)
+
+
 def _create_tray_icon() -> Image.Image:
     """绘制系统托盘图标：64×64 靛蓝底色 + 白色 X。"""
     img = Image.new("RGBA", (64, 64), (99, 102, 241, 255))
@@ -56,6 +74,7 @@ def _validate_index_html() -> None:
 
 def main() -> None:
     """主入口函数。"""
+    _setup_logging()
     _validate_index_html()
     api = XMatrixAPI()
     atexit.register(api.stop_core)
@@ -77,8 +96,8 @@ def main() -> None:
             api._save_stats()
             try:
                 api.toggle_system_proxy(False)
-            except Exception:
-                pass
+            except Exception as e:
+                logging.warning("[退出] 还原系统代理失败: %s", e)
             api.stop_core()
             os._exit(0)
         if hasattr(api, "_window") and api._window:
@@ -97,13 +116,16 @@ def main() -> None:
         window.destroy()
 
     def _safe_js(js_expr):
-        """安全执行 JS：Alpine 未就绪时静默失败，不抛异常。"""
+        """安全执行 JS：兼容 Alpine 3（Alpine.$data）与 Alpine 2（el.__x），未就绪时静默失败。"""
         try:
             api._window.evaluate_js(
-                "(function(){try{var el=document.querySelector('[x-data]');if(el&&el.__x){" + js_expr + "}}catch(e){}})()"
+                "(function(){try{var el=document.querySelector('[x-data]');"
+                "var d=null;"
+                "if(el){ if(window.Alpine&&window.Alpine.$data){d=window.Alpine.$data(el);} else if(el.__x){d=el.__x.$data;} }"
+                "if(d){ window.__xm=d;" + js_expr + " }}catch(e){}})()"
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logging.debug("[托盘] 执行 JS 失败: %s", e)
 
     def menu_generator():
         yield item("显示主窗口", show_window, default=True)
@@ -113,7 +135,7 @@ def main() -> None:
             show_tunnels = api.tunnels if api.tray_limit <= 0 else api.tunnels[:api.tray_limit]
             for i, t in enumerate(show_tunnels):
                 def make_action(idx):
-                    return lambda icon, it: _safe_js("el.__x.$data.activateNode(" + str(idx) + ")")
+                    return lambda icon, it: _safe_js("window.__xm.activateNode(" + str(idx) + ")")
                 def make_checked(idx):
                     return lambda it: api.active_index == idx
 
@@ -126,7 +148,7 @@ def main() -> None:
             yield pystray.Menu.SEPARATOR
 
         def make_mode_action(mode):
-            return lambda icon, it: _safe_js(f"el.__x.$data.setProxyModeFromTray('{mode}')")
+            return lambda icon, it: _safe_js(f"window.__xm.setProxyModeFromTray('{mode}')")
 
         yield item("路由模式", pystray.Menu(
             item("规则 (Rule)", make_mode_action("rule"), checked=lambda it: api.proxy_mode == "rule", radio=True),
@@ -135,18 +157,18 @@ def main() -> None:
             item("直连 (Direct)", make_mode_action("direct"), checked=lambda it: api.proxy_mode == "direct", radio=True),
         ))
         yield item("代理接管模式", pystray.Menu(
-            item("智能 PAC", lambda icon, it: _safe_js("el.__x.$data.setSysProxyModeFromTray('pac')"), checked=lambda it: getattr(api, 'sys_proxy_pac', True), radio=True),
-            item("强制全局", lambda icon, it: _safe_js("el.__x.$data.setSysProxyModeFromTray('global')"), checked=lambda it: not getattr(api, 'sys_proxy_pac', True), radio=True),
+            item("智能 PAC", lambda icon, it: _safe_js("window.__xm.setSysProxyModeFromTray('pac')"), checked=lambda it: getattr(api, 'sys_proxy_pac', True), radio=True),
+            item("强制全局", lambda icon, it: _safe_js("window.__xm.setSysProxyModeFromTray('global')"), checked=lambda it: not getattr(api, 'sys_proxy_pac', True), radio=True),
         ))
         yield item("开启系统代理",
-                   lambda icon, it: _safe_js("el.__x.$data.toggleSysProxyFromTray()"),
+                   lambda icon, it: _safe_js("window.__xm.toggleSysProxyFromTray()"),
                    checked=lambda it: getattr(api, 'sys_proxy_enabled', False))
         yield pystray.Menu.SEPARATOR
         yield item("从剪贴板导入节点",
-                   lambda icon, it: _safe_js("el.__x.$data.importFromClipboard()"))
+                   lambda icon, it: _safe_js("window.__xm.importFromClipboard()"))
         yield item("复制代理命令",
                    lambda icon, it: _safe_js(
-                       f"navigator.clipboard.writeText('set http_proxy=http://127.0.0.1:{api.config_local_port} && set https_proxy=http://127.0.0.1:{api.config_local_port}').then(function(){{ el.__x.$data.showToast('代理命令已复制', 'success') }})"
+                       f"navigator.clipboard.writeText('set http_proxy=http://127.0.0.1:{api.config_local_port} && set https_proxy=http://127.0.0.1:{api.config_local_port}').then(function(){{ window.__xm.showToast('代理命令已复制', 'success') }})"
                    ))
         yield pystray.Menu.SEPARATOR
         yield item("完全退出", quit_app)
@@ -168,9 +190,22 @@ def main() -> None:
 
     # 方案 C：固定缓存目录，后续启动走磁盘缓存加速
     user_data_dir = os.path.join(_BASE, "webview_cache")
-    debug_mode = True  # 调试模式：强制开启开发者工具
+    # 调试模式：默认关闭；可用环境变量 XMATRIX_DEBUG=1 或 data/config.json 的 debug_mode=true 打开
+    debug_mode = os.environ.get("XMATRIX_DEBUG", "").strip().lower() in ("1", "true", "yes", "on")
+    if not debug_mode:
+        try:
+            with open(os.path.join(DATA_DIR, "config.json"), "r", encoding="utf-8") as _f:
+                debug_mode = bool(json.load(_f).get("debug_mode", False))
+        except Exception:
+            debug_mode = False
+    if debug_mode:
+        logging.info("[启动] 调试模式已开启（开发者工具将自动打开）")
     webview.start(debug=debug_mode, private_mode=False, storage_path=user_data_dir)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        logging.exception("[致命] 启动失败")
+        raise

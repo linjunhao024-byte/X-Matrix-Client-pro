@@ -18,7 +18,7 @@ window.XMatrixNodes = {
     ech_enable: false, ech_config: '', finalmask_enable: false,
     send_through: '', bind_interface: '', socks_mark: '', default_ua: '', chain_id: '',
     ws_path: '/', ws_host: '',
-    grpc_service_name: '', kcp_header: 'none', kcp_seed: '', h2_host: '', h2_path: '', httpupgrade_path: '', httpupgrade_host: '', xhttp_mode: 'auto', xhttp_path: '', xhttp_host: '', quic_security: 'none', quic_key: '', quic_header: 'none', bgp_manual: '', bgp_alias: ''
+    grpc_service_name: '', kcp_header: 'none', kcp_seed: '', h2_host: '', h2_path: '', httpupgrade_path: '', httpupgrade_host: '', xhttp_mode: 'auto', xhttp_path: '', xhttp_host: '', quic_security: 'none', quic_key: '', quic_header: 'none', bgp_manual: '', bgp_alias: '', message: ''
   },
   editingIndex: -1,
   isBatchTesting: false,
@@ -48,7 +48,7 @@ window.XMatrixNodes = {
               ech_enable: false, ech_config: '', finalmask_enable: false,
               send_through: '', bind_interface: '', socks_mark: '', default_ua: '', chain_id: '',
               ws_path: '/', ws_host: '',
-              grpc_service_name: '', kcp_header: 'none', kcp_seed: '', h2_host: '', h2_path: '', httpupgrade_path: '', httpupgrade_host: '', xhttp_mode: 'auto', xhttp_path: '', xhttp_host: '', quic_security: 'none', quic_key: '', quic_header: 'none', bgp_manual: '', bgp_alias: ''
+              grpc_service_name: '', kcp_header: 'none', kcp_seed: '', h2_host: '', h2_path: '', httpupgrade_path: '', httpupgrade_host: '', xhttp_mode: 'auto', xhttp_path: '', xhttp_host: '', quic_security: 'none', quic_key: '', quic_header: 'none', bgp_manual: '', bgp_alias: '', message: ''
             };
           }
           this.isNodeModalOpen = true;
@@ -124,6 +124,15 @@ window.XMatrixNodes = {
             }
             if (res && res.success) {
               this.syncTunnels(res.tunnels);
+              // 备注（节点扩展数据）写入 SQLite node_ext 表
+              const profileId = this.editingNode.id || (res.tunnels && res.tunnels.length ? res.tunnels[res.tunnels.length - 1].id : '');
+              if (profileId && typeof this.editingNode.message === 'string') {
+                try {
+                  await window.pywebview.api.update_profile(profileId, { message: this.editingNode.message });
+                  this.nodeProfiles[profileId] = Object.assign({}, this.nodeProfiles[profileId] || {}, { message: this.editingNode.message });
+                  this.tunnels.forEach(t => { if (t.id === profileId) t.message = this.editingNode.message; });
+                } catch (e) { console.warn('[节点] 保存备注失败:', e); }
+              }
               // ProxyChain: 保存后设置代理链
               const chainId = this.editingNode.chain_id || '';
               const nodeId = this.editingNode.id || (res.tunnels && res.tunnels.length ? res.tunnels[res.tunnels.length - 1].id : '');
@@ -201,10 +210,129 @@ window.XMatrixNodes = {
           }
         },
         async udpPingNode(index) {
-          this.showToast('UDP Ping: 功能开发中', 'info');
+          const node = this.tunnels[index];
+          if (!node) return;
+          const nodeName = node.out_tag || (`节点 ${index}`);
+          this.nodeTools.busyIndex = index; this.nodeTools.busyKind = 'udp';
+          this.addLog('info', `[UDP Ping] ${nodeName}: 正在探测 ${node.server_addr}:${node.server_port} 的 UDP 响应...`);
+          try {
+            const res = await window.pywebview.api.test_node_udp_ping(index);
+            const delay = (res && res.success) ? res.delay : -1;
+            if (delay > 0) {
+              this.addLog('info', `[UDP Ping] ${nodeName}: ${delay}ms`);
+              this.showToast(`UDP Ping ${nodeName}: ${delay}ms`, 'success');
+            } else {
+              const why = (res && res.error) || '目标端口无 UDP 响应';
+              this.addLog('warning', `[UDP Ping] ${nodeName}: ${why}`);
+              this.showToast(`UDP Ping ${nodeName}: ${why}`, 'warning');
+            }
+          } catch (e) {
+            this.addLog('error', `[UDP Ping] ${nodeName}: 异常 ${e.message}`);
+            this.showToast('UDP Ping 异常', 'error');
+          } finally {
+            this.nodeTools.busyIndex = -1; this.nodeTools.busyKind = '';
+          }
         },
         async mixedTestNode(index) {
-          this.showToast('混合测速: 功能开发中', 'info');
+          const node = this.tunnels[index];
+          if (!node) return;
+          const nodeName = node.out_tag || (`节点 ${index}`);
+          this.nodeTools.busyIndex = index; this.nodeTools.busyKind = 'mixed';
+          this.tunnels[index].delay = '...';
+          this.addLog('info', `[混合测速] ${nodeName}: TCP 延迟 + 真实延迟...`);
+          try {
+            const res = await window.pywebview.api.test_node_mixed(
+              index, this.settingsState.delayTestUrl, this.settingsState.testTimeout, this.configState.localPort
+            );
+            if (res && res.success) {
+              const tcp = (typeof res.tcp_delay === 'number') ? res.tcp_delay : -1;
+              const real = (typeof res.real_delay === 'number') ? res.real_delay : -1;
+              this.tunnels[index].delay = real > 0 ? real : (tcp > 0 ? tcp : -1);
+              this.addLog('info', `[混合测速] ${nodeName}: TCP ${tcp > 0 ? tcp + 'ms' : 'Timeout'} / 真实 ${real > 0 ? real + 'ms' : '不可用'}`);
+              this.showToast(
+                `混合测速 ${nodeName}: TCP ${tcp > 0 ? tcp + 'ms' : '超时'} / 真实 ${real > 0 ? real + 'ms' : '不可用（需活动节点且核心运行）'}`,
+                real > 0 ? 'success' : 'warning'
+              );
+            } else {
+              this.tunnels[index].delay = -1;
+              this.showToast(('混合测速失败: ') + ((res && res.error) || '未知错误'), 'error');
+            }
+          } catch (e) {
+            this.tunnels[index].delay = -1;
+            this.showToast('混合测速异常: ' + e.message, 'error');
+          } finally {
+            this.nodeTools.busyIndex = -1; this.nodeTools.busyKind = '';
+          }
+        },
+        async bandwidthTestNode(index) {
+          const node = this.tunnels[index];
+          if (!node) return;
+          const nodeName = node.out_tag || (`节点 ${index}`);
+          this.nodeTools.busyIndex = index; this.nodeTools.busyKind = 'bandwidth';
+          this.addLog('info', `[带宽测速] ${nodeName}: 经本地端口 ${this.configState.localPort} 下载 10MB...`);
+          this.showToast('带宽测速开始，可能需要数十秒', 'info');
+          try {
+            const res = await window.pywebview.api.test_node_bandwidth(
+              index, '', 10000000, 60, this.configState.localPort
+            );
+            if (res && res.success) {
+              this.tunnels[index].speed = res.bandwidth_mbps;
+              this.addLog('info', `[带宽测速] ${nodeName}: ${res.bandwidth_mbps} Mbps (${res.total_bytes} 字节 / ${res.elapsed_seconds}s)`);
+              this.showToast(`带宽 ${nodeName}: ${res.bandwidth_mbps} Mbps`, 'success');
+            } else {
+              const why = (res && res.error) || '未知错误';
+              this.addLog('warning', `[带宽测速] ${nodeName}: ${why}`);
+              this.showToast('带宽测速失败: ' + why, 'error');
+            }
+          } catch (e) {
+            this.showToast('带宽测速异常: ' + e.message, 'error');
+          } finally {
+            this.nodeTools.busyIndex = -1; this.nodeTools.busyKind = '';
+          }
+        },
+        async batchRealDelay() {
+          if (!this.tunnels.length) return this.showToast('没有可用节点', 'warning');
+          this.nodeTools.batchRealRunning = true;
+          this.addLog('info', '[批量真延迟] 开始（仅活动节点能测出结果）...');
+          try {
+            const indices = this.tunnels.map((_, i) => i);
+            const res = await window.pywebview.api.batch_test_real_delay(indices, this.settingsState.testConcurrency || 5);
+            if (res && res.success) {
+              (res.results || []).forEach(r => {
+                if (this.tunnels[r.index]) this.tunnels[r.index].delay = (r.success && r.delay > 0) ? r.delay : -1;
+              });
+              (res.skipped || []).forEach(i => { if (this.tunnels[i]) this.tunnels[i].delay = -1; });
+              const skipped = (res.skipped || []).length;
+              this.addLog('info', `[批量真延迟] 完成: 成功 ${res.passed || 0}, 失败 ${res.failed || 0}, 跳过 ${skipped}`);
+              this.showToast(
+                `真延迟: ${res.passed || 0} 成功 / ${res.failed || 0} 失败 / ${skipped} 跳过（非活动节点无本地端口，无法测真实延迟）`,
+                (res.passed ? 'success' : 'warning')
+              );
+            } else {
+              this.showToast('批量真延迟失败: ' + ((res && res.error) || '未知错误'), 'error');
+            }
+          } catch (e) {
+            this.showToast('批量真延迟异常: ' + e.message, 'error');
+          } finally {
+            this.nodeTools.batchRealRunning = false;
+          }
+        },
+        batchRealRunningText() {
+          return this.nodeTools.batchRealRunning ? '真延迟测试中…' : '批量真延迟（仅活动节点）';
+        },
+        async loadProfiles() {
+          try {
+            const res = await window.pywebview.api.get_profiles();
+            if (res && res.success && res.profiles) {
+              this.nodeProfiles = res.profiles || {};
+              this.tunnels.forEach(t => {
+                const p = this.nodeProfiles[t.id];
+                t.message = (p && p.message) ? p.message : '';
+              });
+            }
+          } catch (e) {
+            console.warn('[节点] 拉取节点扩展数据失败:', e);
+          }
         },
         async batchTcpPing() {
           if (!this.tunnels.length) return this.showToast('没有可用节点', 'warning');
@@ -477,23 +605,18 @@ window.XMatrixNodes = {
           }
         },
         async cloneNode(index) {
-          const copiedNode = JSON.parse(JSON.stringify(this.tunnels[index]));
-          const oldName = copiedNode.out_tag || copiedNode.tag || 'Node';
-          delete copiedNode.in_tag;
-          delete copiedNode.out_tag;
-          delete copiedNode.delay;
-          delete copiedNode.active;
-          copiedNode.out_tag = oldName + ' - Copy';
-          delete copiedNode.tag; // 防止污染后端
           try {
-            const res = await window.pywebview.api.add_tunnel(copiedNode);
+            const res = await window.pywebview.api.clone_tunnel(index);
             if (res && res.success) {
               this.syncTunnels(res.tunnels);
+              const cloned = this.tunnels[res.cloned_index];
+              this.addLog('info', `[节点] 已克隆: ${cloned ? cloned.out_tag : ''}`);
+              this.showToast('已克隆节点（后端同时生成了独立 in_tag）', 'success');
             } else {
               this.showToast(('克隆失败：') + ((res && res.error) || ('未知错误')), 'error');
             }
           } catch (e) {
-            this.showToast(('通信异常：') + e.message, 'error');
+            this.showToast(('通信异常: ') + e.message, 'error');
           }
         },
         async importConfig() {
@@ -553,7 +676,21 @@ window.XMatrixNodes = {
             const res = await window.pywebview.api.export_uri(index);
             if (res && res.success && res.uri) {
               this.qrModal.uri = res.uri;
+              this.qrModal.dataUri = '';
               this.qrModal.show = true;
+              // 优先在本地渲染二维码（离线可用），失败再退回外网接口
+              try {
+                const qr = await window.pywebview.api.get_qr_data_uri(res.uri);
+                if (qr && qr.success) {
+                  this.qrModal.dataUri = qr.data_uri;
+                } else {
+                  this.addLog('warning', `[分享] 本地二维码不可用: ${(qr && qr.error) || '未知原因'}`);
+                  this.qrModal.dataUri = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(res.uri);
+                }
+              } catch (e) {
+                this.addLog('warning', `[分享] 本地二维码异常: ${e.message}`);
+                this.qrModal.dataUri = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(res.uri);
+              }
             } else if (res && res.success) {
               this.qrModal.uri = '';
               this.showToast('该节点没有可分享的链接（不支持扫码导入）', 'error');

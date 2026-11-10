@@ -147,8 +147,8 @@ def test_node_udp_ping(api: XMatrixAPI, index: int) -> dict:
                 elapsed_ms = int((time.perf_counter() - start_time) * 1000)
                 return {"success": True, "delay": elapsed_ms}
             except socket.timeout:
-                elapsed_ms = int((time.perf_counter() - start_time) * 1000)
-                return {"success": True, "delay": elapsed_ms, "note": "no_response"}
+                return {"success": True, "delay": -1, "note": "no_response",
+                        "error": "目标端口无 UDP 响应（多数代理协议是 TCP 端口，UDP Ping 仅对 UDP 类节点有意义）"}
     except Exception as e:
         return {"success": True, "delay": -1, "error": str(e)}
 
@@ -180,10 +180,16 @@ def test_node_mixed(api: XMatrixAPI, index: int, test_url: str = "", timeout: in
     }
 
 
-def test_node_bandwidth(api: XMatrixAPI, index: int, test_url: str = "", test_bytes: int = 10000000, timeout: int = 30) -> dict:
-    """带宽测试。"""
+def test_node_bandwidth(api: XMatrixAPI, index: int, test_url: str = "", test_bytes: int = 10000000, timeout: int = 30, local_port: int = 2077) -> dict:
+    """带宽测试。经当前活动节点的本地代理端口下载指定字节数。"""
     if not (0 <= index < len(api.tunnels)):
         return {"success": False, "error": "索引越界"}
+    with api._process_lock:
+        running = api.xray_process is not None and api.xray_process.poll() is None
+    if not running:
+        return {"success": False, "error": "核心未运行，无法测带宽（请先启动代理）"}
+    if index != getattr(api, "active_index", -1):
+        return {"success": False, "error": "仅能测量当前活动节点：带宽测试需经本地代理端口，非活动节点没有入站端口"}
     if not test_url:
         try:
             cfg_path = os.path.join(DATA_DIR, "config.json")
@@ -196,13 +202,9 @@ def test_node_bandwidth(api: XMatrixAPI, index: int, test_url: str = "", test_by
             test_url = f"https://speed.cloudflare.com/__down?bytes={test_bytes}"
 
     t = api.tunnels[index]
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(('127.0.0.1', 0))
-        test_port = s.getsockname()[1]
-
     proxy_handler = urllib.request.ProxyHandler({
-        "http": f"http://127.0.0.1:{test_port}",
-        "https": f"http://127.0.0.1:{test_port}",
+        "http": f"http://127.0.0.1:{local_port}",
+        "https": f"http://127.0.0.1:{local_port}",
     })
     opener = urllib.request.build_opener(proxy_handler)
     try:
@@ -231,8 +233,20 @@ def test_node_bandwidth(api: XMatrixAPI, index: int, test_url: str = "", test_by
 
 
 def batch_test_real_delay(api: XMatrixAPI, node_indices: list[int], concurrency: int = 5) -> dict:
-    """批量延迟测试。"""
+    """批量真延迟测试。
+
+    注意：真实延迟必须经本地代理端口发出，因此只有"当前活动节点"能测出结果；
+    其余节点标记为 skipped（而不是伪造一个超时值）。
+    """
     import concurrent.futures
+
+    with api._process_lock:
+        running = api.xray_process is not None and api.xray_process.poll() is None
+    if not running:
+        return {"success": False, "error": "核心未运行，无法测真实延迟（请先启动代理）"}
+
+    active = getattr(api, "active_index", -1)
+    skipped = [i for i in node_indices if i != active]
 
     def _test_one(idx: int) -> dict:
         try:
@@ -242,6 +256,8 @@ def batch_test_real_delay(api: XMatrixAPI, node_indices: list[int], concurrency:
         except Exception:
             pass
         return {"index": idx, "delay": -1, "success": False}
+
+    node_indices = [i for i in node_indices if i == active]
 
     all_results: list[dict] = []
     remaining = list(node_indices)
@@ -266,7 +282,9 @@ def batch_test_real_delay(api: XMatrixAPI, node_indices: list[int], concurrency:
     for idx in remaining:
         all_results.append({"index": idx, "delay": -1, "success": False})
 
-    return {"success": True, "results": all_results, "total": len(node_indices),
+    return {"success": True, "results": all_results,
+            "total": len(node_indices) + len(skipped), "checked": len(node_indices),
+            "skipped": skipped,
             "passed": len([r for r in all_results if r["success"]]),
             "failed": len([r for r in all_results if not r["success"]])}
 

@@ -396,6 +396,10 @@
                       <svg class="w-3.5 h-3.5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                       <span x-text="'批量 TCP Ping'"></span>
                     </button>
+                    <button @click="batchRealDelay(); toolOpen = false" class="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                      <svg class="w-3.5 h-3.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      <span x-text="batchRealRunningText()"></span>
+                    </button>
                     <button @click="openSubModal(); toolOpen = false" class="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2">
                       <svg class="w-3.5 h-3.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                       <span x-text="'订阅管理'"></span>
@@ -471,6 +475,7 @@
                     <div class="flex flex-col min-w-0">
                       <span class="text-sm font-semibold text-gray-800 truncate" x-text="node.out_tag || '未命名节点'"></span>
                       <span x-show="displayOptions.showAddress && node.protocol !== 'policy_group'" class="text-[11px] text-gray-400 font-mono truncate" x-text="node.server_addr + ':' + node.server_port"></span>
+                      <span x-show="node.message" class="text-[11px] text-blue-500/90 truncate" :title="node.message || ''" x-text="'📝 ' + node.message"></span>
                       <span x-show="node.protocol === 'policy_group'" class="text-[11px] text-amber-500 font-mono truncate" x-text="(node.group_strategy || 'leastPing') + ' · ' + (node.child_count || 0) + (' 个节点')"></span>
                     </div>
                   </div>
@@ -495,6 +500,7 @@
                           <button @click.stop="testNode(index); nodeMenu = false" class="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50" x-text="'真连接测速'"></button>
                           <button @click.stop="udpPingNode(index); nodeMenu = false" class="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50" x-text="'UDP Ping'"></button>
                           <button @click.stop="mixedTestNode(index); nodeMenu = false" class="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50" x-text="'混合测速'"></button>
+                          <button @click.stop="bandwidthTestNode(index); nodeMenu = false" class="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50" x-text="'带宽测速 (10MB)'"></button>
                           <button @click.stop="cloneNode(index); nodeMenu = false" class="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50" x-text="'克隆'"></button>
                           <button @click.stop="shareNode(index); nodeMenu = false" class="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50" x-text="'分享'"></button>
                           <button @click.stop="exportXmatrixUri(index); nodeMenu = false" class="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50" x-text="'导出链接'"></button>
@@ -1452,6 +1458,9 @@
             <span class="text-xs text-gray-500 mt-0.5" x-text="'自上而下匹配，命中即返回。系统默认规则已在底层生效。'"></span>
           </div>
           <div class="flex gap-2.5">
+            <button @click="openRoutingTopology()" class="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-blue-600 transition-colors shadow-sm">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h5m0 0a2 2 0 104 0m-4 0a2 2 0 014 0m-4 0H4m9 0h7M4 18h5m0 0a2 2 0 104 0m-4 0a2 2 0 014 0m-4 0H4m9 0h7" /></svg> <span x-text="'路由拓扑'"></span>
+            </button>
             <button @click="addRoutingRule()" class="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-blue-500 rounded-lg hover:bg-blue-600 transition-colors shadow-sm">
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg> <span x-text="'添加规则'"></span>
             </button>
@@ -2819,6 +2828,10 @@
                   </div>
                 </div>
                 <div class="flex gap-2">
+                  <button @click="testWebdavConnection()" :disabled="webdavProbe.testing" class="px-4 py-1.5 bg-white border border-gray-200 hover:border-purple-300 hover:text-purple-600 text-gray-600 text-sm font-medium rounded-lg shadow-sm transition-colors flex items-center gap-2 disabled:opacity-60">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                    <span x-text="webdavProbe.testing ? '测试中…' : '测试连接'"></span>
+                  </button>
                   <button @click="webdavBackup()" class="px-4 py-1.5 bg-white border border-gray-200 hover:border-blue-300 hover:text-blue-600 text-gray-600 text-sm font-medium rounded-lg shadow-sm transition-colors flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
                     <span x-text="'备份到 WebDAV'"></span>
@@ -2828,7 +2841,39 @@
                     <span x-text="'从 WebDAV 恢复'"></span>
                   </button>
                 </div>
+                <div x-show="webdavProbe.text" class="text-xs font-mono px-3 py-2 rounded-lg bg-gray-50 text-gray-600 break-all" x-text="webdavProbe.text"></div>
               </div>
+              <div class="flex justify-between items-center px-6 py-5 hover:glass transition-colors">
+                <div class="flex flex-col gap-1">
+                  <span class="text-sm font-medium text-gray-800" x-text="'生成核心配置文件'"></span>
+                  <span class="text-xs text-gray-400" x-text="'按当前节点与端口设置写出 data/config.json（排障时可直接查看）'"></span>
+                </div>
+                <button @click="saveConfigFile()" :disabled="sysTools.busy === 'config'" class="px-4 py-1.5 bg-white border border-gray-200 hover:border-blue-300 hover:text-blue-600 text-gray-600 text-sm font-medium rounded-lg shadow-sm transition-colors flex items-center gap-2 disabled:opacity-60">
+                  <svg x-show="sysTools.busy === 'config'" class="animate-spin w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                  <span x-text="sysTools.busy === 'config' ? '生成中…' : '生成配置'"></span>
+                </button>
+              </div>
+              <div class="flex justify-between items-center px-6 py-5 hover:glass transition-colors">
+                <div class="flex flex-col gap-1">
+                  <span class="text-sm font-medium text-gray-800" x-text="'隐藏到系统托盘'"></span>
+                  <span class="text-xs text-gray-400" x-text="'不退出程序，仅收起主窗口；可从托盘图标再次打开'"></span>
+                </div>
+                <button @click="hideMainWindow()" class="px-4 py-1.5 bg-white border border-gray-200 hover:border-gray-300 hover:text-gray-700 text-gray-600 text-sm font-medium rounded-lg shadow-sm transition-colors flex items-center gap-2">
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14" /></svg>
+                  <span x-text="'隐藏窗口'"></span>
+                </button>
+              </div>
+              <div class="flex justify-between items-center px-6 py-5 hover:glass transition-colors">
+                <div class="flex flex-col gap-1">
+                  <span class="text-sm font-medium text-gray-800" x-text="'完全退出'"></span>
+                  <span class="text-xs text-gray-400" x-text="'停止核心、还原系统代理并结束进程（不走关闭行为设置）'"></span>
+                </div>
+                <button @click="quitAppNow()" class="px-4 py-1.5 bg-white border border-gray-200 hover:border-rose-300 hover:text-rose-600 text-gray-600 text-sm font-medium rounded-lg shadow-sm transition-colors flex items-center gap-2">
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                  <span x-text="'退出程序'"></span>
+                </button>
+              </div>
+              <div x-show="sysTools.message" class="px-6 py-3 text-xs font-mono text-gray-500 bg-gray-50 border-t border-gray-100 break-all" x-text="sysTools.message"></div>
               <div class="flex justify-between items-center px-6 py-5 hover:glass transition-colors">
                 <div class="flex flex-col gap-1">
                   <span class="text-sm font-medium text-gray-800" x-text="'清理本地缓存'"></span>
@@ -2906,6 +2951,31 @@
       </div>
     </div>
 
+    <!-- ═══ 路由拓扑弹窗 ═══ -->
+    <div x-show="routingTopology.show" x-cloak class="fixed inset-0 z-[55] flex items-center justify-center">
+      <div x-show="routingTopology.show" x-transition.opacity @click="routingTopology.show = false" class="absolute inset-0 bg-gray-900/40 backdrop-blur-sm"></div>
+      <div x-show="routingTopology.show" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+           class="relative w-[52rem] max-w-[92vw] bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+          <div class="flex flex-col">
+            <h3 class="text-base font-bold text-gray-800" x-text="'路由拓扑'"></h3>
+            <p class="text-xs text-gray-400 mt-0.5" x-text="'入站 → 路由引擎 → 出口，边上数字为该出口命中的规则条数'"></p>
+          </div>
+          <div class="flex items-center gap-4">
+            <span class="text-xs text-gray-500 font-mono" x-text="'生效规则 ' + routingTopology.rulesCount + ' 条'"></span>
+            <button @click="routingTopology.show = false" class="text-gray-400 hover:text-gray-600 transition-colors">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+        </div>
+        <div class="p-4">
+          <div x-show="routingTopology.loading" class="h-[22rem] flex items-center justify-center text-sm text-gray-400" x-text="'正在生成拓扑…'"></div>
+          <div id="routing-topology-chart" class="w-full h-[22rem]" x-show="!routingTopology.loading"></div>
+        </div>
+        <div class="px-6 py-3 border-t border-gray-100 text-[11px] text-gray-400" x-text="'说明：仅启用的规则参与统计；一条规则都没命中时默认走代理出口。节点可拖动，滚轮缩放。'"></div>
+      </div>
+    </div>
+
     <!-- ═══ QR 码分享弹窗 ═══ -->
     <div x-show="qrModal.show" x-cloak class="fixed inset-0 z-[55] flex items-center justify-center">
       <div x-show="qrModal.show" x-transition.opacity @click="qrModal.show = false" class="absolute inset-0 bg-gray-900/40 backdrop-blur-sm"></div>
@@ -2916,8 +2986,8 @@
           <p class="text-xs text-gray-400 mt-1" x-text="'使用代理客户端扫描下方二维码'"></p>
         </div>
         <div class="flex justify-center px-6 pb-2">
-          <img x-show="qrModal.uri" :src="qrModal.uri ? 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(qrModal.uri) : ''" alt="QR Code" class="w-[220px] h-[220px] rounded-lg border border-gray-100" loading="eager">
-          <div x-show="!qrModal.uri" class="w-[220px] h-[220px] rounded-lg border border-gray-100 flex items-center justify-center text-xs text-gray-400" x-text="'该节点不支持扫码导入'"></div>
+          <img x-show="qrModal.dataUri" :src="qrModal.dataUri" alt="QR Code" class="w-[220px] h-[220px] rounded-lg border border-gray-100" loading="eager">
+          <div x-show="!qrModal.dataUri" class="w-[220px] h-[220px] rounded-lg border border-gray-100 flex items-center justify-center text-xs text-gray-400 text-center px-3" x-text="qrModal.uri ? '正在生成二维码…' : '该节点不支持扫码导入'"></div>
         </div>
         <div class="px-6 pb-2">
           <p class="text-[11px] text-gray-400 font-mono truncate text-center" x-text="qrModal.uri"></p>
@@ -2967,6 +3037,10 @@
             <div class="flex flex-col gap-1.5">
               <label class="text-xs font-medium text-gray-500" x-text="'节点别名 (Remarks)'"></label>
               <input type="text" x-model="editingNode.out_tag" :placeholder="'如: HK-BGP-01'" class="h-9 px-3 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:border-blue-500 outline-none">
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs font-medium text-gray-500" x-text="'备注 (仅本地，存在 SQLite)'"></label>
+              <input type="text" x-model="editingNode.message" :placeholder="'如: 机场A-年付 / 备用'" class="h-9 px-3 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:border-blue-500 outline-none">
             </div>
           </div>
           <div class="grid grid-cols-[2fr_1fr] gap-4">
@@ -3581,7 +3655,14 @@
                 <button @click="groupSelectAll()" class="text-xs text-blue-500 hover:text-blue-700" x-text="'全选'"></button>
                 <button @click="groupSelectNone()" class="text-xs text-gray-400 hover:text-gray-600" x-text="'全不选'"></button>
                 <button @click="groupSelectInvert()" class="text-xs text-gray-400 hover:text-gray-600" x-text="'反选'"></button>
+                <button @click="previewGroupNodes()" class="text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-600 hover:bg-blue-100" x-text="groupPreview.loading ? '预览中…' : '预览匹配'"></button>
               </div>
+            </div>
+            <div x-show="groupPreview.show" class="border border-dashed border-gray-200 rounded-lg max-h-28 overflow-y-auto custom-scrollbar px-3 py-2 text-xs text-gray-500 font-mono flex flex-col gap-0.5">
+              <template x-for="(n, i) in groupPreview.nodes" :key="n.id">
+                <div class="truncate" x-text="(i + 1) + '. ' + n.name + ' · ' + n.protocol + ' · ' + n.addr"></div>
+              </template>
+              <div x-show="!groupPreview.count" x-text="'没有匹配到节点'"></div>
             </div>
             <div class="border border-gray-200 rounded-lg overflow-hidden">
               <div class="max-h-48 overflow-y-auto custom-scrollbar divide-y divide-gray-50">

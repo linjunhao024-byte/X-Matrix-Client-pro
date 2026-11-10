@@ -492,5 +492,96 @@ window.XMatrixRouting = {
           };
           window.addEventListener('mousemove', onMove);
           window.addEventListener('mouseup', onUp);
+        },
+        async openRoutingTopology() {
+          this.routingTopology.show = true;
+          this.routingTopology.loading = true;
+          try {
+            const res = await window.pywebview.api.get_routing_topology(this.routingRules || [], this.configState.localPort);
+            if (res && res.success) {
+              this.routingTopology.nodes = res.nodes || [];
+              this.routingTopology.edges = res.edges || [];
+              this.routingTopology.rulesCount = res.rules_count || 0;
+              this.$nextTick(() => this.renderRoutingTopology());
+            } else {
+              this.showToast('拓扑生成失败: ' + ((res && res.error) || '未知错误'), 'error');
+            }
+          } catch (e) {
+            this.showToast('拓扑生成异常: ' + e.message, 'error');
+          } finally {
+            this.routingTopology.loading = false;
+          }
+        },
+        renderRoutingTopology() {
+          const el = document.getElementById('routing-topology-chart');
+          if (!el || typeof echarts === 'undefined') return;
+          if (this.routingTopology._chart) { try { this.routingTopology._chart.dispose(); } catch (e) {} }
+          const chart = echarts.init(el);
+          this.routingTopology._chart = chart;
+          const edgeColor = (to) => to === 'block' ? '#f43f5e' : (to === 'direct' ? '#10b981' : '#3b82f6');
+          const links = (this.routingTopology.edges || []).map(e => ({
+            source: e.from,
+            target: e.to,
+            value: (e.rules || []).length,
+            label: { show: true, formatter: () => ((e.rules || []).length ? ((e.rules || []).length + ' 条') : ''), fontSize: 10, color: '#64748b' },
+            lineStyle: { color: edgeColor(e.to), width: 2, curveness: 0.12 }
+          }));
+          const colorOf = (type) => type === 'router' ? '#6366f1' : (type === 'in' ? '#64748b' : '#3b82f6');
+          chart.setOption({
+            animation: false,
+            backgroundColor: 'transparent',
+            tooltip: {
+              formatter: (p) => p.dataType === 'edge'
+                ? (p.data.source + ' → ' + p.data.target + '（' + (p.data.value || 0) + ' 条规则）')
+                : (p.data.fullLabel || '')
+            },
+            series: [{
+              type: 'graph',
+              layout: 'none',
+              roam: true,
+              draggable: true,
+              data: (this.routingTopology.nodes || []).map(n => ({
+                id: n.id,
+                name: n.id,
+                x: n.x,
+                y: n.y,
+                fullLabel: n.label,
+                symbolSize: n.type === 'router' ? 56 : 70,
+                itemStyle: { color: '#ffffff', borderColor: colorOf(n.type), borderWidth: 2, shadowBlur: 4, shadowColor: 'rgba(0,0,0,0.06)' },
+                label: {
+                  show: true,
+                  formatter: () => n.label,
+                  fontSize: 12,
+                  color: '#1f2937',
+                  backgroundColor: '#ffffff',
+                  padding: [4, 6],
+                  borderColor: 'transparent'
+                }
+              })),
+              links: links,
+              edgeSymbol: ['none', 'arrow'],
+              edgeSymbolSize: 9,
+              lineStyle: { opacity: 0.9 }
+            }]
+          });
+          setTimeout(() => { try { chart.resize(); } catch (e) {} }, 120);
+        },
+        async previewGroupNodes() {
+          this.groupPreview.loading = true;
+          try {
+            const childIds = Array.isArray(this.groupEditor.childIds) ? this.groupEditor.childIds.slice() : [];
+            const res = await window.pywebview.api.get_group_preview(childIds, this.groupEditor.filterRegex || '');
+            if (res && res.success) {
+              this.groupPreview.count = res.count || 0;
+              this.groupPreview.nodes = res.nodes || [];
+              this.groupPreview.show = true;
+            } else {
+              this.showToast('预览失败: ' + ((res && res.error) || '未知错误'), 'error');
+            }
+          } catch (e) {
+            this.showToast('预览异常: ' + e.message, 'error');
+          } finally {
+            this.groupPreview.loading = false;
+          }
         }
 };

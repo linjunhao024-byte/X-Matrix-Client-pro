@@ -612,5 +612,61 @@ openGroupModal(mode, group = null) {
           } catch (e) {
             this.showToast('Geo 更新异常: ' + e.message, 'error');
           }
+        },
+        async testWebdavConnection() {
+          const url = ((this.webdavConfig && this.webdavConfig.url) || '').trim();
+          if (!url) return this.showToast('请先填写 WebDAV 地址', 'warning');
+          this.webdavProbe.testing = true;
+          this.webdavProbe.text = '正在测试连接...';
+          try {
+            const res = await window.pywebview.api.webdav_test(url);
+            if (res && res.success) {
+              const dav = res.dav === 'auth_required' ? '需要认证（地址可达）' : ('DAV: ' + res.dav);
+              this.webdavProbe.text = '连接成功（HTTP ' + res.status + '，' + dav + '）';
+              this.showToast(this.webdavProbe.text, 'success');
+            } else {
+              this.webdavProbe.text = '连接失败: ' + ((res && res.error) || '未知错误');
+              this.showToast(this.webdavProbe.text, 'error');
+            }
+          } catch (e) {
+            this.webdavProbe.text = '测试异常: ' + e.message;
+            this.showToast(this.webdavProbe.text, 'error');
+          } finally {
+            this.webdavProbe.testing = false;
+          }
+        },
+        async saveConfigFile() {
+          this.sysTools.busy = 'config';
+          try {
+            const res = await window.pywebview.api.save_config();
+            if (res && res.success) {
+              this.sysTools.message = '已生成配置文件: ' + res.path;
+              this.showToast('配置已生成: ' + res.path, 'success');
+              this.addLog('info', '[配置] 已生成 ' + res.path);
+            } else {
+              this.sysTools.message = '生成失败: ' + ((res && res.error) || '未知错误');
+              this.showToast(this.sysTools.message, 'error');
+            }
+          } catch (e) {
+            this.showToast('生成配置异常: ' + e.message, 'error');
+          } finally {
+            this.sysTools.busy = '';
+          }
+        },
+        async hideMainWindow() {
+          try {
+            const res = await window.pywebview.api.hide_window();
+            if (res && res.success) this.showToast('已隐藏到系统托盘', 'info');
+          } catch (e) {
+            this.showToast('隐藏窗口失败: ' + e.message, 'error');
+          }
+        },
+        async quitAppNow() {
+          if (!confirm('确定退出 X-Matrix？将停止核心并还原系统代理。')) return;
+          try {
+            await window.pywebview.api.force_quit();
+          } catch (e) {
+            this.showToast('退出失败: ' + e.message, 'error');
+          }
         }
 };

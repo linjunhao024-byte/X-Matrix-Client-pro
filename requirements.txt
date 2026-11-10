@@ -4,3 +4,4 @@ pywebview>=4.0
 pystray>=0.19
 Pillow>=9.0
 PyYAML>=6.0
+qrcode>=7.4

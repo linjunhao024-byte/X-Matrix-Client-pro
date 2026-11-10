@@ -97,7 +97,17 @@ window.XMatrixState = {
         isActivatingNode: false,
         toasts: [],
         clipboardPrompt: { show: false, text: '' },
-        qrModal: { show: false, uri: '' },
+        qrModal: { show: false, uri: '', dataUri: '' },
+        nodeTools: {
+          busyIndex: -1, busyKind: '',
+          batchRealRunning: false,
+          sortKey: 'delay', sortAsc: true
+        },
+        nodeProfiles: {},
+        routingTopology: { show: false, loading: false, rulesCount: 0, nodes: [], edges: [], _chart: null },
+        groupPreview: { show: false, loading: false, count: 0, nodes: [] },
+        webdavProbe: { testing: false, text: '' },
+        sysTools: { busy: '', message: '' },
         lastClipboardText: '',
         showRouteList: false,
         coreTypes: [],

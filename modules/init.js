@@ -80,6 +80,7 @@ window.XMatrixInit = {
             if (res) {
               this.syncTunnels(res);
               this.addLog('info', `[系统] 已加载 ${this.tunnels.length} 个节点配置`);
+              await this.loadProfiles();
             }
             } catch (e) {
               console.error('初始化拉取节点失败:', e);

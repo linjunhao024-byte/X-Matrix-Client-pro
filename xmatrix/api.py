@@ -128,8 +128,8 @@ class XMatrixAPI:
 
     @api_response
     def get_profiles(self) -> dict:
-        """返回所有节点的扩展数据。"""
-        return load_profiles()
+        """返回所有节点的扩展数据（包装成统一 {success, profiles} 结构，与前端约定一致）。"""
+        return {"success": True, "profiles": load_profiles()}
 
     @api_response
     def update_profile(self, node_id: str, data: dict) -> dict:
@@ -616,9 +616,9 @@ class XMatrixAPI:
 
     @api_response
     def sort_tunnels(self, key: str = "delay", reverse: bool = False) -> dict:
-        """排序节点。"""
+        """排序节点。reverse=True 表示降序（与 crud 的 ascending 取反）。"""
         from xmatrix.nodes.crud import sort_tunnels
-        return sort_tunnels(self, key, reverse)
+        return sort_tunnels(self, key, not reverse)
 
     @api_response
     def dedup_server_list(self, silent: bool = False) -> dict:
@@ -1233,6 +1233,24 @@ class XMatrixAPI:
             return {"success": False, "error": str(e)}
 
     @api_response
+    def get_qr_data_uri(self, text: str) -> dict:
+        """把文本渲染成本地二维码（data:image/png;base64），不依赖第三方外网接口。"""
+        if not text:
+            return {"success": False, "error": "内容为空，无法生成二维码"}
+        try:
+            import qrcode
+        except ImportError:
+            return {"success": False, "error": "缺少 qrcode 库，请执行 pip install -r requirements.txt"}
+        import base64
+        import io
+        try:
+            img = qrcode.make(text)
+            buf = io.BytesIO()
+            img.save(buf)
+            return {"success": True, "data_uri": "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")}
+        except Exception as e:
+            return {"success": False, "error": f"生成二维码失败: {e}"}
+
     def update_core(self) -> dict:
         """更新核心。"""
         from xmatrix.core.registry import update_core
@@ -1299,10 +1317,10 @@ class XMatrixAPI:
         return batch_test_real_delay(self, node_indices, concurrency)
 
     @api_response
-    def test_node_bandwidth(self, index: int, test_url: str = "", test_bytes: int = 10000000, timeout: int = 30) -> dict:
-        """带宽测试。"""
+    def test_node_bandwidth(self, index: int, test_url: str = "", test_bytes: int = 10000000, timeout: int = 30, local_port: int = 2077) -> dict:
+        """带宽测试（经当前活动的本地代理端口下载）。"""
         from xmatrix.network.speedtest import test_node_bandwidth
-        return test_node_bandwidth(self, index, test_url, test_bytes, timeout)
+        return test_node_bandwidth(self, index, test_url, test_bytes, timeout, local_port)
 
     @api_response
     def batch_test_bandwidth(self, node_indices: list[int], max_workers: int = 3, test_url: str = "", test_bytes: int = 10000000) -> dict:
