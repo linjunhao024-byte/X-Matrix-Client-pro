@@ -554,3 +554,11 @@ Copyright (c) 2026 Junhao Lin
 <img src="https://capsule-render.vercel.app/api?type=rect&color=0:0f0f0f,100:1a1a1a&height=80&section=footer&text=%20" width="100%"/>
 
 </div>
+
+## 跑测试
+
+```bash
+python tests/_xm_tests.py
+```
+
+离线静态 + 单元测试，不启动 GUI、不写注册表、不联网。覆盖：系统代理开启前快照并按原值还原、核心更新缺 `.zip.dgst` 时 fail-closed、mihomo 标记实验性、命名 Mutex 单例。
