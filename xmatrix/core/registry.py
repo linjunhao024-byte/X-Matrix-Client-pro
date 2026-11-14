@@ -33,6 +33,7 @@ def get_core_types(api: XMatrixAPI) -> dict:
             "available": exe_path is not None,
             "active": api.active_core == core_type,
             "exe_path": exe_path or "",
+            "experimental": bool(info.get("experimental", False)),
         })
     return {"success": True, "cores": cores, "active": api.active_core}
 
@@ -103,6 +104,21 @@ def check_core_update(api: XMatrixAPI, check_prerelease: bool = False) -> dict:
     return {"success": True, "cores": results, "check_prerelease": check_prerelease}
 
 
+def _allow_unsigned_core_update() -> bool:
+    """读取 security.allow_unsigned_core_update；默认 False（fail-closed）。"""
+    try:
+        cfg_path = os.path.join(DATA_DIR, "config.json")
+        if not os.path.isfile(cfg_path):
+            return False
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+        security = cfg.get("security") or {}
+        return bool(security.get("allow_unsigned_core_update", False))
+    except Exception as e:
+        logging.warning("[核心更新] 读取 allow_unsigned_core_update 失败，按 False 处理: %s", e)
+        return False
+
+
 def update_core(api: XMatrixAPI) -> dict:
     """从 GitHub 下载最新 Xray-core 并热替换 xmatrix-core.exe。"""
     with api._process_lock:
@@ -133,6 +149,15 @@ def update_core(api: XMatrixAPI) -> dict:
 
     if not download_url:
         return {"success": False, "error": "未找到 Windows 64 位核心包"}
+
+    # fail-closed：没有官方签名文件时默认拒绝，且必须在下载前返回，
+    # 确保不产生任何网络下载、解压或替换。
+    warning = ""
+    if not dgst_url:
+        if not _allow_unsigned_core_update():
+            return {"success": False, "error": "官方未提供签名文件，已拒绝更新（fail-closed）"}
+        warning = "官方未提供签名文件，已按 allow_unsigned_core_update=true 跳过校验"
+        logging.warning("[核心更新] %s", warning)
 
     try:
         with api._urlopen(download_url, timeout=120) as resp:
@@ -188,4 +213,7 @@ def update_core(api: XMatrixAPI) -> dict:
         time.sleep(0.5)
         api.start_core()
 
-    return {"success": True, "tag_name": tag_name, "message": f"核心已更新至 {tag_name}"}
+    result = {"success": True, "tag_name": tag_name, "message": f"核心已更新至 {tag_name}"}
+    if warning:
+        result["warning"] = warning
+    return result

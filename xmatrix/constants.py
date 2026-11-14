@@ -57,6 +57,9 @@ CORE_REGISTRY: dict[str, dict] = {
         "args_template": ["-f", "{config}", "-d", os.path.join(DATA_DIR, "mihomo")],
         "config_ext": "yaml",
         "env_vars": {},
+        # mihomo 配置生成目前是简化版：TUN、规则集、DNS 行为与 xray 不一致。
+        # 仅作为实验性核心暴露，避免用户误以为与 xray 等价。
+        "experimental": True,
     },
     "hysteria": {
         "name": "Hysteria 2",

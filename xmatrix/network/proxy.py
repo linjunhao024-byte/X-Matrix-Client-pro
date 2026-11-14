@@ -19,6 +19,102 @@ if TYPE_CHECKING:
     from xmatrix.api import XMatrixAPI
 
 
+# 需要备份/还原的 Internet Settings 值。顺序固定，便于排查。
+_PROXY_VALUE_NAMES = ("ProxyEnable", "ProxyServer", "ProxyOverride", "AutoConfigURL")
+_PROXY_BACKUP_NAME = "proxy_backup.json"
+
+
+def _proxy_backup_path() -> str:
+    """代理备份文件路径（放在 data/ 下，不污染安装目录）。"""
+    from xmatrix.constants import DATA_DIR
+    return os.path.join(DATA_DIR, _PROXY_BACKUP_NAME)
+
+
+def _read_proxy_backup(path: str) -> dict | None:
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def _write_proxy_backup(path: str, data: dict) -> None:
+    """原子写备份文件，避免进程中断留下半截 JSON。"""
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
+
+
+def _snapshot_proxy_settings(key) -> bool:
+    """开启代理前快照当前注册表值；已有未还原备份时保留最原始那份。"""
+    path = _proxy_backup_path()
+    existing = _read_proxy_backup(path)
+    if existing and not existing.get("restored", False):
+        logging.warning("[代理] 发现上次未还原的备份 %s，保留原快照，本次不覆盖", path)
+        return False
+
+    values: dict[str, dict] = {}
+    for name in _PROXY_VALUE_NAMES:
+        try:
+            value, reg_type = winreg.QueryValueEx(key, name)
+            values[name] = {"exists": True, "type": int(reg_type), "value": value}
+        except FileNotFoundError:
+            values[name] = {"exists": False}
+        # 其它 OSError 交给调用方记录；不写半份快照。
+
+    _write_proxy_backup(path, {
+        "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "restored": False,
+        "values": values,
+    })
+    logging.info("[代理] 已备份系统代理设置到 %s", path)
+    return True
+
+
+def _restore_proxy_settings(key) -> bool:
+    """按快照逐项还原：原存在恢复类型/值，原不存在删除键。"""
+    path = _proxy_backup_path()
+    data = _read_proxy_backup(path)
+    if not data or not isinstance(data.get("values"), dict):
+        return False
+
+    for name in _PROXY_VALUE_NAMES:
+        info = data["values"].get(name)
+        if not isinstance(info, dict):
+            continue
+        if info.get("exists"):
+            reg_type = info.get("type")
+            value = info.get("value")
+            if reg_type is None:
+                reg_type = winreg.REG_SZ if isinstance(value, str) else winreg.REG_DWORD
+            winreg.SetValueEx(key, name, 0, int(reg_type), value)
+        else:
+            try:
+                winreg.DeleteValue(key, name)
+            except FileNotFoundError:
+                pass
+
+    data["restored"] = True
+    data["restored_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    _write_proxy_backup(path, data)
+    logging.info("[代理] 已按备份还原系统代理设置（%s）", path)
+    return True
+
+
+def _notify_wininet() -> None:
+    """通知 WinINET 设置已变化；失败只记日志，不影响开关结果。"""
+    try:
+        internet_set_option = ctypes.windll.wininet.InternetSetOptionW
+        internet_set_option(0, 39, 0, 0)
+        internet_set_option(0, 37, 0, 0)
+    except Exception as e:
+        logging.warning("[代理] 通知系统刷新代理设置失败: %s", e)
+
+
 def generate_pac_script(api: XMatrixAPI) -> str:
     """根据当前路由规则动态生成 PAC 脚本。"""
     proxy_addr = f"PROXY 127.0.0.1:{api.config_local_port}"
@@ -129,6 +225,11 @@ def toggle_system_proxy(api: XMatrixAPI, enable: bool, port: str = "2077", use_p
                             r"Software\Microsoft\Windows\CurrentVersion\Internet Settings",
                             0, winreg.KEY_ALL_ACCESS) as internet_settings:
             if enable:
+                try:
+                    _snapshot_proxy_settings(internet_settings)
+                except Exception as e:
+                    logging.warning("[代理] 备份系统代理设置失败（不影响开启）: %s", e)
+
                 winreg.SetValueEx(internet_settings, "ProxyOverride", 0, winreg.REG_SZ, _exceptions)
                 if use_pac:
                     winreg.SetValueEx(internet_settings, "ProxyEnable", 0, winreg.REG_DWORD, 0)
@@ -141,14 +242,19 @@ def toggle_system_proxy(api: XMatrixAPI, enable: bool, port: str = "2077", use_p
                     winreg.SetValueEx(internet_settings, "ProxyEnable", 0, winreg.REG_DWORD, 1)
                     winreg.SetValueEx(internet_settings, "ProxyServer", 0, winreg.REG_SZ, proxy_addr)
             else:
-                winreg.SetValueEx(internet_settings, "ProxyEnable", 0, winreg.REG_DWORD, 0)
+                restored = False
                 try:
-                    winreg.DeleteValue(internet_settings, "AutoConfigURL")
-                except FileNotFoundError:
-                    pass
-        internet_set_option = ctypes.windll.wininet.InternetSetOptionW
-        internet_set_option(0, 39, 0, 0)
-        internet_set_option(0, 37, 0, 0)
+                    restored = _restore_proxy_settings(internet_settings)
+                except Exception as e:
+                    logging.warning("[代理] 还原系统代理设置失败（继续关闭）: %s", e)
+                if not restored:
+                    # 没有可用备份时退回旧行为，保证“关闭代理”仍然生效。
+                    winreg.SetValueEx(internet_settings, "ProxyEnable", 0, winreg.REG_DWORD, 0)
+                    try:
+                        winreg.DeleteValue(internet_settings, "AutoConfigURL")
+                    except FileNotFoundError:
+                        pass
+        _notify_wininet()
 
     elif sys.platform == "linux":
         proxy_mode = "manual" if enable else "none"

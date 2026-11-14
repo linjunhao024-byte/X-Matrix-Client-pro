@@ -1,10 +1,12 @@
 """
 X-Matrix Client — mihomo 配置生成
-注意：这是一个简化版本，完整实现需要从 main_original.py 中提取
+注意：这是一个简化版本（实验性），TUN、规则集、DNS 行为与 xray 不一致。
+完整实现需要从 main_original.py 中提取。
 """
 from __future__ import annotations
 
 import json
+import logging
 import os
 from typing import Any, TYPE_CHECKING
 
@@ -15,8 +17,20 @@ if TYPE_CHECKING:
     from xmatrix.api import XMatrixAPI
 
 
+def _mihomo_warnings(kwargs: dict) -> list[str]:
+    """列出当前 mihomo 生成器不支持、会被静默忽略的选项。"""
+    warnings: list[str] = []
+    if any(kwargs.get(k) for k in ("tun_mode", "enable_tun", "tun")):
+        warnings.append("mihomo 当前不支持 TUN，已忽略 TUN 相关选项（与 xray 行为不一致）")
+    if any(kwargs.get(k) for k in ("rule_sets", "rule_providers", "enable_rule_sets", "geodata_mode")):
+        warnings.append("mihomo 当前不支持规则集/rule-providers，已忽略相关选项（与 xray 行为不一致）")
+    if kwargs.get("dns_rules") or kwargs.get("dns_strategy") or kwargs.get("use_system_hosts"):
+        warnings.append("mihomo 的 DNS 生成是简化版，dns_rules/strategy/系统 hosts 等选项未完全对齐 xray")
+    return warnings
+
+
 def build_config_mihomo(api: XMatrixAPI, **kwargs) -> dict:
-    """生成 mihomo 配置。这是一个简化版本。"""
+    """生成 mihomo 配置。这是一个简化版本（实验性）。"""
     local_port = kwargs.get("local_port", 2077)
 
     config = {
@@ -103,6 +117,9 @@ def build_config_mihomo(api: XMatrixAPI, **kwargs) -> dict:
             dns_cfg = load_dns_config()
             dns_conf["fake-ip-range"] = dns_cfg["fakeip_range"]
         config["dns"] = dns_conf
+
+    for warning in _mihomo_warnings(kwargs):
+        logging.warning("[mihomo] %s", warning)
 
     return config
 

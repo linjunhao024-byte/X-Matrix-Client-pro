@@ -478,7 +478,13 @@ openGroupModal(mode, group = null) {
             var res = await window.pywebview.api.get_core_types();
             console.log('[CoreTypes] 后端返回:', JSON.stringify(res));
             if (res && res.success) {
-              this.coreTypes = res.cores;
+              // 实验性核心在名称上直接标注，避免用户误以为与 xray 等价。
+              this.coreTypes = (res.cores || []).map(c => {
+                if (c && c.experimental && !String(c.name || '').includes('实验性')) {
+                  return { ...c, name: c.name + '（实验性）' };
+                }
+                return c;
+              });
               console.log('[CoreTypes] coreTypes 已更新, 长度:', this.coreTypes.length);
             } else {
               console.warn('[CoreTypes] 后端返回失败或格式不对:', res);
@@ -487,7 +493,7 @@ openGroupModal(mode, group = null) {
                 this.coreTypes = [
                   { type: 'xray', name: 'Xray', available: false, active: true },
                   { type: 'singbox', name: 'sing-box', available: false, active: false },
-                  { type: 'mihomo', name: 'mihomo', available: false, active: false },
+                  { type: 'mihomo', name: 'mihomo（实验性）', available: false, active: false, experimental: true },
                   { type: 'clash', name: 'Clash', available: false, active: false },
                   { type: 'v2ray', name: 'V2Ray', available: false, active: false },
                   { type: 'hysteria', name: 'Hysteria', available: false, active: false },
@@ -504,7 +510,7 @@ openGroupModal(mode, group = null) {
               this.coreTypes = [
                 { type: 'xray', name: 'Xray', available: false, active: true },
                 { type: 'singbox', name: 'sing-box', available: false, active: false },
-                { type: 'mihomo', name: 'mihomo', available: false, active: false },
+                { type: 'mihomo', name: 'mihomo（实验性）', available: false, active: false, experimental: true },
               ];
             }
           }
@@ -555,12 +561,17 @@ openGroupModal(mode, group = null) {
           const core = this.coreTypes.find(c => c.type === coreType);
           // 未安装 → 弹确认框提示下载
           if (core && !core.available) {
-            const msg = `${core.name} 尚未安装，是否立即下载？`;
+            let msg = `${core.name} 尚未安装，是否立即下载？`;
+            if (core.experimental) msg += String.fromCharCode(10, 10) + '注意：mihomo 的 TUN、规则集、DNS 行为与 xray 不一致。';
             if (!confirm(msg)) return;
             await this.downloadCore(coreType);
             // 下载后重新检查
             const updated = this.coreTypes.find(c => c.type === coreType);
             if (!updated || !updated.available) return;
+          }
+          if (core && core.experimental) {
+            const warn = '注意：mihomo 的 TUN、规则集、DNS 行为与 xray 不一致，仅建议在明确了解差异时使用。';
+            if (!confirm(`${core.name}${String.fromCharCode(10, 10)}${warn}${String.fromCharCode(10, 10)}仍要切换吗？`)) return;
           }
           try {
             var res = await window.pywebview.api.set_active_core(coreType);

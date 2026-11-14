@@ -5,6 +5,7 @@ X-Matrix Client — 入口文件
 from __future__ import annotations
 
 import atexit
+import ctypes
 import json
 import logging
 import os
@@ -72,8 +73,109 @@ def _validate_index_html() -> None:
         logging.warning("[启动] index.html 校验失败:\n%s", result.stdout)
 
 
+# ── 单实例锁 ─────────────────────────────────────────────────────────
+_SINGLETON_MUTEX_NAME = r"Global\XMatrix-Client-pro"
+_singleton_handle = None
+_singleton_lock_file = None
+
+
+def _acquire_windows_mutex(name: str = _SINGLETON_MUTEX_NAME) -> str:
+    """返回 ok / busy / error；busy 表示已有实例。"""
+    global _singleton_handle
+    try:
+        kernel32 = ctypes.windll.kernel32
+        kernel32.CreateMutexW.restype = ctypes.c_void_p
+        handle = kernel32.CreateMutexW(None, False, name)
+        if not handle:
+            return "error"
+        # ERROR_ALREADY_EXISTS = 183
+        if kernel32.GetLastError() == 183:
+            kernel32.CloseHandle(handle)
+            return "busy"
+        _singleton_handle = handle
+        return "ok"
+    except Exception as e:
+        logging.warning("[单例] 创建命名 Mutex 失败: %s", e)
+        return "error"
+
+
+def _acquire_file_lock() -> bool:
+    """非 Windows（以及 Mutex 不可用时的兜底）文件锁。"""
+    global _singleton_lock_file
+    lock_path = os.path.join(DATA_DIR, "xmatrix.lock")
+    try:
+        f = open(lock_path, "a+", encoding="utf-8")
+        f.write("x")
+        f.flush()
+        f.seek(0)
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _singleton_lock_file = f
+        return True
+    except OSError as e:
+        logging.warning("[单例] 获取文件锁失败: %s", e)
+        try:
+            f.close()
+        except Exception:
+            pass
+        return False
+    except Exception as e:
+        logging.warning("[单例] 文件锁异常: %s", e)
+        return False
+
+
+def _acquire_single_instance() -> bool:
+    if os.name == "nt":
+        state = _acquire_windows_mutex()
+        if state == "ok":
+            return True
+        if state == "busy":
+            return False
+        logging.warning("[单例] 命名 Mutex 不可用，改用文件锁兜底")
+    return _acquire_file_lock()
+
+
+def _release_single_instance() -> None:
+    global _singleton_handle, _singleton_lock_file
+    if _singleton_handle is not None:
+        try:
+            ctypes.windll.kernel32.CloseHandle(_singleton_handle)
+        except Exception:
+            pass
+        _singleton_handle = None
+    if _singleton_lock_file is not None:
+        try:
+            if os.name == "nt":
+                import msvcrt
+                _singleton_lock_file.seek(0)
+                msvcrt.locking(_singleton_lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(_singleton_lock_file.fileno(), fcntl.LOCK_UN)
+        except Exception:
+            pass
+        try:
+            _singleton_lock_file.close()
+        except Exception:
+            pass
+        _singleton_lock_file = None
+
+
 def main() -> None:
     """主入口函数。"""
+    if not _acquire_single_instance():
+        if os.name == "nt":
+            try:
+                ctypes.windll.user32.MessageBoxW(0, "X-Matrix 已在运行", "X-Matrix", 0x40)
+            except Exception:
+                pass
+        return
+    atexit.register(_release_single_instance)
+
     _setup_logging()
     _validate_index_html()
     api = XMatrixAPI()
@@ -99,6 +201,7 @@ def main() -> None:
             except Exception as e:
                 logging.warning("[退出] 还原系统代理失败: %s", e)
             api.stop_core()
+            _release_single_instance()
             os._exit(0)
         if hasattr(api, "_window") and api._window:
             api._window.hide()
@@ -112,6 +215,7 @@ def main() -> None:
     def quit_app(icon: pystray.Icon, _item: item) -> None:
         api.is_quitting = True
         api.stop_core()
+        _release_single_instance()
         icon.stop()
         window.destroy()
 
