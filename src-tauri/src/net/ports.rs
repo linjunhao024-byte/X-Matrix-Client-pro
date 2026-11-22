@@ -21,9 +21,16 @@ pub fn ensure_free(port: u16, what: &str) -> AppResult<()> {
             drop(listener);
             Ok(())
         }
-        Err(error) => Err(AppError::Engine(format!(
-            "{what} {port} 已被占用（{error}）：可能是另一个代理客户端还在跑，先关掉它，或在设置里换一个端口"
-        ))),
+        Err(error) => {
+            // The Win32 text ("通常每个套接字地址…只允许使用一次") is true and
+            // useless to a human at a glance: the sentence the user needs is
+            // "something else is holding it". Keep the code in the log for us,
+            // and say the actionable thing in the UI.
+            eprintln!("x-matrix: {what} {port} 绑定失败：{error}");
+            Err(AppError::Engine(format!(
+                "{what} {port} 已被占用：可能是另一个代理客户端还在跑。先关掉它，或在设置里换一个端口"
+            )))
+        }
     }
 }
 
