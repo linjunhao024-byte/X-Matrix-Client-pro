@@ -121,6 +121,7 @@ export const en: Record<string, string> = {
   "home.control.speed": "Speed test",
   "home.speed.testing": "Measuring…",
   "home.speed.result": "Download speed {rate}",
+  "home.mode.locked": "The proxy mode cannot change while the kernel runs",
   // nodes
   "nodes.new": "New node",
   "nodes.import": "Import",
@@ -336,6 +337,9 @@ export const en: Record<string, string> = {
   "import.reparse": "Parse again",
   "import.moreLines": "{count} more lines…",
   "import.fromFile": "Load from file",
+  "import.fromClipboard": "From clipboard",
+  "import.err.clipboard": "Could not read the clipboard: access was denied, paste it into the box below instead",
+  "import.err.clipboardEmpty": "The clipboard is empty",
   // log
   "log.title": "Kernel logs",
   "log.empty.title": "No logs yet",

@@ -121,6 +121,7 @@ export const zh: Record<string, string> = {
   "home.control.speed": "测速",
   "home.speed.testing": "测速中…",
   "home.speed.result": "下载速度 {rate}",
+  "home.mode.locked": "运行中不能切换代理模式",
   // nodes
   "nodes.new": "新增节点",
   "nodes.import": "导入",
@@ -336,6 +337,9 @@ export const zh: Record<string, string> = {
   "import.reparse": "重新解析",
   "import.moreLines": "还有 {count} 行…",
   "import.fromFile": "从文件读取",
+  "import.fromClipboard": "从剪贴板",
+  "import.err.clipboard": "读不到剪贴板内容：系统拒绝了访问，请手动粘贴到下面的框里",
+  "import.err.clipboardEmpty": "剪贴板是空的",
   // log
   "log.title": "内核日志",
   "log.empty.title": "还没有日志",

@@ -183,6 +183,14 @@ pub fn start_engine(
     proxy: &Arc<ProxyGuard>,
     request: StartRequest,
 ) -> AppResult<EngineStatus> {
+    // Only check when we are idle: while our own kernel runs, it *is* the
+    // thing holding the port, and preflighting then would refuse every node
+    // switch. Checking from idle is the case that matters anyway — the user
+    // just closed another client, or forgot to.
+    if !runtime.status().running {
+        crate::net::ports::ensure_free(request.endpoints.mixed_port, "混合端口")?;
+        crate::net::ports::ensure_free(request.endpoints.api_port, "控制端口")?;
+    }
     let options = RunOptions::from_settings(&request.settings, &request.rules)
         .with_catalog(&request.nodes, &request.groups)
         .with_rule_sets(&request.rule_sets);

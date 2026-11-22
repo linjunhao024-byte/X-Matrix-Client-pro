@@ -48,6 +48,32 @@ async function loadFromFile() {
   }
 }
 
+/**
+ * Read whatever the user copied last.
+ *
+ * Providers hand out links in a browser or a chat window, and asking someone
+ * to select a 200-character base64 blob by hand is how typos get in. The
+ * clipboard API is not available outside a secure context, so a refusal is
+ * reported instead of silently doing nothing.
+ */
+async function loadFromClipboard() {
+  error.value = null
+  try {
+    const copied = await navigator.clipboard.readText()
+    if (!copied.trim()) {
+      error.value = t('import.err.clipboardEmpty')
+      return
+    }
+    text.value = copied
+    await parse()
+  } catch (cause) {
+    // A denied permission and a missing API look the same from here; both mean
+    // "paste it yourself", so one message covers it.
+    error.value = t('import.err.clipboard')
+    console.warn('clipboard read failed', cause)
+  }
+}
+
 async function parse() {
   parsing.value = true
   error.value = null
@@ -97,6 +123,10 @@ const canApply = () => (preview.value?.nodes.length ?? 0) > 0 && !applying.value
     <div class="field">
       <div class="row import-label-row">
         <label class="field-label" for="import-text">{{ t('import.label') }}</label>
+        <button class="btn btn-sm" type="button" @click="loadFromClipboard">
+          <AppIcon name="copy" :size="14" />
+          {{ t('import.fromClipboard') }}
+        </button>
         <button class="btn btn-sm" type="button" @click="loadFromFile">
           <AppIcon name="file" :size="14" />
           {{ t('import.fromFile') }}

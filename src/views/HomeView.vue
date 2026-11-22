@@ -15,10 +15,11 @@ const TrafficChart = defineAsyncComponent(() => import('../components/TrafficCha
 const LogDialog = defineAsyncComponent(() => import('../components/LogDialog.vue'))
 const ConfigDialog = defineAsyncComponent(() => import('../components/ConfigDialog.vue'))
 import { t } from '../i18n'
-import { api, describeError, type AppInfo, type EngineKind } from '../services/contract'
+import { api, describeError, type AppInfo, type EngineKind, type ProxyMode } from '../services/contract'
 import { formatBytes, formatRate } from '../services/format'
 import { useEngineStore } from '../stores/engine'
 import { useNodesStore } from '../stores/nodes'
+import { useSettingsStore } from '../stores/settings'
 
 const info = ref<AppInfo | null>(null)
 const infoError = ref<string | null>(null)
@@ -37,6 +38,7 @@ const router = useRouter()
 
 const nodes = useNodesStore()
 const engine = useEngineStore()
+const settings = useSettingsStore()
 
 const ONBOARDING_KEY = 'xm.ui.onboarding-dismissed'
 const onboardingDismissed = ref(localStorage.getItem(ONBOARDING_KEY) === 'true')
@@ -103,6 +105,35 @@ const kinds: { value: EngineKind; label: string }[] = [
   { value: 'sing-box', label: 'sing-box' },
 ]
 
+/**
+ * Rule / global / direct, on the screen people actually look at.
+ *
+ * The mode is baked into the config at render time, so it cannot change under
+ * a running kernel — the control is disabled while running rather than
+ * silently doing nothing. Changing it from idle applies to the next start,
+ * which is the very next thing the user does anyway.
+ */
+const modes: { value: ProxyMode; labelKey: string }[] = [
+  { value: 'rule', labelKey: 'settings.mode.rule' },
+  { value: 'global', labelKey: 'settings.mode.global' },
+  { value: 'direct', labelKey: 'settings.mode.direct' },
+]
+const modeSaving = ref(false)
+
+async function setMode(mode: ProxyMode): Promise<void> {
+  const current = settings.settings
+  if (!current || current.mode === mode) return
+  modeSaving.value = true
+  delayError.value = null
+  try {
+    await settings.save({ ...current, mode })
+  } catch (error) {
+    delayError.value = describeError(error)
+  } finally {
+    modeSaving.value = false
+  }
+}
+
 onMounted(async () => {
   try {
     info.value = await api.appInfo()
@@ -110,6 +141,7 @@ onMounted(async () => {
     infoError.value = describeError(cause)
   }
   await nodes.load()
+  void settings.load()
   await engine.refreshBinaries()
   if (!selectedNodeId.value && nodes.items.length > 0) {
     selectedNodeId.value = nodes.items[0].id
@@ -260,6 +292,24 @@ async function stopEngine() {
             </button>
           </div>
           <p v-if="engine.running" class="field-hint">{{ t('home.control.locked') }}</p>
+        </div>
+
+        <div class="field control-mode">
+          <span class="field-label">{{ t('settings.mode') }}</span>
+          <div class="segmented">
+            <button
+              v-for="item in modes"
+              :key="item.value"
+              type="button"
+              :class="{ active: settings.settings?.mode === item.value }"
+              :aria-pressed="settings.settings?.mode === item.value"
+              :disabled="engine.running || modeSaving || !settings.settings"
+              @click="setMode(item.value)"
+            >
+              {{ t(item.labelKey) }}
+            </button>
+          </div>
+          <p v-if="engine.running" class="field-hint">{{ t('home.mode.locked') }}</p>
         </div>
       </div>
 
@@ -592,6 +642,17 @@ async function stopEngine() {
 .control-engine {
   width: 236px;
   flex: none;
+}
+
+.control-mode {
+  width: 224px;
+  flex: none;
+}
+
+.control-mode .field-hint {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .control-engine .field-hint {

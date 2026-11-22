@@ -2863,5 +2863,25 @@
     "routing.test.skipped",
     "有 {count} 条规则需要 IP 库、端口或进程名才能判断，已跳过。",
     "{count} rules need an IP database, a port or a process name to judge, and were skipped."
+  ],
+  [
+    "home.mode.locked",
+    "运行中不能切换代理模式",
+    "The proxy mode cannot change while the kernel runs"
+  ],
+  [
+    "import.fromClipboard",
+    "从剪贴板",
+    "From clipboard"
+  ],
+  [
+    "import.err.clipboard",
+    "读不到剪贴板内容：系统拒绝了访问，请手动粘贴到下面的框里",
+    "Could not read the clipboard: access was denied, paste it into the box below instead"
+  ],
+  [
+    "import.err.clipboardEmpty",
+    "剪贴板是空的",
+    "The clipboard is empty"
   ]
 ]
