@@ -16,6 +16,7 @@ export const commands = {
 	listNodes: () => typedError<Node_Serialize[], AppError>(__TAURI_INVOKE("list_nodes")),
 	upsertNode: (node: Node_Deserialize) => typedError<Node_Serialize[], AppError>(__TAURI_INVOKE("upsert_node", { node })),
 	deleteNode: (id: string) => typedError<Node_Serialize[], AppError>(__TAURI_INVOKE("delete_node", { id })),
+	moveNode: (id: string, delta: number) => typedError<Node_Serialize[], AppError>(__TAURI_INVOKE("move_node", { id, delta })),
 	/**
 	 *  Delete several nodes in one call.
 	 * 

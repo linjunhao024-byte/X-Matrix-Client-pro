@@ -134,7 +134,7 @@
 的握手扩展）。产品侧的处理是**如实显示**：内核日志里就是这条错误，节点测速（TCP 握手）仍然会显示
 低延迟——所以节点页现在明确写着「测速只量到节点的 TCP 握手，不代表隧道一定能通」。
 
-### 真机上抓到的八个 bug（已修，都只有真机/真内核能暴露）
+### 真机上抓到的九个 bug（已修，都只有真机/真内核能暴露）
 
 1. **sing-box 规则集文件格式错了**：写成了 `domain_suffix:example.org` 这样的行列表，
    而 `format: "source"` 要的是 JSON（`{"version":1,"rules":[...]}`）。sing-box 直接
@@ -169,3 +169,5 @@
 
 7. **分段控件没有选中态**：`class="active"` 与 CSS 的 `[aria-pressed="true"]` 不匹配，除设置页外所有分段控件都显示成"未选"。修法：CSS 两种都认 + 5 个视图补 `aria-pressed`。
 8. **日志对话框读错内核的日志**：前端 `kind` 写死 `'xray'`，自动连接却按后端 `last_engine`（sing-box）启动 → 点「日志」看到的是 `xray.log`。修法：`refreshStatus()` 用后端 `status.kind` 校正前端选择。
+
+9. **双内核只显示一个版本号**：`{ ...versions.value, [kind]: await … }` 的展开早于 await，两个并发探测互相覆盖（实测 xray 1072 ms / sing-box 1068 ms，后者总赢）→ 装了双内核时 Xray 的版本行消失。修法：先 await 再赋值 + 两条回归测试 + 切换内核时补探测。

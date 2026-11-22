@@ -18,6 +18,7 @@ const { api, feed } = vi.hoisted(() => {
   }
 
   const api = {
+    engineVersion: vi.fn(async (kind: 'xray' | 'sing-box') => `version of ${kind}`),
     engineStatus: vi.fn(async () => ({
       running: true,
       kind: 'xray' as const,
@@ -109,5 +110,34 @@ describe('engine store session counter', () => {
     await store.refreshTraffic()
     expect(store.session).toEqual({ up: 0, down: 0 })
     expect(store.rates.up).toBe(0)
+  })
+})
+
+describe('engine store kernel versions', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('keeps both kernels when their probes overlap', async () => {
+    // The real failure: both probes take about a second, the two writes each
+    // started from the same empty snapshot, and the later resolve overwrote the
+    // earlier one — so the Xray version line disappeared on a machine with both
+    // kernels installed.
+    const store = useEngineStore()
+    await Promise.all([store.refreshVersion('xray'), store.refreshVersion('sing-box')])
+
+    expect(store.versions.xray).toBe('version of xray')
+    expect(store.versions['sing-box']).toBe('version of sing-box')
+  })
+
+  it('a failed probe leaves the other version alone', async () => {
+    const store = useEngineStore()
+    await store.refreshVersion('xray')
+    api.engineVersion.mockRejectedValueOnce(new Error('no binary'))
+    await store.refreshVersion('sing-box')
+
+    expect(store.versions.xray).toBe('version of xray')
+    expect(store.versions['sing-box']).toBeUndefined()
   })
 })

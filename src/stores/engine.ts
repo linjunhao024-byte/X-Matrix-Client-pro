@@ -88,7 +88,13 @@ export const useEngineStore = defineStore('engine', () => {
 
   async function refreshVersion(target: EngineKind): Promise<void> {
     try {
-      versions.value = { ...versions.value, [target]: await api.engineVersion(target) }
+      // Assign only after the await resolves. Spreading `versions` before it
+      // makes two concurrent probes both write the snapshot they read at call
+      // time, so whichever answers last wins and the other kernel's version
+      // vanishes — exactly the "Xray line is missing" bug found on a real
+      // machine, where both probes take ~1 s and finish in launch order.
+      const reported = await api.engineVersion(target)
+      versions.value = { ...versions.value, [target]: reported }
     } catch {
       // A kernel that cannot self-report is not an error worth interrupting the
       // user for: the binary check already explains a missing file.

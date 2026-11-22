@@ -5,7 +5,7 @@
  * Every number here comes from the Rust runtime; nothing is derived locally
  * except the transfer rates, which are a difference between two samples.
  */
-import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 
@@ -74,6 +74,20 @@ const canStart = computed(() => !engine.running && !engine.busy && selectedNodeI
  * "not asked yet or not installed", and a placeholder would read as a failure.
  */
 const kernelVersion = computed(() => engine.versions[engine.kind] ?? '')
+
+/**
+ * Switching kernels has to re-ask for that kernel's version.
+ *
+ * Versions are probed on mount for every installed binary, but a user who
+ * switches to a kernel installed after launch (or whose probe failed) would
+ * otherwise stare at an empty line that looks like a broken binary.
+ */
+watch(
+  () => engine.kind,
+  (target) => {
+    if (!engine.versions[target] && engine.currentBinary?.present) void engine.refreshVersion(target)
+  },
+)
 
 const realityOnSingBox = computed(() => {
   if (engine.kind !== 'sing-box') return false

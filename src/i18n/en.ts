@@ -169,6 +169,10 @@ export const en: Record<string, string> = {
   "nodes.tag.hint": "Applies to the {count} selected node(s).",
   "nodes.tag.add": "Add",
   "nodes.tag.remove": "Remove",
+  "nodes.sort.manual": "Manual",
+  "nodes.moveUp": "Move up",
+  "nodes.moveDown": "Move down",
+  "nodes.manualHint": "Use the arrows to reorder; the order is saved",
   // groups
   "groups.title": "Proxy groups",
   "groups.hint": "Rules can point at a group, and the group picks the node.",

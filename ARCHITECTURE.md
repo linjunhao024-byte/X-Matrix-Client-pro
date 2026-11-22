@@ -274,7 +274,7 @@ pub enum StatsChannel {
 
 | 层 | 状态 | 证据 |
 |---|---|---|
-| 契约层 | 完成 | `tauri-specta` 生成 `src/services/bindings.ts`，55 个命令；`npm run check:contract` 校验不过期 |
+| 契约层 | 完成 | `tauri-specta` 生成 `src/services/bindings.ts`，56 个命令；`npm run check:contract` 校验不过期 |
 | 引擎层 | Xray + sing-box 配置渲染、启停、就绪探测、统计读取、日志尾部 | `cargo test --lib`（全库 182 项）；渲染是纯函数，测试不需要任何内核二进制 |
 | 数据层 | 单文件 JSON 原子替换 + 坏文件留证 | `store.rs`，重启后节点/设置/规则都在 |
 | 导入 | vless / vmess / trojan / ss + 整包 base64 | `import.rs`，不支持的行进 `skipped` 而不是报错 |
@@ -306,7 +306,7 @@ pub enum StatsChannel {
 | 自动测速 | 设置里可选 5 / 15 / 60 分钟重新测一遍全部节点，默认关（按流量计费的人会注意到后台在打节点）；手动测速进行中时自动的那次跳过，避免两次扫描互相排队 | `views/NodesView.vue` 的 `armAutoTest` |
 | 未做 | 人工验收的写类操作（导入、启动内核、接管系统代理） | 需要真实内核与网络，按用户要求不在本机跑 |
 
-### 真机才暴露的八个 bug（2026-11-22 修）
+### 真机才暴露的九个 bug（2026-11-22 修）
 
 单元测试全绿也发现不了，因为它们照着**我以为的**格式写的；只有真内核会拒绝。
 

@@ -90,6 +90,36 @@ pub fn apply_tag(
     Ok(snapshot)
 }
 
+/// Move a node one slot up or down in the list.
+///
+/// The stored order *is* the manual order — there is no `sort_index` to keep in
+/// sync, and every other view sorts a copy. Moving past either end is a no-op
+/// rather than an error: the button is disabled there, so an out-of-range delta
+/// only happens on a double click, which should not produce a toast.
+pub fn apply_move(state: &AppState, id: &str, delta: i32) -> AppResult<Vec<Node>> {
+    let snapshot = {
+        let mut nodes = state.nodes.write();
+        let index = nodes
+            .iter()
+            .position(|node| node.id == id)
+            .ok_or_else(|| AppError::NotFound(format!("node {id}")))?;
+        let target = index as i64 + delta as i64;
+        if target < 0 || target >= nodes.len() as i64 {
+            return Ok(nodes.clone());
+        }
+        nodes.swap(index, target as usize);
+        nodes.clone()
+    };
+    state.persist()?;
+    Ok(snapshot)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn move_node(state: State<'_, AppState>, id: NodeId, delta: i32) -> AppResult<Vec<Node>> {
+    apply_move(&state, &id, delta)
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn delete_node(state: State<'_, AppState>, id: NodeId) -> AppResult<Vec<Node>> {
@@ -294,5 +324,26 @@ mod tests {
         assert!(apply_tag(&state, &[], "trusted", false).is_err());
         assert!(apply_tag(&state, &["a".into()], "   ", false).is_err());
         assert!(apply_tag(&state, &["missing".into()], "trusted", false).is_err());
+    }
+
+    #[test]
+    fn moving_a_node_swaps_it_with_its_neighbour() {
+        let state = state_with(vec![node("a", &[]), node("b", &[])]);
+
+        let moved = apply_move(&state, "b", -1).unwrap();
+        assert_eq!(
+            moved.iter().map(|item| item.id.as_str()).collect::<Vec<_>>(),
+            vec!["b", "a"]
+        );
+
+        // Past the top: nothing happens, and it is not an error.
+        let same = apply_move(&state, "b", -1).unwrap();
+        assert_eq!(
+            same.iter().map(|item| item.id.as_str()).collect::<Vec<_>>(),
+            vec!["b", "a"]
+        );
+
+        // Unknown id is a real error, unlike "already at the end".
+        assert!(matches!(apply_move(&state, "nope", 1), Err(AppError::NotFound(_))));
     }
 }

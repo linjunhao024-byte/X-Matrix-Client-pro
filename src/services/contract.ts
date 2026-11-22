@@ -84,6 +84,9 @@ export const api = {
   upsertNode: (node: Node_Deserialize): Promise<Node_Serialize[]> => unwrap(commands.upsertNode(node)),
   deleteNode: (id: string): Promise<Node_Serialize[]> => unwrap(commands.deleteNode(id)),
   deleteNodes: (ids: string[]): Promise<Node_Serialize[]> => unwrap(commands.deleteNodes(ids)),
+
+  /** Reorder by one slot; the stored order is the manual order. */
+  moveNode: (id: string, delta: number): Promise<Node_Serialize[]> => unwrap(commands.moveNode(id, delta)),
   exportNodeLinks: (ids: string[]): Promise<string> => unwrap(commands.exportNodeLinks(ids)),
   tagNodes: (ids: string[], tag: string, remove: boolean): Promise<Node_Serialize[]> =>
     unwrap(commands.tagNodes(ids, tag, remove)),

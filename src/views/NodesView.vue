@@ -46,9 +46,12 @@ const tagBusy = ref(false)
 /** id -> milliseconds, or 'timeout' when the handshake never completed. */
 const latency = ref<Record<string, number | 'timeout'>>({})
 
-type SortKey = 'name' | 'latency' | 'protocol'
-const sortBy = ref<SortKey>('name')
+type SortKey = 'manual' | 'name' | 'latency' | 'protocol'
+const sortBy = ref<SortKey>('manual')
 const sortOptions: { value: SortKey; labelKey: string }[] = [
+  // Manual first: the order the user arranged is the one they expect to see
+  // when they open the page, and every other sort is a lens on top of it.
+  { value: 'manual', labelKey: 'nodes.sort.manual' },
   { value: 'name', labelKey: 'nodes.sort.name' },
   { value: 'latency', labelKey: 'nodes.sort.latency' },
   { value: 'protocol', labelKey: 'nodes.sort.protocol' },
@@ -88,6 +91,11 @@ const filteredNodes = computed(() => {
  */
 const sortedNodes = computed(() => {
   const items = [...filteredNodes.value]
+  if (sortBy.value === 'manual') {
+    // No sort: the stored order is the answer. Copying first keeps Vue from
+    // mutating the store's array when a filter is active.
+    return items
+  }
   if (sortBy.value === 'latency') {
     const rank = (node: Node_Serialize): number => {
       const value = latency.value[node.id]
@@ -169,6 +177,29 @@ function leaveSelection() {
 
 /** Copy needs a writable clipboard; WebView2 refuses it in some profiles, so a
  *  failed copy must say so instead of pretending. */
+/**
+ * Whether a node can move in that direction *in the current view*.
+ *
+ * The list may be filtered or sorted, so "one slot up" is only meaningful in
+ * manual order with no filter narrowing the list — otherwise the button would
+ * swap the node with something the user cannot see.
+ */
+function canMove(node: Node_Serialize, delta: number): boolean {
+  if (sortBy.value !== 'manual') return false
+  const list = sortedNodes.value
+  const index = list.findIndex((item) => item.id === node.id)
+  if (index < 0) return false
+  return index + delta >= 0 && index + delta < list.length
+}
+
+async function moveNode(node: Node_Serialize, delta: number): Promise<void> {
+  try {
+    await store.move(node.id, delta)
+  } catch (problem) {
+    store.error = describeError(problem)
+  }
+}
+
 async function copyText(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text)
@@ -451,6 +482,7 @@ function securityLabel(node: Node_Serialize): string {
             </button>
           </div>
           <span v-if="sortBy === 'latency'" class="muted small">{{ t('nodes.sortHint') }}</span>
+          <span v-else-if="sortBy === 'manual'" class="muted small">{{ t('nodes.manualHint') }}</span>
         </div>
         <div class="row">
           <select
@@ -614,6 +646,28 @@ function securityLabel(node: Node_Serialize): string {
               >
                 <AppIcon name="refresh" :size="14" />
               </button>
+              <template v-if="sortBy === 'manual'">
+                <button
+                  class="btn btn-ghost btn-sm"
+                  type="button"
+                  :disabled="!canMove(node, -1)"
+                  :title="t('nodes.moveUp')"
+                  :aria-label="t('nodes.moveUp')"
+                  @click.stop="moveNode(node, -1)"
+                >
+                  <AppIcon name="arrow-up" :size="14" />
+                </button>
+                <button
+                  class="btn btn-ghost btn-sm"
+                  type="button"
+                  :disabled="!canMove(node, 1)"
+                  :title="t('nodes.moveDown')"
+                  :aria-label="t('nodes.moveDown')"
+                  @click.stop="moveNode(node, 1)"
+                >
+                  <AppIcon name="arrow-down" :size="14" />
+                </button>
+              </template>
               <button
                 class="btn btn-ghost btn-sm"
                 type="button"

@@ -2758,5 +2758,25 @@
     "about.caps.update.note",
     "没做：内核需手动放进 engines 目录，界面会显示它的版本号。",
     "Not built: kernels are placed in the engines folder by hand; the UI shows their version."
+  ],
+  [
+    "nodes.sort.manual",
+    "手动",
+    "Manual"
+  ],
+  [
+    "nodes.moveUp",
+    "上移",
+    "Move up"
+  ],
+  [
+    "nodes.moveDown",
+    "下移",
+    "Move down"
+  ],
+  [
+    "nodes.manualHint",
+    "上移 / 下移调整顺序，顺序会保存下来",
+    "Use the arrows to reorder; the order is saved"
   ]
 ]

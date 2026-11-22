@@ -42,6 +42,11 @@ export const useNodesStore = defineStore('nodes', () => {
     items.value = await api.deleteNode(id)
   }
 
+  /** Reorder by one slot; the persisted order is the manual order. */
+  async function move(id: string, delta: number) {
+    items.value = await api.moveNode(id, delta)
+  }
+
   /** Delete a selection in one round trip, so it cannot be half applied. */
   async function removeMany(ids: string[]) {
     items.value = await api.deleteNodes(ids)
@@ -65,5 +70,5 @@ export const useNodesStore = defineStore('nodes', () => {
     return outcome
   }
 
-  return { items, loading, error, loaded, load, save, remove, removeMany, tagMany, exportLinks, importFromText }
+  return { items, loading, error, loaded, load, save, remove, move, removeMany, tagMany, exportLinks, importFromText }
 })

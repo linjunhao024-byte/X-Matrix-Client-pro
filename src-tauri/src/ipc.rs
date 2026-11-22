@@ -15,6 +15,7 @@ pub fn builder() -> Builder<tauri::Wry> {
         commands::node::list_nodes,
         commands::node::upsert_node,
         commands::node::delete_node,
+        commands::node::move_node,
         commands::node::delete_nodes,
         commands::node::tag_nodes,
         commands::node::export_node_links,

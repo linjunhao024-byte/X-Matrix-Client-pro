@@ -169,6 +169,10 @@ export const zh: Record<string, string> = {
   "nodes.tag.hint": "将作用于已选的 {count} 个节点。",
   "nodes.tag.add": "添加",
   "nodes.tag.remove": "移除",
+  "nodes.sort.manual": "手动",
+  "nodes.moveUp": "上移",
+  "nodes.moveDown": "下移",
+  "nodes.manualHint": "上移 / 下移调整顺序，顺序会保存下来",
   // groups
   "groups.title": "策略组",
   "groups.hint": "规则可以指向策略组，组内再挑节点。",
