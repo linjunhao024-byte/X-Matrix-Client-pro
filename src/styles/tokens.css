@@ -1,0 +1,116 @@
+/**
+ * Design tokens. Every colour/shape/transition in the app resolves to one of
+ * these variables — components never hard-code a hex value, so light and dark
+ * themes stay in sync by construction.
+ *
+ * Style: apple-liquid-glass. Glass is reserved for navigation, sidebars,
+ * stat cards and overlays. Tables, logs and long text always sit on an opaque
+ * surface (see `global.css` `.surface-plain`).
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Backdrop */
+  --bg-base: #f2f3f8;
+  --bg-glow:
+    radial-gradient(900px 620px at 10% -10%, rgba(99, 102, 241, 0.22), transparent 70%),
+    radial-gradient(820px 540px at 98% 2%, rgba(56, 189, 248, 0.18), transparent 68%),
+    radial-gradient(760px 700px at 50% 112%, rgba(168, 85, 247, 0.13), transparent 72%);
+
+  /* Surfaces */
+  --surface-glass: rgba(255, 255, 255, 0.56);
+  --surface-glass-strong: rgba(255, 255, 255, 0.8);
+  --surface-solid: #ffffff;
+  --surface-sunken: rgba(15, 23, 42, 0.045);
+  --surface-hover: rgba(15, 23, 42, 0.045);
+  --glass-border: rgba(255, 255, 255, 0.72);
+  --glass-highlight: rgba(255, 255, 255, 0.9);
+
+  /* Text */
+  --text-primary: #14161c;
+  --text-secondary: #4b5263;
+  /* 4.85:1 on white — the lightest grey that still passes AA for small text. */
+  --text-tertiary: #6b7280;
+  --text-inverse: #ffffff;
+
+  /* Accents */
+  --accent: #5b5bd6;
+  --accent-hover: #4a4ac4;
+  --accent-contrast: #ffffff;
+  --accent-soft: rgba(91, 91, 214, 0.12);
+  --success: #15803d;
+  --success-soft: rgba(21, 128, 61, 0.12);
+  --warning: #b45309;
+  --warning-soft: rgba(180, 83, 9, 0.12);
+  --danger: #b91c1c;
+  --danger-soft: rgba(185, 28, 28, 0.1);
+
+  /* Lines */
+  --border-subtle: rgba(15, 23, 42, 0.09);
+  --border-strong: rgba(15, 23, 42, 0.16);
+
+  /* Shape */
+  --radius-card: 14px;
+  --radius-control: 10px;
+  --radius-pill: 999px;
+  --blur-glass: 18px;
+
+  /* Depth */
+  --shadow-card: 0 8px 24px rgba(15, 23, 42, 0.08);
+  --shadow-pop: 0 20px 48px rgba(15, 23, 42, 0.18);
+
+  /* Metrics */
+  --row-height: 42px;
+  --sidebar-width: 208px;
+  --sidebar-width-collapsed: 68px;
+
+  /* Type */
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+
+  /* Motion */
+  --duration-fast: 160ms;
+  --duration-base: 220ms;
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg-base: #0a0c12;
+  --bg-glow:
+    radial-gradient(900px 620px at 8% -12%, rgba(99, 102, 241, 0.28), transparent 70%),
+    radial-gradient(820px 540px at 100% 0%, rgba(14, 165, 233, 0.2), transparent 68%),
+    radial-gradient(760px 700px at 48% 114%, rgba(168, 85, 247, 0.18), transparent 72%);
+
+  --surface-glass: rgba(26, 30, 42, 0.6);
+  --surface-glass-strong: rgba(32, 37, 51, 0.84);
+  --surface-solid: #141822;
+  --surface-sunken: rgba(255, 255, 255, 0.05);
+  --surface-hover: rgba(255, 255, 255, 0.07);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-highlight: rgba(255, 255, 255, 0.08);
+
+  --text-primary: #eef1f7;
+  --text-secondary: #a9b1c3;
+  --text-tertiary: #7e8698;
+  --text-inverse: #0a0c12;
+
+  --accent: #8f8ff8;
+  --accent-hover: #a5a5ff;
+  --accent-contrast: #10121a;
+  --accent-soft: rgba(143, 143, 248, 0.16);
+  --success: #4ade80;
+  --success-soft: rgba(74, 222, 128, 0.14);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.14);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.14);
+
+  --border-subtle: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.17);
+
+  --shadow-card: 0 10px 28px rgba(0, 0, 0, 0.42);
+  --shadow-pop: 0 24px 56px rgba(0, 0, 0, 0.58);
+}

@@ -1,0 +1,47 @@
+{
+  "name": "x-matrix",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "X-Matrix — a beautiful proxy client",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "gen:contract": "node scripts/gen-contract.mjs",
+    "test": "vitest run",
+    "check:contract": "node scripts/gen-contract.mjs --check",
+    "check:arch": "node scripts/check-architecture.mjs",
+    "check": "npm run typecheck && npm run check:arch && npm run check:contract && npm run test"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-clipboard-manager": "^2",
+    "@tauri-apps/plugin-dialog": "^2",
+    "@tauri-apps/plugin-opener": "^2",
+    "@vueuse/core": "^13",
+    "dayjs": "^1.11",
+    "echarts": "^5.6",
+    "naive-ui": "^2",
+    "pinia": "^3",
+    "vue": "^3.5.13",
+    "vue-echarts": "^7",
+    "vue-router": "^4"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "@vitejs/plugin-vue": "^6.0.7",
+    "typescript": "~6.0.3",
+    "vite": "^8.0.16",
+    "vitest": "^3",
+    "vue-tsc": "^3.3.5"
+  },
+  "allowScripts": {
+    "vue-demi@0.13.11": true,
+    "esbuild@0.28.2": true
+  }
+}
