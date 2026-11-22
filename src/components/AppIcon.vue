@@ -27,6 +27,7 @@ export type IconName =
   | 'arrow-up'
   | 'info'
   | 'copy'
+  | 'file'
 
 const props = withDefaults(defineProps<{ name: IconName; size?: number }>(), { size: 18 })
 
@@ -71,6 +72,7 @@ const paths: Record<IconName, string[]> = {
   'arrow-up': ['M12 19V5', 'M6 11l6-6 6 6'],
   info: ['M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16', 'M12 11v5', 'M12 8h.01'],
   copy: ['M9 9h10v11H9z', 'M15 9V4H5v11h4'],
+  file: ['M6 3h8l4 4v14H6z', 'M14 3v4h4'],
 }
 </script>
 

@@ -176,6 +176,8 @@ export const en: Record<string, string> = {
   "nodes.moveUp": "Move up",
   "nodes.moveDown": "Move down",
   "nodes.manualHint": "Use the arrows to reorder; the order is saved",
+  "nodes.saveToFile": "Save to file",
+  "nodes.savedFile": "Saved to {path}",
   // groups
   "groups.title": "Proxy groups",
   "groups.hint": "Rules can point at a group, and the group picks the node.",
@@ -322,6 +324,7 @@ export const en: Record<string, string> = {
   "import.err.none": "No recognisable node was found in this text.",
   "import.reparse": "Parse again",
   "import.moreLines": "{count} more lines…",
+  "import.fromFile": "Load from file",
   // log
   "log.title": "Kernel logs",
   "log.empty.title": "No logs yet",

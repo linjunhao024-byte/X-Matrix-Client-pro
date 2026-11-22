@@ -176,6 +176,8 @@ export const zh: Record<string, string> = {
   "nodes.moveUp": "上移",
   "nodes.moveDown": "下移",
   "nodes.manualHint": "上移 / 下移调整顺序，顺序会保存下来",
+  "nodes.saveToFile": "保存为文件",
+  "nodes.savedFile": "已保存到 {path}",
   // groups
   "groups.title": "策略组",
   "groups.hint": "规则可以指向策略组，组内再挑节点。",
@@ -322,6 +324,7 @@ export const zh: Record<string, string> = {
   "import.err.none": "这批内容里没有找到可识别的节点。",
   "import.reparse": "重新解析",
   "import.moreLines": "还有 {count} 行…",
+  "import.fromFile": "从文件读取",
   // log
   "log.title": "内核日志",
   "log.empty.title": "还没有日志",

@@ -2793,5 +2793,20 @@
     "home.speed.result",
     "下载速度 {rate}",
     "Download speed {rate}"
+  ],
+  [
+    "import.fromFile",
+    "从文件读取",
+    "Load from file"
+  ],
+  [
+    "nodes.saveToFile",
+    "保存为文件",
+    "Save to file"
+  ],
+  [
+    "nodes.savedFile",
+    "已保存到 {path}",
+    "Saved to {path}"
   ]
 ]

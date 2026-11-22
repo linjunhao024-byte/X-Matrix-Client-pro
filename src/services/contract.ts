@@ -80,6 +80,9 @@ export const api = {
   saveTextFile: (defaultName: string, contents: string): Promise<string | null> =>
     unwrap(commands.saveTextFile(defaultName, contents)),
 
+  /** Read a text file the user picked; `null` means they cancelled. */
+  openTextFile: (): Promise<string | null> => unwrap(commands.openTextFile()),
+
   listNodes: (): Promise<Node_Serialize[]> => unwrap(commands.listNodes()),
   upsertNode: (node: Node_Deserialize): Promise<Node_Serialize[]> => unwrap(commands.upsertNode(node)),
   deleteNode: (id: string): Promise<Node_Serialize[]> => unwrap(commands.deleteNode(id)),

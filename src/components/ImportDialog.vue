@@ -29,6 +29,25 @@ watch(
   },
 )
 
+/**
+ * Read a file instead of pasting.
+ *
+ * Subscription providers hand out a link, but every tutorial and every other
+ * client also accepts "here is a .txt on my disk", and that is the path people
+ * take when the provider's link is behind a login.
+ */
+async function loadFromFile() {
+  error.value = null
+  try {
+    const text_ = await api.openTextFile()
+    if (text_ === null) return
+    text.value = text_
+    await parse()
+  } catch (cause) {
+    error.value = describeError(cause)
+  }
+}
+
 async function parse() {
   parsing.value = true
   error.value = null
@@ -76,7 +95,13 @@ const canApply = () => (preview.value?.nodes.length ?? 0) > 0 && !applying.value
     </p>
 
     <div class="field">
-      <label class="field-label" for="import-text">{{ t('import.label') }}</label>
+      <div class="row import-label-row">
+        <label class="field-label" for="import-text">{{ t('import.label') }}</label>
+        <button class="btn btn-sm" type="button" @click="loadFromFile">
+          <AppIcon name="file" :size="14" />
+          {{ t('import.fromFile') }}
+        </button>
+      </div>
       <textarea
         id="import-text"
         v-model="text"

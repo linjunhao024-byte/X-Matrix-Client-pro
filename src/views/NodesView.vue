@@ -234,6 +234,35 @@ async function copyLinks(ids: string[]) {
   }
 }
 
+/**
+ * Save the selected links as a text file.
+ *
+ * The clipboard is fine for one link; a whole set is something people keep, and
+ * every other client offers a file. Same payload as `copyLinks`, only it lands
+ * on disk where it can be edited before sharing.
+ */
+async function saveLinks(ids: string[]) {
+  if (ids.length === 0) return
+  copying.value = true
+  copyNote.value = null
+  actionError.value = null
+  try {
+    const text = await store.exportLinks(ids)
+    const stamp = new Date().toISOString().slice(0, 10)
+    const path = await api.saveTextFile(`x-matrix-nodes-${stamp}.txt`, text)
+    if (path === null) return
+    copyNote.value = t('nodes.savedFile', { path })
+    if (copyTimer) clearTimeout(copyTimer)
+    copyTimer = setTimeout(() => {
+      copyNote.value = null
+    }, 6000)
+  } catch (cause) {
+    actionError.value = describeError(cause)
+  } finally {
+    copying.value = false
+  }
+}
+
 async function testSelected() {
   const targets = filteredNodes.value.filter((node) => isSelected(node.id))
   testingAll.value = true
@@ -537,6 +566,15 @@ function securityLabel(node: Node_Serialize): string {
           >
             <AppIcon name="copy" :size="14" />
             {{ t('nodes.copyLink') }}
+          </button>
+          <button
+            class="btn btn-sm"
+            type="button"
+            :disabled="selected.length === 0 || copying"
+            @click="saveLinks(selected)"
+          >
+            <AppIcon name="file" :size="14" />
+            {{ t('nodes.saveToFile') }}
           </button>
           <button
             class="btn btn-sm"

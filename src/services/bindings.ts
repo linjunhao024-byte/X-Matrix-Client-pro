@@ -77,6 +77,7 @@ export const commands = {
 	 *  report a cancelled dialog as `None`" dance.
 	 */
 	saveTextFile: (defaultName: string, contents: string) => typedError<string | null, AppError>(__TAURI_INVOKE("save_text_file", { defaultName, contents })),
+	openTextFile: () => typedError<string | null, AppError>(__TAURI_INVOKE("open_text_file")),
 	/**
 	 *  The title bar is drawn by the OS, so CSS cannot theme it: a dark app with a
 	 *  white frame looks like a bug. The UI calls this whenever the theme resolves.

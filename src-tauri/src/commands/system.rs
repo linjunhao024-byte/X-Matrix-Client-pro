@@ -114,6 +114,45 @@ pub async fn save_text_file(app: AppHandle, default_name: String, contents: Stri
     .map_err(|error| AppError::Internal(format!("保存任务没有跑完：{error}")))?
 }
 
+/// Ask for a text file and return its contents.
+///
+/// Subscription files, Clash configs and exported link lists are all just text,
+/// so the importer can stay one code path: read the file, hand the string to
+/// `import_preview`, done. The size cap keeps a mis-click on a 2 GB log from
+/// freezing the window.
+const MAX_IMPORT_BYTES: u64 = 4 * 1024 * 1024;
+
+#[tauri::command]
+#[specta::specta]
+pub async fn open_text_file(app: AppHandle) -> AppResult<Option<String>> {
+    let handle = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let picked = handle
+            .dialog()
+            .file()
+            .add_filter("文本文件", &["txt", "json", "yaml", "yml", "conf", "list"])
+            .blocking_pick_file();
+        let Some(path) = picked else {
+            return Ok(None);
+        };
+        let path = path
+            .into_path()
+            .map_err(|error| AppError::InvalidInput(format!("这个路径读不出来：{error}")))?;
+        let size = std::fs::metadata(&path).map(|meta| meta.len()).unwrap_or(0);
+        if size > MAX_IMPORT_BYTES {
+            return Err(AppError::InvalidInput(format!(
+                "文件有 {} MB，超过 4 MB 上限；这么大的东西不是订阅",
+                size / 1024 / 1024
+            )));
+        }
+        let text = std::fs::read_to_string(&path)
+            .map_err(|error| AppError::InvalidInput(format!("读不了这个文件：{error}")))?;
+        Ok(Some(text))
+    })
+    .await
+    .map_err(|error| AppError::Internal(format!("读取任务没有跑完：{error}")))?
+}
+
 /// The title bar is drawn by the OS, so CSS cannot theme it: a dark app with a
 /// white frame looks like a bug. The UI calls this whenever the theme resolves.
 #[tauri::command]
