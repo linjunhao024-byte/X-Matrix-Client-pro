@@ -232,7 +232,7 @@ function actionClass(rule: RoutingRule): string {
             <th scope="col">{{ t('routing.col.value') }}</th>
             <th scope="col">{{ t('routing.col.action') }}</th>
             <th scope="col">{{ t('routing.col.status') }}</th>
-            <th scope="col" class="col-actions">{{ t('routing.col.actions') }}</th>
+            <th scope="col" class="actions">{{ t('routing.col.actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -249,10 +249,10 @@ function actionClass(rule: RoutingRule): string {
                 :title="rule.enabled ? t('routing.disable') : t('routing.enable')"
                 @click="toggle(rule)"
               >
-                {{ rule.enabled ? t('common.enabled') : t('common.disabled') }}
+                {{ rule.enabled ? t('common.disable') : t('common.enable') }}
               </button>
             </td>
-            <td class="col-actions">
+            <td class="actions">
               <div class="row">
                 <button
                   class="btn btn-ghost btn-sm"
@@ -339,7 +339,7 @@ function actionClass(rule: RoutingRule): string {
       <p class="muted">{{ t('routing.delete.body', { name: pendingDelete?.name ?? '' }) }}</p>
       <template #footer>
         <button class="btn" type="button" @click="pendingDelete = null">{{ t('common.cancel') }}</button>
-        <button class="btn btn-primary" type="button" :disabled="busy" @click="confirmDelete">
+        <button class="btn btn-danger" type="button" :disabled="busy" @click="confirmDelete">
           {{ busy ? t('common.deleting') : t('common.confirm') }}
         </button>
       </template>
@@ -370,12 +370,18 @@ function actionClass(rule: RoutingRule): string {
   white-space: nowrap;
 }
 
-.col-actions {
+.actions {
   width: 1%;
   white-space: nowrap;
 }
 
 tr.disabled td {
   opacity: 0.55;
+}
+
+/* Dimming the row must not dim the control that turns it back on: a switch at
+   55% reads as disabled, which is exactly what it is not. */
+tr.disabled td button {
+  opacity: 1;
 }
 </style>

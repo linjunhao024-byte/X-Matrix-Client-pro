@@ -25,6 +25,12 @@
   --surface-glass: rgba(255, 255, 255, 0.56);
   --surface-glass-strong: rgba(255, 255, 255, 0.8);
   --surface-solid: #ffffff;
+  /* One step above the card: used by the selected segment of a segmented
+     control, which must read as lifted out of its track. */
+  --surface-raised: #f4f5f8;
+  /* The scrim behind a modal. A literal rgba() here was the one colour in the
+     component tree that ignored the theme. */
+  --overlay-scrim: rgba(10, 12, 18, 0.42);
   --surface-sunken: rgba(15, 23, 42, 0.03);
   --surface-hover: rgba(15, 23, 42, 0.045);
   --glass-border: rgba(255, 255, 255, 0.72);
@@ -90,6 +96,8 @@
   --surface-glass: rgba(26, 30, 42, 0.6);
   --surface-glass-strong: rgba(32, 37, 51, 0.84);
   --surface-solid: #141822;
+  --surface-raised: #1e2433;
+  --overlay-scrim: rgba(4, 6, 12, 0.6);
   --surface-sunken: rgba(255, 255, 255, 0.035);
   --surface-hover: rgba(255, 255, 255, 0.07);
   --glass-border: rgba(255, 255, 255, 0.15);

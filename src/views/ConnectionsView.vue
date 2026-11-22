@@ -88,10 +88,14 @@ const rows = computed(() => {
  */
 const exporting = ref(false)
 const exportNote = ref<string | null>(null)
+/** Kept apart from `exportNote`: a failure in the green "saved to …" skin
+    reads as success, and the user closes the app believing there is a file. */
+const exportError = ref<string | null>(null)
 
 async function exportCsv(): Promise<void> {
   exporting.value = true
   exportNote.value = null
+  exportError.value = null
   try {
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
     const saved = await api.saveTextFile(`x-matrix-connections-${stamp}.csv`, connectionsToCsv(rows.value))
@@ -99,7 +103,7 @@ async function exportCsv(): Promise<void> {
     // worth a message.
     if (saved) exportNote.value = t('conn.exported', { path: saved })
   } catch (error) {
-    exportNote.value = describeError(error)
+    exportError.value = describeError(error)
   } finally {
     exporting.value = false
   }
@@ -188,20 +192,22 @@ function chainLabel(chains: string[]): string {
         </button>
       </div>
       <label class="muted small" for="conn-sort">{{ t('conn.sort') }}</label>
-      <button class="btn btn-sm" type="button" :disabled="exporting || rows.length === 0" @click="exportCsv">
-        {{ exporting ? t('common.loading') : t('conn.export') }}
-      </button>
       <select id="conn-sort" v-model="sortBy" class="select select-sort">
         <option value="start">{{ t('conn.sort.start') }}</option>
         <option value="download">{{ t('conn.sort.download') }}</option>
         <option value="upload">{{ t('conn.sort.upload') }}</option>
         <option value="host">{{ t('conn.sort.host') }}</option>
       </select>
+      <button class="btn btn-sm" type="button" :disabled="exporting || rows.length === 0" @click="exportCsv">
+        {{ exporting ? t('common.loading') : t('conn.export') }}
+      </button>
     </div>
 
-    <p v-if="exportNote" class="notice">{{ exportNote }}</p>
+    <p v-if="exportError" class="alert">{{ exportError }}</p>
+    <p v-else-if="exportNote" class="notice">{{ exportNote }}</p>
 
     <section class="surface-plain">
+      <p v-if="closeError" class="alert alert-inline">{{ closeError }}</p>
       <EmptyState
         v-if="!engine.running"
         icon="connections"
@@ -285,8 +291,6 @@ function chainLabel(chains: string[]): string {
         </tbody>
       </table>
     </section>
-
-    <p v-if="closeError" class="alert">{{ closeError }}</p>
 
     <p class="muted small">
       {{

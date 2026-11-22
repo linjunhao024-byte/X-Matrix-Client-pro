@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 
+import AppIcon from '../components/AppIcon.vue'
 import EmptyState from '../components/EmptyState.vue'
 import ModalDialog from '../components/ModalDialog.vue'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
@@ -178,8 +179,12 @@ onMounted(() => {
     <p v-if="store.error" class="alert">{{ store.error }}</p>
     <p v-if="note" class="notice">{{ note }}</p>
 
+    <p v-if="store.loading && !store.loaded" class="muted small">
+      {{ t('common.loading') }}
+    </p>
+
     <EmptyState
-      v-if="isEmpty"
+      v-else-if="isEmpty"
       icon="inbox"
       :title="t('rs.empty.title')"
       :body="t('rs.empty.body')"
@@ -223,19 +228,33 @@ onMounted(() => {
               <button
                 type="button"
                 class="btn btn-ghost btn-sm"
+                :title="t('rs.refresh')"
+                :aria-label="t('rs.refresh')"
                 :disabled="store.busyId === set.id"
                 @click="refreshOne(set)"
               >
-                {{ t('rs.refresh') }}
+                <AppIcon name="refresh" :size="14" />
               </button>
-              <button type="button" class="btn btn-ghost btn-sm" @click="openEdit(set)">
-                {{ t('common.edit') }}
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm"
+                :title="t('common.edit')"
+                :aria-label="t('common.edit')"
+                @click="openEdit(set)"
+              >
+                <AppIcon name="edit" :size="14" />
               </button>
               <button type="button" class="btn btn-ghost btn-sm" @click="store.toggle(set.id)">
-                {{ set.enabled ? t('common.disabled') : t('common.enabled') }}
+                {{ set.enabled ? t('common.disable') : t('common.enable') }}
               </button>
-              <button type="button" class="btn btn-ghost btn-sm" @click="confirming = set">
-                {{ t('common.delete') }}
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm"
+                :title="t('common.delete')"
+                :aria-label="t('common.delete')"
+                @click="confirming = set"
+              >
+                <AppIcon name="trash" :size="14" />
               </button>
             </td>
           </tr>

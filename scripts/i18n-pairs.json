@@ -1,2738 +1,33 @@
 [
   [
-    "nav.home",
-    "首页",
-    "Home"
+    "about.caps.backup",
+    "配置备份",
+    "Config backup"
   ],
   [
-    "nav.nodes",
-    "节点",
-    "Nodes"
+    "about.caps.backup.note",
+    "导出与恢复整份配置，含本地规则集内容。",
+    "Export and restore the whole configuration, local rule sets included."
   ],
   [
-    "nav.routing",
-    "路由",
-    "Routing"
-  ],
-  [
-    "nav.subscriptions",
-    "订阅",
-    "Subscriptions"
-  ],
-  [
-    "nav.connections",
-    "连接",
+    "about.caps.connections",
+    "连接管理",
     "Connections"
   ],
   [
-    "nav.settings",
-    "设置",
-    "Settings"
+    "about.caps.connections.note",
+    "仅 sing-box：Xray 不提供连接列表接口。",
+    "sing-box only: Xray exposes no connection list."
   ],
   [
-    "sidebar.toLight",
-    "切换到浅色主题",
-    "Switch to light theme"
-  ],
-  [
-    "sidebar.toDark",
-    "切换到深色主题",
-    "Switch to dark theme"
-  ],
-  [
-    "sidebar.light",
-    "浅色",
-    "Light"
-  ],
-  [
-    "sidebar.dark",
-    "深色",
-    "Dark"
-  ],
-  [
-    "sidebar.expand",
-    "展开侧栏",
-    "Expand sidebar"
-  ],
-  [
-    "sidebar.collapse",
-    "收起侧栏",
-    "Collapse sidebar"
-  ],
-  [
-    "page.home.title",
-    "首页",
-    "Home"
-  ],
-  [
-    "page.home.subtitle",
-    "运行状态总览",
-    "Everything at a glance"
-  ],
-  [
-    "page.nodes.title",
-    "节点",
-    "Nodes"
-  ],
-  [
-    "page.nodes.subtitle",
-    "节点、策略组与延迟",
-    "Nodes, groups and latency"
-  ],
-  [
-    "page.routing.title",
-    "路由",
-    "Routing"
-  ],
-  [
-    "page.routing.subtitle",
-    "分流规则",
-    "Rules that decide where traffic goes"
-  ],
-  [
-    "page.subscriptions.title",
-    "订阅",
-    "Subscriptions"
-  ],
-  [
-    "page.subscriptions.subtitle",
-    "机场链接与自动更新",
-    "Provider links and auto updates"
-  ],
-  [
-    "page.connections.title",
-    "连接",
-    "Connections"
-  ],
-  [
-    "page.connections.subtitle",
-    "实时连接与流量",
-    "Live connections and traffic"
-  ],
-  [
-    "page.settings.title",
-    "设置",
-    "Settings"
-  ],
-  [
-    "page.settings.subtitle",
-    "端口、模式与系统集成",
-    "Ports, modes and system integration"
-  ],
-  [
-    "common.refresh",
-    "刷新",
-    "Refresh"
-  ],
-  [
-    "common.refreshing",
-    "刷新中…",
-    "Refreshing…"
-  ],
-  [
-    "common.save",
-    "保存",
-    "Save"
-  ],
-  [
-    "common.saving",
-    "保存中…",
-    "Saving…"
-  ],
-  [
-    "common.cancel",
-    "取消",
-    "Cancel"
-  ],
-  [
-    "common.delete",
-    "删除",
-    "Delete"
-  ],
-  [
-    "common.deleting",
-    "删除中…",
-    "Deleting…"
-  ],
-  [
-    "common.edit",
-    "编辑",
-    "Edit"
-  ],
-  [
-    "common.close",
-    "关闭",
-    "Close"
-  ],
-  [
-    "common.loading",
-    "读取中…",
-    "Loading…"
-  ],
-  [
-    "common.none",
-    "无",
-    "None"
-  ],
-  [
-    "common.never",
-    "从未",
-    "Never"
-  ],
-  [
-    "common.unknown",
-    "未知",
-    "Unknown"
-  ],
-  [
-    "common.add",
-    "新增",
-    "Add"
-  ],
-  [
-    "common.confirm",
-    "确认",
-    "Confirm"
-  ],
-  [
-    "common.search",
-    "搜索",
-    "Search"
-  ],
-  [
-    "common.openDir",
-    "打开目录",
-    "Open folder"
-  ],
-  [
-    "common.start",
-    "启动",
-    "Start"
-  ],
-  [
-    "common.starting",
-    "启动中…",
-    "Starting…"
-  ],
-  [
-    "common.stop",
-    "停止",
-    "Stop"
-  ],
-  [
-    "common.stopping",
-    "停止中…",
-    "Stopping…"
-  ],
-  [
-    "common.running",
-    "运行中",
-    "Running"
-  ],
-  [
-    "common.stopped",
-    "未运行",
-    "Not running"
-  ],
-  [
-    "common.test",
-    "测速",
-    "Test"
-  ],
-  [
-    "common.testing",
-    "测速中…",
-    "Testing…"
-  ],
-  [
-    "common.timeout",
-    "超时",
-    "Timed out"
-  ],
-  [
-    "common.render",
-    "重新渲染",
-    "Render again"
-  ],
-  [
-    "common.rendering",
-    "渲染中…",
-    "Rendering…"
-  ],
-  [
-    "common.enabled",
-    "已启用",
-    "Enabled"
-  ],
-  [
-    "common.disabled",
-    "已停用",
-    "Disabled"
-  ],
-  [
-    "common.saved",
-    "已保存",
-    "Saved"
-  ],
-  [
-    "home.stat.engine",
-    "引擎",
-    "Engine"
-  ],
-  [
-    "home.stat.down",
-    "下载速率",
-    "Download"
-  ],
-  [
-    "home.stat.up",
-    "上传速率",
-    "Upload"
-  ],
-  [
-    "home.stat.nodes",
-    "节点",
-    "Nodes"
-  ],
-  [
-    "home.total",
-    "累计 {value}",
-    "Total {value}"
-  ],
-  [
-    "home.nodeLine",
-    "节点：{name}",
-    "Node: {name}"
-  ],
-  [
-    "home.noEngine",
-    "还没有启动内核",
-    "No kernel running"
-  ],
-  [
-    "home.nodesCount",
-    "已保存的节点数量",
-    "Saved nodes"
-  ],
-  [
-    "home.nodesEmptyHint",
-    "还没有节点，去「节点」页添加",
-    "No nodes yet — add some on the Nodes page"
-  ],
-  [
-    "home.chart.title",
-    "最近一分钟",
-    "Last minute"
-  ],
-  [
-    "home.control.title",
-    "启动控制",
-    "Kernel control"
-  ],
-  [
-    "home.control.noNodes",
-    "还没有节点，无法启动。去「节点」页加一个再回来。",
-    "No nodes yet, so nothing can start. Add one on the Nodes page first."
-  ],
-  [
-    "home.control.node",
-    "节点",
-    "Node"
-  ],
-  [
-    "home.control.engine",
-    "内核",
-    "Kernel"
-  ],
-  [
-    "home.control.locked",
-    "内核运行中不能切换，先停止再换",
-    "Stop the kernel before switching"
-  ],
-  [
-    "home.control.config",
-    "配置",
-    "Config"
-  ],
-  [
-    "home.control.log",
-    "日志",
-    "Logs"
-  ],
-  [
-    "home.binaryMissing",
-    "没找到 {name}。把它放进内核目录，然后重启程序。",
-    "{name} was not found. Put it in the kernels folder, then restart the app."
-  ],
-  [
-    "home.fact.mixed",
-    "入站端口",
-    "Inbound port"
-  ],
-  [
-    "home.fact.api",
-    "控制端口",
-    "Control port"
-  ],
-  [
-    "home.fact.config",
-    "配置文件",
-    "Config file"
-  ],
-  [
-    "home.lastExit",
-    "上一次内核退出码 {code}，点「日志」看内核最后说了什么。",
-    "The kernel last exited with code {code}. Open Logs to see what it said."
-  ],
-  [
-    "home.progress.title",
-    "当前进度",
-    "Progress"
-  ],
-  [
-    "home.progress.m0",
-    "M0 · 契约层与工程骨架",
-    "M0 · Contract layer and skeleton"
-  ],
-  [
-    "home.progress.m1",
-    "M1 · 引擎启停、配置渲染、实时统计",
-    "M1 · Engine control, config rendering, live stats"
-  ],
-  [
-    "home.progress.m2",
-    "M2 · 路由规则、导入、系统代理",
-    "M2 · Rules, import, system proxy"
-  ],
-  [
-    "home.progress.m3",
-    "M3 · 测速、曲线、日志、自启、托盘",
-    "M3 · Latency, chart, logs, autostart, tray"
-  ],
-  [
-    "home.progress.sub",
-    "订阅 · 拉取、整包解析、定时更新",
-    "Subscriptions · fetch, parse, auto update"
-  ],
-  [
-    "home.progress.groups",
-    "策略组 · 选择 / 自动测速",
-    "Groups · select and url-test"
-  ],
-  [
-    "home.progress.left",
-    "待做 · 写类操作的人工验收",
-    "Todo · human acceptance of the write paths"
-  ],
-  [
-    "home.footer",
-    "版本 {version} · {platform} · {arch}",
-    "Version {version} · {platform} · {arch}"
-  ],
-  [
-    "home.footerLoading",
-    "版本 {version} · 读取中…",
-    "Version {version} · loading…"
-  ],
-  [
-    "nodes.new",
-    "新增节点",
-    "New node"
-  ],
-  [
-    "nodes.import",
-    "导入",
-    "Import"
-  ],
-  [
-    "nodes.importLinks",
-    "导入链接",
-    "Import links"
-  ],
-  [
-    "nodes.search",
-    "搜索节点",
-    "Search nodes"
-  ],
-  [
-    "nodes.count",
-    "{count} 个节点",
-    "{count} nodes"
-  ],
-  [
-    "nodes.sort",
-    "排序",
-    "Sort"
-  ],
-  [
-    "nodes.sort.name",
-    "按名称",
-    "By name"
-  ],
-  [
-    "nodes.sort.latency",
-    "按延迟",
-    "By latency"
-  ],
-  [
-    "nodes.sort.protocol",
-    "按协议",
-    "By protocol"
-  ],
-  [
-    "nodes.testAll",
-    "全部测速",
-    "Test all"
-  ],
-  [
-    "nodes.engineHint",
-    "启动时使用的内核",
-    "Kernel used when starting"
-  ],
-  [
-    "nodes.empty.title",
-    "还没有任何节点",
-    "No nodes yet"
-  ],
-  [
-    "nodes.empty.body",
-    "列表为空，因为你还没有手写节点、也没有导入过分享链接。点「新增节点」逐项填写，或点「导入链接」批量粘贴。",
-    "The list is empty because no node was written by hand and no share link was imported yet. Use New node to fill one in, or Import links to paste a batch."
-  ],
-  [
-    "nodes.latency.none",
-    "未测速",
-    "Not tested"
-  ],
-  [
-    "nodes.latency.ms",
-    "{value} ms",
-    "{value} ms"
-  ],
-  [
-    "nodes.delete.title",
-    "删除节点",
-    "Delete node"
-  ],
-  [
-    "nodes.delete.body",
-    "确认删除「{name}」？删除后无法恢复，需要重新填写或导入。",
-    "Delete \"{name}\"? This cannot be undone — you would have to fill it in or import it again."
-  ],
-  [
-    "nodes.imported",
-    "已导入 {imported} 个节点",
-    "Imported {imported} nodes"
-  ],
-  [
-    "nodes.importedDup",
-    "{count} 个已存在，跳过",
-    "{count} already existed and were skipped"
-  ],
-  [
-    "nodes.importedSkipped",
-    "{count} 行无法识别",
-    "{count} lines could not be recognised"
-  ],
-  [
-    "nodes.col.transport",
-    "传输",
-    "Transport"
-  ],
-  [
-    "nodes.col.security",
-    "安全",
-    "Security"
-  ],
-  [
-    "groups.title",
+    "about.caps.groups",
     "策略组",
     "Proxy groups"
   ],
   [
-    "groups.hint",
-    "规则可以指向策略组，组内再挑节点。",
-    "Rules can point at a group, and the group picks the node."
-  ],
-  [
-    "groups.new",
-    "新增策略组",
-    "New group"
-  ],
-  [
-    "groups.empty.title",
-    "还没有策略组",
-    "No groups yet"
-  ],
-  [
-    "groups.empty.body",
-    "策略组把多个节点打包成一个出口，规则指向它就行。没有组时，规则只能指向当前节点。",
-    "A group bundles several nodes into one outbound that rules can point at. Without groups, rules can only target the current node."
-  ],
-  [
-    "groups.kind.select",
-    "手动选择",
-    "Select"
-  ],
-  [
-    "groups.kind.urlTest",
-    "自动测速",
-    "URL test"
-  ],
-  [
-    "groups.kind.select.hint",
-    "永远用你选中的那个节点",
-    "Always use the node you picked"
-  ],
-  [
-    "groups.kind.urlTest.hint",
-    "定时测速，用最快的",
-    "Test on a timer, use the fastest"
-  ],
-  [
-    "groups.members",
-    "{count} 个成员",
-    "{count} members"
-  ],
-  [
-    "groups.current",
-    "当前出口",
-    "Current outbound"
-  ],
-  [
-    "groups.pick",
-    "选它",
-    "Use this"
-  ],
-  [
-    "groups.delete.title",
-    "删除策略组",
-    "Delete group"
-  ],
-  [
-    "groups.delete.body",
-    "确认删除「{name}」？指向它的规则会退回「当前节点」。",
-    "Delete \"{name}\"? Rules pointing at it will fall back to the current node."
-  ],
-  [
-    "groups.editor.new",
-    "新增策略组",
-    "New group"
-  ],
-  [
-    "groups.editor.edit",
-    "编辑策略组",
-    "Edit group"
-  ],
-  [
-    "groups.editor.name",
-    "名称",
-    "Name"
-  ],
-  [
-    "groups.editor.namePlaceholder",
-    "例如：自动选择",
-    "e.g. Auto"
-  ],
-  [
-    "groups.editor.kind",
-    "类型",
-    "Type"
-  ],
-  [
-    "groups.editor.members",
-    "成员节点",
-    "Member nodes"
-  ],
-  [
-    "groups.editor.membersHint",
-    "没选节点的组不会出现在规则的动作列表里。",
-    "A group with no members will not show up in the rule action list."
-  ],
-  [
-    "groups.editor.noNodes",
-    "还没有节点可选，先去加节点。",
-    "No nodes to pick yet — add some first."
-  ],
-  [
-    "routing.hint",
-    "从上到下逐条匹配，命中第一条即停止 · {enabled} / {total} 条已启用",
-    "Matched top to bottom, first hit wins · {enabled} of {total} enabled"
-  ],
-  [
-    "routing.new",
-    "新增规则",
-    "New rule"
-  ],
-  [
-    "routing.empty.title",
-    "还没有路由规则",
-    "No rules yet"
-  ],
-  [
-    "routing.empty.body",
-    "规则列表为空，所以全部流量走当前节点。加一条规则可以按域名、IP 段、端口或进程决定直连或拦截。",
-    "The rule list is empty, so all traffic uses the current node. Add a rule to send domains, IP ranges, ports or processes direct or block them."
-  ],
-  [
-    "routing.col.order",
-    "顺序",
-    "Order"
-  ],
-  [
-    "routing.col.name",
-    "名称",
-    "Name"
-  ],
-  [
-    "routing.col.match",
-    "匹配",
-    "Match"
-  ],
-  [
-    "routing.col.value",
-    "内容",
-    "Value"
-  ],
-  [
-    "routing.col.action",
-    "动作",
-    "Action"
-  ],
-  [
-    "routing.col.status",
-    "状态",
-    "Status"
-  ],
-  [
-    "routing.col.actions",
-    "操作",
-    "Actions"
-  ],
-  [
-    "routing.enable",
-    "启用",
-    "Enable"
-  ],
-  [
-    "routing.disable",
-    "停用",
-    "Disable"
-  ],
-  [
-    "routing.moveUp",
-    "上移",
-    "Move up"
-  ],
-  [
-    "routing.moveDown",
-    "下移",
-    "Move down"
-  ],
-  [
-    "routing.delete.title",
-    "删除规则",
-    "Delete rule"
-  ],
-  [
-    "routing.delete.body",
-    "确认删除「{name}」？删除后规则表按新顺序重新生效。",
-    "Delete \"{name}\"? The rule table takes effect again in its new order."
-  ],
-  [
-    "match.domain_suffix",
-    "域名后缀",
-    "Domain suffix"
-  ],
-  [
-    "match.domain_keyword",
-    "域名关键字",
-    "Domain keyword"
-  ],
-  [
-    "match.domain_full",
-    "完整域名",
-    "Exact domain"
-  ],
-  [
-    "match.ip_cidr",
-    "IP 段",
-    "IP range"
-  ],
-  [
-    "match.geo_ip",
-    "国家",
-    "Country"
-  ],
-  [
-    "match.port",
-    "端口",
-    "Port"
-  ],
-  [
-    "match.process_name",
-    "进程名",
-    "Process name"
-  ],
-  [
-    "action.proxy",
-    "代理",
-    "Proxy"
-  ],
-  [
-    "action.direct",
-    "直连",
-    "Direct"
-  ],
-  [
-    "action.block",
-    "拦截",
-    "Block"
-  ],
-  [
-    "action.proxy.hint",
-    "走当前节点",
-    "Through the current node"
-  ],
-  [
-    "action.direct.hint",
-    "不经过代理",
-    "Bypass the proxy"
-  ],
-  [
-    "action.block.hint",
-    "直接断开",
-    "Drop it"
-  ],
-  [
-    "editor.new",
-    "新增节点",
-    "New node"
-  ],
-  [
-    "editor.edit",
-    "编辑节点",
-    "Edit node"
-  ],
-  [
-    "editor.name",
-    "名称",
-    "Name"
-  ],
-  [
-    "editor.namePlaceholder",
-    "例如：东京 01",
-    "e.g. Tokyo 01"
-  ],
-  [
-    "editor.protocol",
-    "协议",
-    "Protocol"
-  ],
-  [
-    "editor.server",
-    "服务器",
-    "Server"
-  ],
-  [
-    "editor.serverPlaceholder",
-    "example.com 或 IP",
-    "example.com or an IP"
-  ],
-  [
-    "editor.port",
-    "端口",
-    "Port"
-  ],
-  [
-    "editor.uuid",
-    "UUID",
-    "UUID"
-  ],
-  [
-    "editor.flow",
-    "流控",
-    "Flow"
-  ],
-  [
-    "editor.password",
-    "密码",
-    "Password"
-  ],
-  [
-    "editor.method",
-    "加密方式",
-    "Method"
-  ],
-  [
-    "editor.transport",
-    "传输",
-    "Transport"
-  ],
-  [
-    "editor.wsPath",
-    "WS 路径",
-    "WS path"
-  ],
-  [
-    "editor.wsHost",
-    "WS Host",
-    "WS host"
-  ],
-  [
-    "editor.grpcService",
-    "gRPC 服务名",
-    "gRPC service name"
-  ],
-  [
-    "editor.security",
-    "安全",
-    "Security"
-  ],
-  [
-    "editor.sni",
-    "SNI",
-    "SNI"
-  ],
-  [
-    "editor.alpn",
-    "ALPN（逗号分隔）",
-    "ALPN (comma separated)"
-  ],
-  [
-    "editor.allowInsecure",
-    "允许不安全证书",
-    "Allow an untrusted certificate"
-  ],
-  [
-    "editor.allowInsecureHint",
-    "跳过证书校验。sing-box 支持；Xray 26 起已移除该选项，请改用下面的证书指纹。",
-    "Skip certificate verification. sing-box honours it; Xray 26 removed the option, so use the certificate fingerprint below instead."
-  ],
-  [
-    "editor.certPin",
-    "证书指纹（SHA-256）",
-    "Certificate fingerprint (SHA-256)"
-  ],
-  [
-    "editor.certPinHint",
-    "只信任这一张证书，比跳过校验更安全。Xray 与 sing-box 都支持；多个用逗号分开。",
-    "Trust exactly this certificate — stricter than skipping verification. Works on both kernels; separate several with commas."
-  ],
-  [
-    "editor.certPinPlaceholder",
-    "93c559a5d6605453…",
-    "93c559a5d6605453…"
-  ],
-  [
-    "editor.publicKey",
-    "公钥",
-    "Public key"
-  ],
-  [
-    "editor.shortId",
-    "Short ID",
-    "Short ID"
-  ],
-  [
-    "editor.fingerprint",
-    "指纹（uTLS）",
-    "Fingerprint (uTLS)"
-  ],
-  [
-    "editor.spiderX",
-    "爬虫路径（spx）",
-    "Spider path (spx)"
-  ],
-  [
-    "editor.serverName",
-    "服务器名",
-    "Server name"
-  ],
-  [
-    "editor.err.name",
-    "请填写节点名称",
-    "Enter a node name"
-  ],
-  [
-    "editor.err.server",
-    "请填写服务器地址",
-    "Enter a server address"
-  ],
-  [
-    "editor.err.port",
-    "端口须为 1–65535 的整数",
-    "Port must be an integer from 1 to 65535"
-  ],
-  [
-    "editor.err.certPin",
-    "证书指纹要填 64 位十六进制（就是 SHA-256 的长度）",
-    "A certificate fingerprint must be 64 hex characters (the length of a SHA-256)"
-  ],
-  [
-    "editor.err.required",
-    "这一项不能为空",
-    "This field is required"
-  ],
-  [
-    "ruleEditor.new",
-    "新增规则",
-    "New rule"
-  ],
-  [
-    "ruleEditor.edit",
-    "编辑规则",
-    "Edit rule"
-  ],
-  [
-    "ruleEditor.name",
-    "名称",
-    "Name"
-  ],
-  [
-    "ruleEditor.namePlaceholder",
-    "例如：内网直连",
-    "e.g. LAN direct"
-  ],
-  [
-    "ruleEditor.matcher",
-    "匹配方式",
-    "Match type"
-  ],
-  [
-    "ruleEditor.value",
-    "匹配内容",
-    "Match value"
-  ],
-  [
-    "ruleEditor.action",
-    "动作",
-    "Action"
-  ],
-  [
-    "ruleEditor.hint",
-    "规则按顺序匹配，命中第一条就停止。",
-    "Rules match in order and stop at the first hit."
-  ],
-  [
-    "ruleEditor.enabled",
-    "启用这条规则",
-    "Enable this rule"
-  ],
-  [
-    "ruleEditor.err.name",
-    "请填写规则名称",
-    "Enter a rule name"
-  ],
-  [
-    "ruleEditor.err.value",
-    "请填写匹配内容",
-    "Enter a match value"
-  ],
-  [
-    "ruleEditor.err.port",
-    "端口需要是 1–65535 之间的整数",
-    "Port must be an integer from 1 to 65535"
-  ],
-  [
-    "import.title",
-    "导入分享链接",
-    "Import share links"
-  ],
-  [
-    "import.body",
-    "粘贴一行一个的分享链接（vless / vmess / trojan / ss），也可以粘贴整段 Base64 订阅内容，或从文件读取 Clash / sing-box 配置。",
-    "Paste one share link per line (vless / vmess / trojan / ss), paste a whole Base64 subscription, or load a Clash / sing-box config from a file."
-  ],
-  [
-    "import.hint",
-    "先点「解析预览」看看会得到什么，再确认写入。",
-    "Preview first, then write."
-  ],
-  [
-    "import.label",
-    "链接或订阅内容",
-    "Links or subscription body"
-  ],
-  [
-    "import.placeholder",
-    "vless://uuid@example.com:443?security=reality&pbk=...#Tokyo",
-    "vless://uuid@example.com:443?security=reality&pbk=...#Tokyo"
-  ],
-  [
-    "import.found",
-    "识别 {count} 个节点",
-    "{count} nodes recognised"
-  ],
-  [
-    "import.skipped",
-    "{count} 行无法识别",
-    "{count} lines could not be recognised"
-  ],
-  [
-    "import.first",
-    "前 {count} 个",
-    "First {count}"
-  ],
-  [
-    "import.andMore",
-    "还有 {count} 个。",
-    "and {count} more."
-  ],
-  [
-    "import.preview",
-    "解析预览",
-    "Preview"
-  ],
-  [
-    "import.parsing",
-    "解析中…",
-    "Parsing…"
-  ],
-  [
-    "import.apply",
-    "导入",
-    "Import"
-  ],
-  [
-    "import.applying",
-    "导入中…",
-    "Importing…"
-  ],
-  [
-    "import.err.none",
-    "这批内容里没有找到可识别的节点。",
-    "No recognisable node was found in this text."
-  ],
-  [
-    "log.title",
-    "内核日志",
-    "Kernel logs"
-  ],
-  [
-    "log.empty.title",
-    "还没有日志",
-    "No logs yet"
-  ],
-  [
-    "log.empty.body",
-    "内核还没启动过，所以没有输出。启动一次之后，内核的 stdout 和 stderr 会写到这里。",
-    "The kernel has never started, so there is no output. After one start its stdout and stderr are written here."
-  ],
-  [
-    "config.title",
-    "内核的最终配置",
-    "The config the kernel actually gets"
-  ],
-  [
-    "config.err.noNode",
-    "先选一个节点，否则没有可渲染的东西。",
-    "Pick a node first, otherwise there is nothing to render."
-  ],
-  [
-    "sub.hint",
-    "一个订阅只拥有它自己带进来的节点（标记为 sub:id），刷新时只替换那一批。",
-    "A subscription owns only the nodes it brought in (tagged sub:id); a refresh replaces just that batch."
-  ],
-  [
-    "sub.refreshDue",
-    "刷新到期",
-    "Refresh due"
-  ],
-  [
-    "sub.new",
-    "新增订阅",
-    "New subscription"
-  ],
-  [
-    "sub.empty.title",
-    "还没有订阅",
-    "No subscriptions yet"
-  ],
-  [
-    "sub.empty.body",
-    "添加一个机场的订阅链接，它会按设定的间隔自动拉取节点；也可以直接在节点页粘贴分享链接。",
-    "Add a provider subscription link and it will pull nodes on your schedule. You can also paste share links directly on the Nodes page."
-  ],
-  [
-    "sub.col.name",
-    "名称",
-    "Name"
-  ],
-  [
-    "sub.col.url",
-    "地址",
-    "Address"
-  ],
-  [
-    "sub.col.nodes",
-    "节点",
-    "Nodes"
-  ],
-  [
-    "sub.col.interval",
-    "自动更新",
-    "Auto update"
-  ],
-  [
-    "sub.col.updated",
-    "上次更新",
-    "Last update"
-  ],
-  [
-    "sub.col.status",
-    "状态",
-    "Status"
-  ],
-  [
-    "sub.col.actions",
-    "操作",
-    "Actions"
-  ],
-  [
-    "sub.status.failed",
-    "上次失败",
-    "Last attempt failed"
-  ],
-  [
-    "sub.status.disabled",
-    "已停用",
-    "Disabled"
-  ],
-  [
-    "sub.status.ok",
-    "正常",
-    "OK"
-  ],
-  [
-    "sub.interval.manual",
-    "仅手动",
-    "Manual only"
-  ],
-  [
-    "sub.interval.hourly",
-    "每小时",
-    "Hourly"
-  ],
-  [
-    "sub.interval.6h",
-    "每 6 小时",
-    "Every 6 hours"
-  ],
-  [
-    "sub.interval.12h",
-    "每 12 小时",
-    "Every 12 hours"
-  ],
-  [
-    "sub.interval.daily",
-    "每天",
-    "Daily"
-  ],
-  [
-    "sub.interval.custom",
-    "每 {count} 分钟",
-    "Every {count} minutes"
-  ],
-  [
-    "sub.editor.new",
-    "新增订阅",
-    "New subscription"
-  ],
-  [
-    "sub.editor.edit",
-    "编辑订阅",
-    "Edit subscription"
-  ],
-  [
-    "sub.editor.name",
-    "名称",
-    "Name"
-  ],
-  [
-    "sub.editor.namePlaceholder",
-    "机场名字",
-    "Provider name"
-  ],
-  [
-    "sub.editor.url",
-    "订阅地址",
-    "Subscription URL"
-  ],
-  [
-    "sub.editor.urlHint",
-    "只支持 http(s)。地址里的 token 就是密码，别分享给别人。",
-    "http(s) only. The token in the URL is a password — do not share it."
-  ],
-  [
-    "sub.editor.interval",
-    "自动更新",
-    "Auto update"
-  ],
-  [
-    "sub.editor.enabled",
-    "启用",
-    "Enabled"
-  ],
-  [
-    "sub.editor.enabledHint",
-    "停用后不会自动更新，节点仍然留在列表里。",
-    "Disabled subscriptions stop updating, but their nodes stay in the list."
-  ],
-  [
-    "sub.err.name",
-    "给这个订阅起个名字",
-    "Give this subscription a name"
-  ],
-  [
-    "sub.err.url",
-    "地址必须以 http:// 或 https:// 开头",
-    "The address must start with http:// or https://"
-  ],
-  [
-    "sub.note.refreshed",
-    "「{name}」更新完成：{imported} 个节点（替换 {removed} 个）",
-    "\"{name}\" updated: {imported} nodes ({removed} replaced)"
-  ],
-  [
-    "sub.note.due",
-    "已更新到期的订阅，共 {count} 个节点",
-    "Updated the due subscriptions, {count} nodes in total"
-  ],
-  [
-    "sub.note.noneDue",
-    "没有到期的订阅",
-    "No subscription is due"
-  ],
-  [
-    "sub.note.deleted",
-    "已删除「{name}」及其节点",
-    "Deleted \"{name}\" and its nodes"
-  ],
-  [
-    "sub.delete.title",
-    "删除订阅",
-    "Delete subscription"
-  ],
-  [
-    "sub.delete.body",
-    "删除「{name}」会同时删掉它带进来的节点，手动添加的节点不受影响。",
-    "Deleting \"{name}\" also removes the nodes it brought in. Nodes added by hand are untouched."
-  ],
-  [
-    "settings.ports",
-    "端口",
-    "Ports"
-  ],
-  [
-    "settings.mixed",
-    "本地混合端口",
-    "Local mixed port"
-  ],
-  [
-    "settings.mixedHint",
-    "给 HTTP + SOCKS 共用的入口端口",
-    "One port serving both HTTP and SOCKS"
-  ],
-  [
-    "settings.api",
-    "控制端口",
-    "Control port"
-  ],
-  [
-    "settings.apiHint",
-    "统计与连接查询使用的端口，不能和混合端口相同",
-    "Used for stats and connection queries; must differ from the mixed port"
-  ],
-  [
-    "settings.mode",
-    "代理模式",
-    "Proxy mode"
-  ],
-  [
-    "settings.modeHint",
-    "规则模式按路由规则分流；全局模式全部走代理；直连模式不经过任何节点。",
-    "Rule mode follows your rules, global sends everything through the proxy, direct bypasses every node."
-  ],
-  [
-    "settings.system",
-    "系统集成",
-    "System integration"
-  ],
-  [
-    "settings.allowLan",
-    "允许局域网连接",
-    "Allow LAN connections"
-  ],
-  [
-    "settings.allowLanHint",
-    "其它设备可以经本机端口上网",
-    "Other devices on your network can use this machine as a proxy"
-  ],
-  [
-    "settings.systemProxy",
-    "接管系统代理",
-    "Take over the system proxy"
-  ],
-  [
-    "settings.systemProxyHint",
-    "启动内核时把 Windows 系统代理指向本机混合端口，停止时还原原设置",
-    "Point the Windows system proxy at the local mixed port while the kernel runs, and restore the previous setting on stop"
-  ],
-  [
-    "settings.proxyState",
-    "系统代理当前",
-    "System proxy now"
-  ],
-  [
-    "settings.proxyOn",
-    "已开启",
-    "on"
-  ],
-  [
-    "settings.proxyOff",
-    "已关闭",
-    "off"
-  ],
-  [
-    "settings.restoreProxy",
-    "还原系统代理",
-    "Restore system proxy"
-  ],
-  [
-    "settings.proxyWarning",
-    "两个客户端同时写注册表会互相覆盖：若系统代理已被其它客户端（例如 V2RayN）接管，先关掉它再启动本客户端。",
-    "Two clients writing the registry will overwrite each other: if another client (V2RayN, for example) already owns the system proxy, turn it off before starting this one."
-  ],
-  [
-    "settings.autostart",
-    "开机自启",
-    "Start with Windows"
-  ],
-  [
-    "settings.autostartHint",
-    "登录 Windows 后自动启动本客户端（写入当前用户的启动项）",
-    "Start this client after you sign in, by writing the current user startup entry"
-  ],
-  [
-    "settings.autostartState",
-    "启动项当前{state}。",
-    "The startup entry is currently {state}."
-  ],
-  [
-    "settings.autostartOn",
-    "已登记",
-    "registered"
-  ],
-  [
-    "settings.autostartOff",
-    "未登记",
-    "not registered"
-  ],
-  [
-    "settings.autostartUnknown",
-    "未知",
-    "unknown"
-  ],
-  [
-    "settings.autostartNote",
-    "保存设置时写入或删除注册表，所以关掉开关就是真的关掉。",
-    "Saving writes or removes the registry value, so switching it off really turns it off."
-  ],
-  [
-    "settings.language",
-    "界面语言",
-    "Language"
-  ],
-  [
-    "settings.languageHint",
-    "切换后立即生效，不需要重启。",
-    "Takes effect immediately, no restart needed."
-  ],
-  [
-    "settings.tray",
-    "关闭窗口不会退出：窗口只是隐藏到托盘，退出请用托盘菜单的「退出 X-Matrix」。退出前会先还原系统代理，再停内核。",
-    "Closing the window does not quit: it hides to the tray. Use \"Quit X-Matrix\" in the tray menu to exit — the system proxy is restored first, then the kernel stops."
-  ],
-  [
-    "conn.rate.down",
-    "下载",
-    "Down"
-  ],
-  [
-    "conn.rate.up",
-    "上传",
-    "Up"
-  ],
-  [
-    "conn.rate.active",
-    "活跃连接",
-    "Active connections"
-  ],
-  [
-    "conn.empty.stopped.title",
-    "没有运行中的引擎，所以没有连接",
-    "No kernel is running, so there are no connections"
-  ],
-  [
-    "conn.empty.stopped.body",
-    "连接列表来自内核自己的统计接口：Xray 通过 expvar HTTP 给出累计流量，sing-box 通过 Clash API 给出连接列表。在首页启动一个节点，这里就会有数据。",
-    "The connection list comes from the kernel: Xray exposes cumulative traffic over expvar HTTP, sing-box exposes a connection list over the Clash API. Start a node on the Home page and data shows up here."
-  ],
-  [
-    "conn.empty.unsupported.title",
-    "当前内核不提供连接列表",
-    "This kernel does not expose a connection list"
-  ],
-  [
-    "conn.empty.unsupported.body",
-    "Xray 只有流量统计，没有查询连接的接口，所以这里只能看到上方的累计与速率。需要看连接明细，请在首页把内核换成 sing-box。",
-    "Xray only reports traffic totals, with no endpoint for individual connections, so only the totals and rates above are available. Switch the kernel to sing-box on the Home page to see connection details."
-  ],
-  [
-    "conn.empty.idle.title",
-    "引擎在运行，但当前没有活跃连接",
-    "The kernel is running, but nothing is connected"
-  ],
-  [
-    "conn.empty.idle.body",
-    "统计接口已经接上，只是这一秒没有流量转发。随便打开一个网站，连接就会出现在这里。",
-    "The stats endpoint is connected; there is just no traffic this second. Open any website and the connection appears here."
-  ],
-  [
-    "conn.col.host",
-    "目标",
-    "Destination"
-  ],
-  [
-    "conn.col.network",
-    "网络",
-    "Network"
-  ],
-  [
-    "conn.col.rule",
-    "命中规则",
-    "Matched rule"
-  ],
-  [
-    "conn.col.chains",
-    "链路",
-    "Chain"
-  ],
-  [
-    "conn.col.upload",
-    "上传",
-    "Upload"
-  ],
-  [
-    "conn.col.download",
-    "下载",
-    "Download"
-  ],
-  [
-    "conn.col.start",
-    "开始时间",
-    "Started"
-  ],
-  [
-    "conn.footer",
-    "当前内核：{engine} · 连接列表每秒刷新一次；速率是两次采样的差值，不是内核直接给出的瞬时值。",
-    "Kernel: {engine} · the list refreshes every second; rates are the difference between two samples, not an instantaneous value from the kernel."
-  ],
-  [
-    "time.never",
-    "从未",
-    "never"
-  ],
-  [
-    "time.now",
-    "刚刚",
-    "just now"
-  ],
-  [
-    "time.minutes",
-    "{count} 分钟前",
-    "{count} minutes ago"
-  ],
-  [
-    "time.hours",
-    "{count} 小时前",
-    "{count} hours ago"
-  ],
-  [
-    "time.yesterday",
-    "昨天",
-    "yesterday"
-  ],
-  [
-    "time.days",
-    "{count} 天前",
-    "{count} days ago"
-  ],
-  [
-    "time.months",
-    "{count} 个月前",
-    "{count} months ago"
-  ],
-  [
-    "action.group.hint",
-    "走策略组「{name}」",
-    "Through the group \"{name}\""
-  ],
-  [
-    "common.all",
-    "全部",
-    "All"
-  ],
-  [
-    "common.dismiss",
-    "知道了",
-    "Got it"
-  ],
-  [
-    "sidebar.collapseShort",
-    "收起",
-    "Collapse"
-  ],
-  [
-    "home.chart.empty",
-    "启动内核后，这里会出现最近一分钟的速率曲线。",
-    "Start the kernel and the last minute of traffic shows up here."
-  ],
-  [
-    "home.progress.i18n",
-    "多语言 · 中文 / English",
-    "UI languages · 中文 / English"
-  ],
-  [
-    "conn.sampling",
-    "采样中",
-    "Sampling"
-  ],
-  [
-    "settings.mode.rule",
-    "规则",
-    "Rule"
-  ],
-  [
-    "settings.mode.global",
-    "全局",
-    "Global"
-  ],
-  [
-    "settings.mode.direct",
-    "直连",
-    "Direct"
-  ],
-  [
-    "settings.proxyServer",
-    "（{server}）",
-    " ({server})"
-  ],
-  [
-    "settings.proxyHeldSuffix",
-    "，由 X-Matrix 接管",
-    ", held by X-Matrix"
-  ],
-  [
-    "settings.proxyIntent",
-    "设置在这里只保存意图，下次启动内核时生效。",
-    "Settings are only stored here; they take effect the next time the kernel starts."
-  ],
-  [
-    "import.reparse",
-    "重新解析",
-    "Parse again"
-  ],
-  [
-    "import.moreLines",
-    "还有 {count} 行…",
-    "{count} more lines…"
-  ],
-  [
-    "editor.optional",
-    "可留空",
-    "Optional"
-  ],
-  [
-    "nodes.col.name",
-    "名称",
-    "Name"
-  ],
-  [
-    "nodes.col.protocol",
-    "协议",
-    "Protocol"
-  ],
-  [
-    "nodes.col.server",
-    "服务器",
-    "Server"
-  ],
-  [
-    "nav.groups",
-    "策略组",
-    "Proxy groups"
-  ],
-  [
-    "page.groups.title",
-    "策略组",
-    "Proxy groups"
-  ],
-  [
-    "page.groups.subtitle",
-    "把几个节点打包成一个出口，规则可以指向它",
-    "Bundle nodes into one outbound that rules can point at"
-  ],
-  [
-    "groups.col.name",
-    "名称",
-    "Name"
-  ],
-  [
-    "groups.col.kind",
-    "类型",
-    "Type"
-  ],
-  [
-    "groups.col.members",
-    "成员",
-    "Members"
-  ],
-  [
-    "groups.col.current",
-    "当前出口",
-    "Current"
-  ],
-  [
-    "groups.col.status",
-    "状态",
-    "Status"
-  ],
-  [
-    "groups.col.actions",
-    "操作",
-    "Actions"
-  ],
-  [
-    "groups.autoHint",
-    "由内核按延迟自动挑最快的成员",
-    "The kernel probes the members and uses the fastest"
-  ],
-  [
-    "groups.xrayHint",
-    "Xray 没有选择器 outbound，所以策略组在 Xray 下会渲染成「选中成员的静态副本」：换成员等于换一条出站，需要重启内核。sing-box 下是内核原生 selector，切换即时生效。",
-    "Xray has no selector outbound, so under Xray a group renders as a static copy of the chosen member: switching members means restarting the kernel. Under sing-box it is a native selector and switches live."
-  ],
-  [
-    "groups.editor.err.name",
-    "给这个组起个名字",
-    "Give this group a name"
-  ],
-  [
-    "groups.editor.err.members",
-    "至少选一个节点",
-    "Pick at least one node"
-  ],
-  [
-    "action.group",
-    "策略组",
-    "Group"
-  ],
-  [
-    "action.group.select.hint",
-    "走一个策略组，由组决定用哪个节点",
-    "Through a proxy group, which decides the node"
-  ],
-  [
-    "ruleEditor.group",
-    "策略组",
-    "Proxy group"
-  ],
-  [
-    "ruleEditor.err.group",
-    "先选一个策略组",
-    "Pick a group first"
-  ],
-  [
-    "ruleEditor.groupEmpty",
-    "还没有启用的策略组，先去「策略组」页建一个",
-    "No enabled groups yet — create one on the Proxy groups page"
-  ],
-  [
-    "nodes.sortHint",
-    "按延迟排序时，未测速的节点排在最后",
-    "When sorting by latency, untested nodes go last"
-  ],
-  [
-    "nodes.latencyHint",
-    "测速只量到节点的 TCP 握手，不代表隧道一定能通；通了没网请看内核日志。",
-    "A latency test only measures the TCP handshake to the node — it does not prove the tunnel works. If traffic still fails, check the kernel log."
-  ],
-  [
-    "nav.ruleSets",
-    "规则集",
-    "Rule sets"
-  ],
-  [
-    "page.ruleSets.title",
-    "规则集",
-    "Rule sets"
-  ],
-  [
-    "page.ruleSets.subtitle",
-    "远程域名与 IP 列表，路由规则可以整份引用",
-    "Remote domain and IP lists that routing rules can reference"
-  ],
-  [
-    "match.rule_set",
-    "规则集",
-    "Rule set"
-  ],
-  [
-    "ruleEditor.ruleSet",
-    "规则集",
-    "Rule set"
-  ],
-  [
-    "ruleEditor.ruleSetEmpty",
-    "还没有可用的规则集，先去「规则集」页添加一个",
-    "No rule sets yet — add one on the Rule sets page first"
-  ],
-  [
-    "rs.hint",
-    "规则集是一份域名 / IP 列表，路由规则可以整份引用它。Xray 会把列表内联进配置，sing-box 会生成独立的 rule-set 文件。",
-    "A rule set is a list of domains or IPs that a routing rule can reference as a whole. Xray inlines the list into the config; sing-box gets a separate rule-set file."
-  ],
-  [
-    "rs.new",
-    "新建规则集",
-    "New rule set"
-  ],
-  [
-    "rs.refresh",
-    "刷新",
-    "Refresh"
-  ],
-  [
-    "rs.paste",
-    "粘贴列表",
-    "Paste list"
-  ],
-  [
-    "rs.col.name",
-    "名称",
-    "Name"
-  ],
-  [
-    "rs.col.source",
-    "来源",
-    "Source"
-  ],
-  [
-    "rs.col.entries",
-    "条目",
-    "Entries"
-  ],
-  [
-    "rs.col.interval",
-    "自动更新",
-    "Auto update"
-  ],
-  [
-    "rs.col.updated",
-    "上次更新",
-    "Last update"
-  ],
-  [
-    "rs.col.status",
-    "状态",
-    "Status"
-  ],
-  [
-    "rs.col.actions",
-    "操作",
-    "Actions"
-  ],
-  [
-    "rs.source.remote",
-    "远程",
-    "Remote"
-  ],
-  [
-    "rs.source.local",
-    "本地",
-    "Local"
-  ],
-  [
-    "rs.status.failed",
-    "上次失败",
-    "Last attempt failed"
-  ],
-  [
-    "rs.status.disabled",
-    "已停用",
-    "Disabled"
-  ],
-  [
-    "rs.status.ok",
-    "正常",
-    "OK"
-  ],
-  [
-    "rs.empty.title",
-    "还没有规则集",
-    "No rule sets yet"
-  ],
-  [
-    "rs.empty.body",
-    "规则集把一长串域名或 IP 收成一个名字，路由规则就能整份引用；可以从规则仓库拉取，也可以直接粘贴。",
-    "A rule set groups a long list of domains or IPs under one name so a routing rule can reference it whole. Fetch it from a provider or paste it in."
-  ],
-  [
-    "rs.editor.new",
-    "新建规则集",
-    "New rule set"
-  ],
-  [
-    "rs.editor.edit",
-    "编辑规则集",
-    "Edit rule set"
-  ],
-  [
-    "rs.editor.name",
-    "名称",
-    "Name"
-  ],
-  [
-    "rs.editor.namePlaceholder",
-    "例如：广告拦截",
-    "e.g. Ads blocklist"
-  ],
-  [
-    "rs.editor.source",
-    "来源",
-    "Source"
-  ],
-  [
-    "rs.editor.url",
-    "列表地址",
-    "List URL"
-  ],
-  [
-    "rs.editor.urlHint",
-    "支持 Clash provider（payload:）、纯域名 / CIDR 列表，以及 v2ray 的 domain: / full: / keyword: 前缀。",
-    "Accepts Clash providers (payload:), plain domain or CIDR lists, and v2ray domain: / full: / keyword: prefixes."
-  ],
-  [
-    "rs.editor.interval",
-    "自动更新",
-    "Auto update"
-  ],
-  [
-    "rs.editor.err.name",
-    "规则集需要名字",
-    "A rule set needs a name"
-  ],
-  [
-    "rs.editor.err.url",
-    "远程规则集的地址必须是 http:// 或 https://",
-    "A remote rule set needs an http:// or https:// URL"
-  ],
-  [
-    "rs.paste.title",
-    "粘贴规则列表",
-    "Paste a rule list"
-  ],
-  [
-    "rs.paste.hint",
-    "一行一条：裸域名、DOMAIN-SUFFIX,example.com、IP-CIDR,10.0.0.0/8 都能识别；无法识别的行会被跳过并计数。",
-    "One entry per line: bare domains, DOMAIN-SUFFIX,example.com and IP-CIDR,10.0.0.0/8 all work. Lines that cannot be parsed are skipped and counted."
-  ],
-  [
-    "rs.paste.placeholder",
-    "一行一条规则…",
-    "One entry per line…"
-  ],
-  [
-    "rs.paste.save",
-    "保存列表",
-    "Save list"
-  ],
-  [
-    "rs.paste.empty",
-    "列表是空的，先粘点内容进来",
-    "The list is empty — paste something first"
-  ],
-  [
-    "rs.note.saved",
-    "规则集「{name}」已保存，共 {count} 条",
-    "Saved “{name}” with {count} entries"
-  ],
-  [
-    "rs.note.deleted",
-    "规则集「{name}」已删除，引用它的规则已停用",
-    "Deleted “{name}”; rules pointing at it were disabled"
-  ],
-  [
-    "rs.note.refreshed",
-    "规则集「{name}」已刷新，共 {count} 条",
-    "Refreshed “{name}” with {count} entries"
-  ],
-  [
-    "rs.interval.manual",
-    "仅手动",
-    "Manual only"
-  ],
-  [
-    "rs.interval.hourly",
-    "每小时",
-    "Hourly"
-  ],
-  [
-    "rs.interval.6h",
-    "每 6 小时",
-    "Every 6 hours"
-  ],
-  [
-    "rs.interval.12h",
-    "每 12 小时",
-    "Every 12 hours"
-  ],
-  [
-    "rs.interval.daily",
-    "每天",
-    "Daily"
-  ],
-  [
-    "rs.interval.custom",
-    "每 {count} 分钟",
-    "Every {count} minutes"
-  ],
-  [
-    "rs.delete.title",
-    "删除规则集",
-    "Delete rule set"
-  ],
-  [
-    "rs.delete.body",
-    "确认删除「{name}」？引用它的规则会被停用，不会静默指向空。",
-    "Delete “{name}”? Rules pointing at it will be disabled rather than silently pointing at nothing."
-  ],
-  [
-    "ruleEditor.err.ruleSet",
-    "先选一个规则集",
-    "Pick a rule set first"
-  ],
-  [
-    "home.progress.ruleSets",
-    "规则集 · 远程列表与本地列表",
-    "Rule sets · remote and local lists"
-  ],
-  [
-    "nav.about",
-    "关于",
-    "About"
-  ],
-  [
-    "page.about.title",
-    "关于",
-    "About"
-  ],
-  [
-    "page.about.subtitle",
-    "版本、目录与许可",
-    "Version, folders and licence"
-  ],
-  [
-    "about.version.title",
-    "版本信息",
-    "Version"
-  ],
-  [
-    "about.version.name",
-    "名称",
-    "Name"
-  ],
-  [
-    "about.version.version",
-    "版本",
-    "Version"
-  ],
-  [
-    "about.version.platform",
-    "平台",
-    "Platform"
-  ],
-  [
-    "about.version.arch",
-    "架构",
-    "Architecture"
-  ],
-  [
-    "about.license.title",
-    "许可",
-    "Licence"
-  ],
-  [
-    "about.license.body",
-    "X-Matrix 以 MIT 许可发布：可以自由使用、修改与再分发，请保留版权声明。",
-    "X-Matrix is released under the MIT licence: use, change and redistribute it freely, keep the copyright notice."
-  ],
-  [
-    "about.license.upstream",
-    "分流思路与配置格式参考了 v2rayN（GPL-3.0）与 Clash Verge Rev（GPL-3.0），本项目只借鉴行为，不含它们的代码。",
-    "Routing behaviour and config formats were studied from v2rayN (GPL-3.0) and Clash Verge Rev (GPL-3.0). No code from them is included."
-  ],
-  [
-    "about.paths.title",
-    "目录",
-    "Folders"
-  ],
-  [
-    "about.paths.hint",
-    "数据都在本机，没有云端账号。改坏了直接删掉对应文件即可回到默认。",
-    "Everything lives on this machine; there is no cloud account. Break something and deleting the file restores the defaults."
-  ],
-  [
-    "about.paths.open",
-    "打开数据目录",
-    "Open data folder"
-  ],
-  [
-    "about.diagnostics.title",
-    "诊断报告",
-    "Diagnostic report"
-  ],
-  [
-    "about.diagnostics.hint",
-    "导出后得到一份 markdown：版本、内核、目录、设置、规模、最近日志和生成配置都在里面。凭据已打码，可以直接发给别人排查问题。",
-    "One markdown file with versions, kernels, folders, settings, scale, recent logs and the generated config. Credentials are masked, so it can be shared as is."
-  ],
-  [
-    "about.diagnostics.export",
-    "导出诊断报告",
-    "Export report"
-  ],
-  [
-    "about.diagnostics.saved",
-    "已写入 {path}",
-    "Written to {path}"
-  ],
-  [
-    "about.paths.data",
-    "数据",
-    "Data"
-  ],
-  [
-    "about.paths.engines",
-    "内核",
-    "Kernels"
-  ],
-  [
-    "about.paths.config",
-    "配置",
-    "Configs"
-  ],
-  [
-    "about.paths.logs",
-    "日志",
-    "Logs"
-  ],
-  [
-    "about.engines.title",
-    "内核放哪里",
-    "Where kernels go"
-  ],
-  [
-    "about.engines.body",
-    "把 xray.exe 或 sing-box.exe 放进内核目录，本程序只负责生成配置和启停，不内置任何内核。",
-    "Put xray.exe or sing-box.exe into the kernels folder. This app only renders configs and starts them; no kernel is bundled."
-  ],
-  [
-    "about.engines.unknown",
-    "（读取中）",
-    "(loading)"
-  ],
-  [
-    "common.copy",
-    "复制",
-    "Copy"
-  ],
-  [
-    "common.copied",
-    "已复制",
-    "Copied"
-  ],
-  [
-    "onboarding.title",
-    "三步开始用",
-    "Three steps to start"
-  ],
-  [
-    "onboarding.step.nodes",
-    "导入订阅或粘贴分享链接，先把节点加进来。",
-    "Import a subscription or paste a share link to get nodes."
-  ],
-  [
-    "onboarding.step.engines",
-    "把 xray.exe 或 sing-box.exe 放进内核目录。",
-    "Put xray.exe or sing-box.exe into the kernels folder."
-  ],
-  [
-    "onboarding.step.start",
-    "选一个节点，点启动。系统代理会在启动时接管，停止时还原。",
-    "Pick a node and press start. The system proxy is taken over on start and restored on stop."
-  ],
-  [
-    "onboarding.goNodes",
-    "去导入节点",
-    "Import nodes"
-  ],
-  [
-    "onboarding.openEngines",
-    "打开内核目录",
-    "Open kernels folder"
-  ],
-  [
-    "onboarding.dismiss",
-    "不再显示",
-    "Do not show again"
-  ],
-  [
-    "error.title",
-    "出了点问题",
-    "Something went wrong"
-  ],
-  [
-    "error.dismiss",
-    "知道了",
-    "Dismiss"
-  ],
-  [
-    "home.progress.polish",
-    "发布打磨 · 关于页、首启动引导、错误面",
-    "Release polish · about page, first-run guide, error surface"
-  ],
-  [
-    "sub.col.quota",
-    "流量",
-    "Traffic"
-  ],
-  [
-    "sub.quota.expires",
-    "到期 {day}",
-    "expires {day}"
-  ],
-  [
-    "home.realityHint",
-    "sing-box 1.14 的 REALITY 客户端与 Xray 26 服务端握手会失败（实测）。这个节点选 Xray 更稳。",
-    "sing-box 1.14 fails the REALITY handshake against Xray 26 servers (measured). Use the Xray engine for this node."
-  ],
-  [
-    "home.quota.title",
-    "订阅提醒",
-    "Plan notices"
-  ],
-  [
-    "home.quota.low",
-    "「{name}」已用 {percent}% 流量，剩下的不多了。",
-    "\"{name}\" has used {percent}% of its traffic — not much left."
-  ],
-  [
-    "home.quota.full",
-    "「{name}」的流量已用尽，节点会连不上。",
-    "\"{name}\" is out of traffic; its nodes will stop connecting."
-  ],
-  [
-    "home.quota.expiring",
-    "「{name}」还有 {days} 天到期。",
-    "\"{name}\" expires in {days} day(s)."
-  ],
-  [
-    "home.quota.expired",
-    "「{name}」已过期，节点会连不上。",
-    "\"{name}\" has expired; its nodes will stop connecting."
-  ],
-  [
-    "home.quota.open",
-    "去订阅页看看",
-    "Open subscriptions"
-  ],
-  [
-    "nodes.searchEmpty",
-    "没有匹配的节点",
-    "No node matches"
-  ],
-  [
-    "nodes.select",
-    "选择",
-    "Select"
-  ],
-  [
-    "nodes.selectDone",
-    "完成",
-    "Done"
-  ],
-  [
-    "nodes.selected",
-    "已选 {count}",
-    "{count} selected"
-  ],
-  [
-    "nodes.selectAll",
-    "全选",
-    "Select all"
-  ],
-  [
-    "nodes.selectNone",
-    "取消选择",
-    "Clear"
-  ],
-  [
-    "nodes.copyLink",
-    "复制链接",
-    "Copy link"
-  ],
-  [
-    "nodes.copied",
-    "已复制 {count} 条链接",
-    "Copied {count} link(s)"
-  ],
-  [
-    "nodes.copyFailed",
-    "复制失败，剪贴板不可用",
-    "Could not reach the clipboard"
-  ],
-  [
-    "nodes.testSelected",
-    "测速选中",
-    "Test selected"
-  ],
-  [
-    "nodes.deleteSelected",
-    "删除选中",
-    "Delete selected"
-  ],
-  [
-    "nodes.bulkDelete.title",
-    "删除选中的节点？",
-    "Delete the selected nodes?"
-  ],
-  [
-    "nodes.bulkDelete.body",
-    "将删除 {count} 个节点，引用它们的策略组会一并清理。",
-    "{count} nodes will be deleted; any group that references them is cleaned up too."
-  ],
-  [
-    "nodes.clearSearch",
-    "清空搜索",
-    "Clear search"
-  ],
-  [
-    "editor.tags",
-    "标签",
-    "Tags"
-  ],
-  [
-    "editor.tagsPlaceholder",
-    "用逗号分隔，例如：机场A, 常用",
-    "Comma separated, e.g. airport-a, daily"
-  ],
-  [
-    "editor.tagsHint",
-    "标签只用来筛选和归类，不影响连接。",
-    "Tags only group and filter; they do not affect the connection."
-  ],
-  [
-    "editor.tagsLocked",
-    "{tags} 由订阅维护，这里改不了。",
-    "{tags} is maintained by the subscription and cannot be edited here."
-  ],
-  [
-    "nodes.tagFilter",
-    "按标签筛选",
-    "Filter by tag"
-  ],
-  [
-    "nodes.tagFilterAll",
-    "全部标签",
-    "All tags"
-  ],
-  [
-    "nodes.tag.action",
-    "打标签",
-    "Tag"
-  ],
-  [
-    "nodes.tag.title",
-    "给选中的节点打标签",
-    "Tag the selected nodes"
-  ],
-  [
-    "nodes.tag.name",
-    "标签",
-    "Tag"
-  ],
-  [
-    "nodes.tag.placeholder",
-    "例如：常用",
-    "e.g. daily"
-  ],
-  [
-    "nodes.tag.hint",
-    "将作用于已选的 {count} 个节点。",
-    "Applies to the {count} selected node(s)."
-  ],
-  [
-    "nodes.tag.add",
-    "添加",
-    "Add"
-  ],
-  [
-    "nodes.tag.remove",
-    "移除",
-    "Remove"
-  ],
-  [
-    "settings.autoConnect",
-    "启动时自动连接",
-    "Connect on launch"
-  ],
-  [
-    "settings.autoConnectHint",
-    "应用启动后自动启动上次使用的节点；内核不在内核目录时会跳过。",
-    "Starts the last used node once the app is up. Skipped when its kernel is not in the kernels folder."
-  ],
-  [
-    "settings.logLevel",
-    "内核日志级别",
-    "Kernel log level"
-  ],
-  [
-    "settings.logLevelHint",
-    "默认只记警告；排查连不上时切到 debug 再启动一次，然后看「日志」。",
-    "Warnings only by default. Switch to debug, start once, then read the log when a node will not connect."
-  ],
-  [
-    "settings.logLevel.warn",
-    "警告",
-    "Warn"
-  ],
-  [
-    "settings.logLevel.info",
-    "信息",
-    "Info"
-  ],
-  [
-    "settings.logLevel.debug",
-    "调试",
-    "Debug"
-  ],
-  [
-    "home.control.realDelay",
-    "真实延迟",
-    "Real delay"
-  ],
-  [
-    "home.realDelay.testing",
-    "测试中…",
-    "Testing…"
-  ],
-  [
-    "home.realDelay.result",
-    "真实延迟 {ms} ms",
-    "Real delay {ms} ms"
-  ],
-  [
-    "conn.col.action",
-    "操作",
-    "Action"
-  ],
-  [
-    "conn.close",
-    "断开",
-    "Close"
-  ],
-  [
-    "conn.closing",
-    "断开中…",
-    "Closing…"
-  ],
-  [
-    "settings.backup.title",
-    "备份与恢复",
-    "Backup and restore"
-  ],
-  [
-    "settings.backup.hint",
-    "导出会把节点、订阅、路由规则、策略组和规则集条目写进一个 JSON 文件。恢复是整体替换而不是合并，而且要先停止内核。",
-    "Export writes nodes, subscriptions, routing rules, groups and rule-set entries into one JSON file. Restoring replaces everything rather than merging, and the kernel must be stopped first."
-  ],
-  [
-    "settings.backup.export",
-    "导出配置",
-    "Export"
-  ],
-  [
-    "settings.backup.restore",
-    "从备份恢复",
-    "Restore"
-  ],
-  [
-    "settings.backup.saved",
-    "已导出到 {path}",
-    "Saved to {path}"
-  ],
-  [
-    "settings.backup.restored",
-    "已恢复：{nodes} 个节点、{rules} 条规则、{groups} 个策略组、{ruleSets} 个规则集",
-    "Restored {nodes} nodes, {rules} rules, {groups} groups, {ruleSets} rule sets"
-  ],
-  [
-    "home.session.label",
-    "本次会话",
-    "This session"
-  ],
-  [
-    "home.session.reset",
-    "清零",
-    "Reset"
-  ],
-  [
-    "settings.bypass",
-    "代理例外（bypass）",
-    "Proxy bypass"
-  ],
-  [
-    "settings.bypassHint",
-    "分号分隔。留空则用默认值（本机回环与内网段不走代理）。",
-    "Semicolon separated. Empty falls back to the default (loopback and private ranges stay direct)."
-  ],
-  [
-    "settings.autoTest",
-    "自动测速",
-    "Automatic latency test"
-  ],
-  [
-    "settings.autoTestHint",
-    "按这个间隔重新测一遍所有节点。选「不自动」就只在点按钮时测。",
-    "Re-test every node at this interval. Pick “Off” to test only when you press the button."
-  ],
-  [
-    "settings.autoTest.off",
-    "不自动",
-    "Off"
-  ],
-  [
-    "settings.autoTest.min5",
-    "每 5 分钟",
-    "Every 5 min"
-  ],
-  [
-    "settings.autoTest.min15",
-    "每 15 分钟",
-    "Every 15 min"
-  ],
-  [
-    "settings.autoTest.min60",
-    "每小时",
-    "Hourly"
-  ],
-  [
-    "conn.search",
-    "搜索目标或规则",
-    "Search host or rule"
-  ],
-  [
-    "conn.sort",
-    "排序",
-    "Sort"
-  ],
-  [
-    "conn.sort.start",
-    "最新在前",
-    "Newest first"
-  ],
-  [
-    "conn.sort.download",
-    "下载最多",
-    "Most downloaded"
-  ],
-  [
-    "conn.sort.upload",
-    "上传最多",
-    "Most uploaded"
-  ],
-  [
-    "conn.sort.host",
-    "按目标",
-    "By host"
-  ],
-  [
-    "conn.empty.search.title",
-    "没有匹配的连接",
-    "No matching connection"
-  ],
-  [
-    "conn.empty.search.body",
-    "换个关键词，或清空搜索框看全部连接。",
-    "Try another keyword, or clear the box to see every connection."
-  ],
-  [
-    "sub.note.skipped",
-    "，跳过 {count} 个（重复或无法识别）",
-    " ({count} skipped: duplicates or unreadable)"
-  ],
-  [
-    "settings.testUrl",
-    "测速地址",
-    "Probe URL"
-  ],
-  [
-    "settings.testUrlHint",
-    "「真实延迟」与「自动测速」策略组都打这个地址，必须是 http://（探测经本机代理，不带 TLS）。gstatic 被墙时换成 http://cp.cloudflare.com/ 之类。",
-    "The real-latency button and url-test groups probe this address. It must be http:// (the probe goes through the local proxy, which speaks no TLS). Swap it when gstatic is blocked."
-  ],
-  [
-    "settings.subAgent",
-    "订阅 User-Agent",
-    "Subscription User-Agent"
-  ],
-  [
-    "settings.subAgentLabel",
-    "拉取订阅时使用的 UA",
-    "User-Agent used when fetching subscriptions"
-  ],
-  [
-    "settings.subAgentPlaceholder",
-    "留空则使用默认（X-Matrix/版本号）",
-    "Empty means the default (X-Matrix/version)"
-  ],
-  [
-    "settings.subAgentHint",
-    "有些机场只认 Clash 的 UA，别的 UA 会返回空内容或 403；填 clash-verge/v2rayN 之类即可。",
-    "Some providers only serve a Clash UA and answer anything else with an empty body or a 403."
-  ],
-  [
-    "settings.dns.title",
-    "DNS",
-    "DNS"
-  ],
-  [
-    "settings.dns.servers",
-    "自定义 DNS 服务器",
-    "Custom DNS servers"
-  ],
-  [
-    "settings.dns.placeholder",
-    "留空则用系统 DNS，例如 1.1.1.1、tls://9.9.9.9、https://8.8.8.8/dns-query",
-    "Empty means the system resolver, e.g. 1.1.1.1, tls://9.9.9.9, https://8.8.8.8/dns-query"
-  ],
-  [
-    "settings.dns.hint",
-    "逗号分隔。三种写法：1.1.1.1（UDP）、tls://1.1.1.1（DoT）、https://1.1.1.1/dns-query（DoH）。主机部分只接受 IP 字面量——写 dns.google 这种域名会让解析器先去解析它自己。",
-    "Comma separated. Three forms: 1.1.1.1 (UDP), tls://1.1.1.1 (DoT), https://1.1.1.1/dns-query (DoH). The host must be an IP literal — a name like dns.google would have to be resolved by the resolver itself."
-  ],
-  [
-    "conn.view.list",
-    "列表",
-    "List"
-  ],
-  [
-    "conn.view.host",
-    "按目标",
-    "By host"
-  ],
-  [
-    "conn.view.chain",
-    "按出口",
-    "By outbound"
-  ],
-  [
-    "conn.col.count",
-    "连接数",
-    "Conns"
-  ],
-  [
-    "conn.group.unknown",
-    "（内核未报告）",
-    "(not reported)"
-  ],
-  [
-    "settings.startMinimized",
-    "启动时隐藏窗口",
-    "Start hidden"
-  ],
-  [
-    "settings.startMinimizedHint",
-    "开机自启配合使用时有用：只在托盘里出现，不弹窗",
-    "Useful with launch at login: appear in the tray only"
-  ],
-  [
-    "settings.hotkeysTitle",
-    "全局快捷键",
-    "Global shortcuts"
-  ],
-  [
-    "settings.hotkeysHint",
-    "在任意程序里都能用，窗口不用打开",
-    "Work from any app; the window does not have to be open"
-  ],
-  [
-    "settings.hotkeyToggle",
-    "Ctrl+Shift+X",
-    "Ctrl+Shift+X"
-  ],
-  [
-    "settings.hotkeyToggleHint",
-    "启动 / 停止内核",
-    "Start / stop the kernel"
-  ],
-  [
-    "settings.hotkeyWindow",
-    "Ctrl+Shift+W",
-    "Ctrl+Shift+W"
-  ],
-  [
-    "settings.hotkeyWindowHint",
-    "显示 / 隐藏窗口（内核继续跑）",
-    "Show / hide the window (the kernel keeps running)"
-  ],
-  [
-    "settings.closeToTray",
-    "关闭窗口时最小化到托盘",
-    "Minimize to tray on close"
-  ],
-  [
-    "settings.closeToTrayHint",
-    "关掉后，点窗口的 × 会退出程序并还原系统代理",
-    "When off, the window X quits and restores the system proxy"
-  ],
-  [
-    "log.openDir",
-    "打开日志目录",
-    "Open log folder"
-  ],
-  [
-    "conn.export",
-    "导出 CSV",
-    "Export CSV"
-  ],
-  [
-    "conn.exported",
-    "已保存到 {path}",
-    "Saved to {path}"
-  ],
-  [
-    "home.kernelVersion",
-    "内核版本：{version}",
-    "Kernel version: {version}"
-  ],
-  [
-    "about.caps.title",
-    "能力对照",
-    "Capability check"
+    "about.caps.groups.note",
+    "手动选择与自动测速；Xray 下组渲染成选中成员的静态副本。",
+    "Manual select and url-test. Under Xray a group renders as a static copy of the chosen member."
   ],
   [
     "about.caps.hint",
@@ -2740,14 +35,14 @@
     "What lines up with V2RayN / Clash Verge, and what is deliberately missing. Missing features do not appear as dead switches."
   ],
   [
-    "about.caps.supported",
-    "支持",
-    "Yes"
+    "about.caps.pac",
+    "PAC 自动配置",
+    "PAC script"
   ],
   [
-    "about.caps.unsupported",
-    "不支持",
-    "No"
+    "about.caps.pac.note",
+    "没做：只接管系统代理，不生成 PAC 脚本。",
+    "Not built: only the system proxy is taken over, no PAC script is generated."
   ],
   [
     "about.caps.proxy",
@@ -2770,16 +65,6 @@
     "Seven matchers by four actions, plus remote and local rule sets."
   ],
   [
-    "about.caps.groups",
-    "策略组",
-    "Proxy groups"
-  ],
-  [
-    "about.caps.groups.note",
-    "手动选择与自动测速；Xray 下组渲染成选中成员的静态副本。",
-    "Manual select and url-test. Under Xray a group renders as a static copy of the chosen member."
-  ],
-  [
     "about.caps.subscription",
     "订阅",
     "Subscriptions"
@@ -2790,24 +75,14 @@
     "Scheduled refresh, quota and expiry from the header, cross-subscription dedupe."
   ],
   [
-    "about.caps.connections",
-    "连接管理",
-    "Connections"
+    "about.caps.supported",
+    "支持",
+    "Yes"
   ],
   [
-    "about.caps.connections.note",
-    "仅 sing-box：Xray 不提供连接列表接口。",
-    "sing-box only: Xray exposes no connection list."
-  ],
-  [
-    "about.caps.backup",
-    "配置备份",
-    "Config backup"
-  ],
-  [
-    "about.caps.backup.note",
-    "导出与恢复整份配置，含本地规则集内容。",
-    "Export and restore the whole configuration, local rule sets included."
+    "about.caps.title",
+    "能力对照",
+    "Capability check"
   ],
   [
     "about.caps.tun",
@@ -2820,14 +95,9 @@
     "Not built: it needs a virtual adapter driver and hijacks all traffic, which fights with any proxy already running."
   ],
   [
-    "about.caps.pac",
-    "PAC 自动配置",
-    "PAC script"
-  ],
-  [
-    "about.caps.pac.note",
-    "没做：只接管系统代理，不生成 PAC 脚本。",
-    "Not built: only the system proxy is taken over, no PAC script is generated."
+    "about.caps.unsupported",
+    "不支持",
+    "No"
   ],
   [
     "about.caps.update",
@@ -2840,24 +110,949 @@
     "Not built: kernels are placed in the engines folder by hand; the UI shows their version."
   ],
   [
-    "nodes.sort.manual",
-    "手动",
-    "Manual"
+    "about.diagnostics.export",
+    "导出诊断报告",
+    "Export report"
   ],
   [
-    "nodes.moveUp",
-    "上移",
-    "Move up"
+    "about.diagnostics.hint",
+    "导出后得到一份 markdown：版本、内核、目录、设置、规模、最近日志和生成配置都在里面。凭据已打码，可以直接发给别人排查问题。",
+    "One markdown file with versions, kernels, folders, settings, scale, recent logs and the generated config. Credentials are masked, so it can be shared as is."
   ],
   [
-    "nodes.moveDown",
-    "下移",
-    "Move down"
+    "about.diagnostics.saved",
+    "已写入 {path}",
+    "Written to {path}"
   ],
   [
-    "nodes.manualHint",
-    "上移 / 下移调整顺序，顺序会保存下来",
-    "Use the arrows to reorder; the order is saved"
+    "about.diagnostics.title",
+    "诊断报告",
+    "Diagnostic report"
+  ],
+  [
+    "about.engines.body",
+    "把 xray.exe 或 sing-box.exe 放进内核目录，本程序只负责生成配置和启停，不内置任何内核。",
+    "Put xray.exe or sing-box.exe into the kernels folder. This app only renders configs and starts them; no kernel is bundled."
+  ],
+  [
+    "about.engines.title",
+    "内核放哪里",
+    "Where kernels go"
+  ],
+  [
+    "about.engines.unknown",
+    "（读取中）",
+    "(loading)"
+  ],
+  [
+    "about.license.body",
+    "X-Matrix 以 MIT 许可发布：可以自由使用、修改与再分发，请保留版权声明。",
+    "X-Matrix is released under the MIT licence: use, change and redistribute it freely, keep the copyright notice."
+  ],
+  [
+    "about.license.title",
+    "许可",
+    "Licence"
+  ],
+  [
+    "about.license.upstream",
+    "分流思路与配置格式参考了 v2rayN（GPL-3.0）与 Clash Verge Rev（GPL-3.0），本项目只借鉴行为，不含它们的代码。",
+    "Routing behaviour and config formats were studied from v2rayN (GPL-3.0) and Clash Verge Rev (GPL-3.0). No code from them is included."
+  ],
+  [
+    "about.paths.config",
+    "配置",
+    "Configs"
+  ],
+  [
+    "about.paths.data",
+    "数据",
+    "Data"
+  ],
+  [
+    "about.paths.engines",
+    "内核",
+    "Kernels"
+  ],
+  [
+    "about.paths.hint",
+    "数据都在本机，没有云端账号。改坏了直接删掉对应文件即可回到默认。",
+    "Everything lives on this machine; there is no cloud account. Break something and deleting the file restores the defaults."
+  ],
+  [
+    "about.paths.logs",
+    "日志",
+    "Logs"
+  ],
+  [
+    "about.paths.open",
+    "打开数据目录",
+    "Open data folder"
+  ],
+  [
+    "about.paths.title",
+    "目录",
+    "Folders"
+  ],
+  [
+    "about.version.arch",
+    "架构",
+    "Architecture"
+  ],
+  [
+    "about.version.name",
+    "名称",
+    "Name"
+  ],
+  [
+    "about.version.platform",
+    "平台",
+    "Platform"
+  ],
+  [
+    "about.version.title",
+    "版本信息",
+    "Version"
+  ],
+  [
+    "about.version.version",
+    "版本",
+    "Version"
+  ],
+  [
+    "action.block",
+    "拦截",
+    "Block"
+  ],
+  [
+    "action.block.hint",
+    "直接断开",
+    "Drop it"
+  ],
+  [
+    "action.direct",
+    "直连",
+    "Direct"
+  ],
+  [
+    "action.direct.hint",
+    "不经过代理",
+    "Bypass the proxy"
+  ],
+  [
+    "action.group",
+    "策略组",
+    "Group"
+  ],
+  [
+    "action.group.hint",
+    "走策略组「{name}」",
+    "Through the group \"{name}\""
+  ],
+  [
+    "action.group.select.hint",
+    "走一个策略组，由组决定用哪个节点",
+    "Through a proxy group, which decides the node"
+  ],
+  [
+    "action.proxy",
+    "代理",
+    "Proxy"
+  ],
+  [
+    "action.proxy.hint",
+    "走当前节点",
+    "Through the current node"
+  ],
+  [
+    "common.add",
+    "新增",
+    "Add"
+  ],
+  [
+    "common.all",
+    "全部",
+    "All"
+  ],
+  [
+    "common.cancel",
+    "取消",
+    "Cancel"
+  ],
+  [
+    "common.close",
+    "关闭",
+    "Close"
+  ],
+  [
+    "common.confirm",
+    "确认",
+    "Confirm"
+  ],
+  [
+    "common.copied",
+    "已复制",
+    "Copied"
+  ],
+  [
+    "common.copy",
+    "复制",
+    "Copy"
+  ],
+  [
+    "common.delete",
+    "删除",
+    "Delete"
+  ],
+  [
+    "common.deleting",
+    "删除中…",
+    "Deleting…"
+  ],
+  [
+    "common.disable",
+    "停用",
+    "Disable"
+  ],
+  [
+    "common.disabled",
+    "已停用",
+    "Disabled"
+  ],
+  [
+    "common.dismiss",
+    "知道了",
+    "Got it"
+  ],
+  [
+    "common.edit",
+    "编辑",
+    "Edit"
+  ],
+  [
+    "common.enable",
+    "启用",
+    "Enable"
+  ],
+  [
+    "common.enabled",
+    "已启用",
+    "Enabled"
+  ],
+  [
+    "common.loading",
+    "读取中…",
+    "Loading…"
+  ],
+  [
+    "common.never",
+    "从未",
+    "Never"
+  ],
+  [
+    "common.none",
+    "无",
+    "None"
+  ],
+  [
+    "common.openDir",
+    "打开目录",
+    "Open folder"
+  ],
+  [
+    "common.refresh",
+    "刷新",
+    "Refresh"
+  ],
+  [
+    "common.refreshing",
+    "刷新中…",
+    "Refreshing…"
+  ],
+  [
+    "common.render",
+    "重新渲染",
+    "Render again"
+  ],
+  [
+    "common.rendering",
+    "渲染中…",
+    "Rendering…"
+  ],
+  [
+    "common.running",
+    "运行中",
+    "Running"
+  ],
+  [
+    "common.save",
+    "保存",
+    "Save"
+  ],
+  [
+    "common.saved",
+    "已保存",
+    "Saved"
+  ],
+  [
+    "common.saving",
+    "保存中…",
+    "Saving…"
+  ],
+  [
+    "common.search",
+    "搜索",
+    "Search"
+  ],
+  [
+    "common.start",
+    "启动",
+    "Start"
+  ],
+  [
+    "common.starting",
+    "启动中…",
+    "Starting…"
+  ],
+  [
+    "common.stop",
+    "停止",
+    "Stop"
+  ],
+  [
+    "common.stopped",
+    "未运行",
+    "Not running"
+  ],
+  [
+    "common.stopping",
+    "停止中…",
+    "Stopping…"
+  ],
+  [
+    "common.test",
+    "测速",
+    "Test"
+  ],
+  [
+    "common.testing",
+    "测速中…",
+    "Testing…"
+  ],
+  [
+    "common.timeout",
+    "超时",
+    "Timed out"
+  ],
+  [
+    "common.unknown",
+    "未知",
+    "Unknown"
+  ],
+  [
+    "config.err.noNode",
+    "先选一个节点，否则没有可渲染的东西。",
+    "Pick a node first, otherwise there is nothing to render."
+  ],
+  [
+    "config.title",
+    "内核的最终配置",
+    "The config the kernel actually gets"
+  ],
+  [
+    "conn.close",
+    "断开",
+    "Close"
+  ],
+  [
+    "conn.closing",
+    "断开中…",
+    "Closing…"
+  ],
+  [
+    "conn.col.action",
+    "操作",
+    "Action"
+  ],
+  [
+    "conn.col.chains",
+    "链路",
+    "Chain"
+  ],
+  [
+    "conn.col.count",
+    "连接数",
+    "Conns"
+  ],
+  [
+    "conn.col.download",
+    "下载",
+    "Download"
+  ],
+  [
+    "conn.col.host",
+    "目标",
+    "Destination"
+  ],
+  [
+    "conn.col.network",
+    "网络",
+    "Network"
+  ],
+  [
+    "conn.col.rule",
+    "命中规则",
+    "Matched rule"
+  ],
+  [
+    "conn.col.start",
+    "开始时间",
+    "Started"
+  ],
+  [
+    "conn.col.upload",
+    "上传",
+    "Upload"
+  ],
+  [
+    "conn.empty.idle.body",
+    "统计接口已经接上，只是这一秒没有流量转发。随便打开一个网站，连接就会出现在这里。",
+    "The stats endpoint is connected; there is just no traffic this second. Open any website and the connection appears here."
+  ],
+  [
+    "conn.empty.idle.title",
+    "引擎在运行，但当前没有活跃连接",
+    "The kernel is running, but nothing is connected"
+  ],
+  [
+    "conn.empty.search.body",
+    "换个关键词，或清空搜索框看全部连接。",
+    "Try another keyword, or clear the box to see every connection."
+  ],
+  [
+    "conn.empty.search.title",
+    "没有匹配的连接",
+    "No matching connection"
+  ],
+  [
+    "conn.empty.stopped.body",
+    "连接列表来自内核自己的统计接口：Xray 通过 expvar HTTP 给出累计流量，sing-box 通过 Clash API 给出连接列表。在首页启动一个节点，这里就会有数据。",
+    "The connection list comes from the kernel: Xray exposes cumulative traffic over expvar HTTP, sing-box exposes a connection list over the Clash API. Start a node on the Home page and data shows up here."
+  ],
+  [
+    "conn.empty.stopped.title",
+    "没有运行中的引擎，所以没有连接",
+    "No kernel is running, so there are no connections"
+  ],
+  [
+    "conn.empty.unsupported.body",
+    "Xray 只有流量统计，没有查询连接的接口，所以这里只能看到上方的累计与速率。需要看连接明细，请在首页把内核换成 sing-box。",
+    "Xray only reports traffic totals, with no endpoint for individual connections, so only the totals and rates above are available. Switch the kernel to sing-box on the Home page to see connection details."
+  ],
+  [
+    "conn.empty.unsupported.title",
+    "当前内核不提供连接列表",
+    "This kernel does not expose a connection list"
+  ],
+  [
+    "conn.export",
+    "导出 CSV",
+    "Export CSV"
+  ],
+  [
+    "conn.exported",
+    "已保存到 {path}",
+    "Saved to {path}"
+  ],
+  [
+    "conn.footer",
+    "当前内核：{engine} · 连接列表每秒刷新一次；速率是两次采样的差值，不是内核直接给出的瞬时值。",
+    "Kernel: {engine} · the list refreshes every second; rates are the difference between two samples, not an instantaneous value from the kernel."
+  ],
+  [
+    "conn.group.unknown",
+    "（内核未报告）",
+    "(not reported)"
+  ],
+  [
+    "conn.rate.active",
+    "活跃连接",
+    "Active connections"
+  ],
+  [
+    "conn.rate.down",
+    "下载",
+    "Down"
+  ],
+  [
+    "conn.rate.up",
+    "上传",
+    "Up"
+  ],
+  [
+    "conn.sampling",
+    "采样中",
+    "Sampling"
+  ],
+  [
+    "conn.search",
+    "搜索目标或规则",
+    "Search host or rule"
+  ],
+  [
+    "conn.sort",
+    "排序",
+    "Sort"
+  ],
+  [
+    "conn.sort.download",
+    "下载最多",
+    "Most downloaded"
+  ],
+  [
+    "conn.sort.host",
+    "按目标",
+    "By host"
+  ],
+  [
+    "conn.sort.start",
+    "最新在前",
+    "Newest first"
+  ],
+  [
+    "conn.sort.upload",
+    "上传最多",
+    "Most uploaded"
+  ],
+  [
+    "conn.view.chain",
+    "按出口",
+    "By outbound"
+  ],
+  [
+    "conn.view.host",
+    "按目标",
+    "By host"
+  ],
+  [
+    "conn.view.list",
+    "列表",
+    "List"
+  ],
+  [
+    "editor.allowInsecure",
+    "允许不安全证书",
+    "Allow an untrusted certificate"
+  ],
+  [
+    "editor.allowInsecureHint",
+    "跳过证书校验。sing-box 支持；Xray 26 起已移除该选项，请改用下面的证书指纹。",
+    "Skip certificate verification. sing-box honours it; Xray 26 removed the option, so use the certificate fingerprint below instead."
+  ],
+  [
+    "editor.alpn",
+    "ALPN（逗号分隔）",
+    "ALPN (comma separated)"
+  ],
+  [
+    "editor.certPin",
+    "证书指纹（SHA-256）",
+    "Certificate fingerprint (SHA-256)"
+  ],
+  [
+    "editor.certPinHint",
+    "只信任这一张证书，比跳过校验更安全。Xray 与 sing-box 都支持；多个用逗号分开。",
+    "Trust exactly this certificate — stricter than skipping verification. Works on both kernels; separate several with commas."
+  ],
+  [
+    "editor.certPinPlaceholder",
+    "93c559a5d6605453…",
+    "93c559a5d6605453…"
+  ],
+  [
+    "editor.edit",
+    "编辑节点",
+    "Edit node"
+  ],
+  [
+    "editor.err.certPin",
+    "证书指纹要填 64 位十六进制（就是 SHA-256 的长度）",
+    "A certificate fingerprint must be 64 hex characters (the length of a SHA-256)"
+  ],
+  [
+    "editor.err.name",
+    "请填写节点名称",
+    "Enter a node name"
+  ],
+  [
+    "editor.err.port",
+    "端口须为 1–65535 的整数",
+    "Port must be an integer from 1 to 65535"
+  ],
+  [
+    "editor.err.required",
+    "这一项不能为空",
+    "This field is required"
+  ],
+  [
+    "editor.err.server",
+    "请填写服务器地址",
+    "Enter a server address"
+  ],
+  [
+    "editor.fingerprint",
+    "指纹（uTLS）",
+    "Fingerprint (uTLS)"
+  ],
+  [
+    "editor.flow",
+    "流控",
+    "Flow"
+  ],
+  [
+    "editor.grpcService",
+    "gRPC 服务名",
+    "gRPC service name"
+  ],
+  [
+    "editor.method",
+    "加密方式",
+    "Method"
+  ],
+  [
+    "editor.name",
+    "名称",
+    "Name"
+  ],
+  [
+    "editor.namePlaceholder",
+    "例如：东京 01",
+    "e.g. Tokyo 01"
+  ],
+  [
+    "editor.new",
+    "新增节点",
+    "New node"
+  ],
+  [
+    "editor.optional",
+    "可留空",
+    "Optional"
+  ],
+  [
+    "editor.password",
+    "密码",
+    "Password"
+  ],
+  [
+    "editor.port",
+    "端口",
+    "Port"
+  ],
+  [
+    "editor.protocol",
+    "协议",
+    "Protocol"
+  ],
+  [
+    "editor.publicKey",
+    "公钥",
+    "Public key"
+  ],
+  [
+    "editor.security",
+    "安全",
+    "Security"
+  ],
+  [
+    "editor.server",
+    "服务器",
+    "Server"
+  ],
+  [
+    "editor.serverName",
+    "服务器名",
+    "Server name"
+  ],
+  [
+    "editor.serverPlaceholder",
+    "example.com 或 IP",
+    "example.com or an IP"
+  ],
+  [
+    "editor.shortId",
+    "Short ID",
+    "Short ID"
+  ],
+  [
+    "editor.sni",
+    "SNI",
+    "SNI"
+  ],
+  [
+    "editor.spiderX",
+    "爬虫路径（spx）",
+    "Spider path (spx)"
+  ],
+  [
+    "editor.tags",
+    "标签",
+    "Tags"
+  ],
+  [
+    "editor.tagsHint",
+    "标签只用来筛选和归类，不影响连接。",
+    "Tags only group and filter; they do not affect the connection."
+  ],
+  [
+    "editor.tagsLocked",
+    "{tags} 由订阅维护，这里改不了。",
+    "{tags} is maintained by the subscription and cannot be edited here."
+  ],
+  [
+    "editor.tagsPlaceholder",
+    "用逗号分隔，例如：机场A, 常用",
+    "Comma separated, e.g. airport-a, daily"
+  ],
+  [
+    "editor.transport",
+    "传输",
+    "Transport"
+  ],
+  [
+    "editor.uuid",
+    "UUID",
+    "UUID"
+  ],
+  [
+    "editor.wsHost",
+    "WS Host",
+    "WS host"
+  ],
+  [
+    "editor.wsPath",
+    "WS 路径",
+    "WS path"
+  ],
+  [
+    "error.dismiss",
+    "知道了",
+    "Dismiss"
+  ],
+  [
+    "error.title",
+    "出了点问题",
+    "Something went wrong"
+  ],
+  [
+    "groups.autoHint",
+    "由内核按延迟自动挑最快的成员",
+    "The kernel probes the members and uses the fastest"
+  ],
+  [
+    "groups.col.actions",
+    "操作",
+    "Actions"
+  ],
+  [
+    "groups.col.current",
+    "当前出口",
+    "Current"
+  ],
+  [
+    "groups.col.kind",
+    "类型",
+    "Type"
+  ],
+  [
+    "groups.col.members",
+    "成员",
+    "Members"
+  ],
+  [
+    "groups.col.name",
+    "名称",
+    "Name"
+  ],
+  [
+    "groups.col.status",
+    "状态",
+    "Status"
+  ],
+  [
+    "groups.current",
+    "当前出口",
+    "Current outbound"
+  ],
+  [
+    "groups.delete.body",
+    "确认删除「{name}」？指向它的规则会退回「当前节点」。",
+    "Delete \"{name}\"? Rules pointing at it will fall back to the current node."
+  ],
+  [
+    "groups.delete.title",
+    "删除策略组",
+    "Delete group"
+  ],
+  [
+    "groups.editor.edit",
+    "编辑策略组",
+    "Edit group"
+  ],
+  [
+    "groups.editor.err.members",
+    "至少选一个节点",
+    "Pick at least one node"
+  ],
+  [
+    "groups.editor.err.name",
+    "给这个组起个名字",
+    "Give this group a name"
+  ],
+  [
+    "groups.editor.kind",
+    "类型",
+    "Type"
+  ],
+  [
+    "groups.editor.members",
+    "成员节点",
+    "Member nodes"
+  ],
+  [
+    "groups.editor.membersHint",
+    "没选节点的组不会出现在规则的动作列表里。",
+    "A group with no members will not show up in the rule action list."
+  ],
+  [
+    "groups.editor.name",
+    "名称",
+    "Name"
+  ],
+  [
+    "groups.editor.namePlaceholder",
+    "例如：自动选择",
+    "e.g. Auto"
+  ],
+  [
+    "groups.editor.new",
+    "新增策略组",
+    "New group"
+  ],
+  [
+    "groups.editor.noNodes",
+    "还没有节点可选，先去加节点。",
+    "No nodes to pick yet — add some first."
+  ],
+  [
+    "groups.empty.body",
+    "策略组把多个节点打包成一个出口，规则指向它就行。没有组时，规则只能指向当前节点。",
+    "A group bundles several nodes into one outbound that rules can point at. Without groups, rules can only target the current node."
+  ],
+  [
+    "groups.empty.title",
+    "还没有策略组",
+    "No groups yet"
+  ],
+  [
+    "groups.hint",
+    "规则可以指向策略组，组内再挑节点。",
+    "Rules can point at a group, and the group picks the node."
+  ],
+  [
+    "groups.kind.select",
+    "手动选择",
+    "Select"
+  ],
+  [
+    "groups.kind.select.hint",
+    "永远用你选中的那个节点",
+    "Always use the node you picked"
+  ],
+  [
+    "groups.kind.urlTest",
+    "自动测速",
+    "URL test"
+  ],
+  [
+    "groups.kind.urlTest.hint",
+    "定时测速，用最快的",
+    "Test on a timer, use the fastest"
+  ],
+  [
+    "groups.members",
+    "{count} 个成员",
+    "{count} members"
+  ],
+  [
+    "groups.new",
+    "新增策略组",
+    "New group"
+  ],
+  [
+    "groups.pick",
+    "选它",
+    "Use this"
+  ],
+  [
+    "groups.title",
+    "策略组",
+    "Proxy groups"
+  ],
+  [
+    "groups.xrayHint",
+    "Xray 没有选择器 outbound，所以策略组在 Xray 下会渲染成「选中成员的静态副本」：换成员等于换一条出站，需要重启内核。sing-box 下是内核原生 selector，切换即时生效。",
+    "Xray has no selector outbound, so under Xray a group renders as a static copy of the chosen member: switching members means restarting the kernel. Under sing-box it is a native selector and switches live."
+  ],
+  [
+    "home.binaryMissing",
+    "没找到 {name}。把它放进内核目录，然后重启程序。",
+    "{name} was not found. Put it in the kernels folder, then restart the app."
+  ],
+  [
+    "home.chart.empty",
+    "启动内核后，这里会出现最近一分钟的速率曲线。",
+    "Start the kernel and the last minute of traffic shows up here."
+  ],
+  [
+    "home.chart.title",
+    "最近一分钟",
+    "Last minute"
+  ],
+  [
+    "home.control.config",
+    "配置",
+    "Config"
+  ],
+  [
+    "home.control.engine",
+    "内核",
+    "Kernel"
+  ],
+  [
+    "home.control.locked",
+    "内核运行中不能切换，先停止再换",
+    "Stop the kernel before switching"
+  ],
+  [
+    "home.control.log",
+    "日志",
+    "Logs"
+  ],
+  [
+    "home.control.noNodes",
+    "还没有节点，无法启动。去「节点」页加一个再回来。",
+    "No nodes yet, so nothing can start. Add one on the Nodes page first."
+  ],
+  [
+    "home.control.node",
+    "节点",
+    "Node"
+  ],
+  [
+    "home.control.realDelay",
+    "真实延迟",
+    "Real delay"
   ],
   [
     "home.control.speed",
@@ -2865,9 +1060,179 @@
     "Speed test"
   ],
   [
-    "home.speed.testing",
-    "测速中…",
-    "Measuring…"
+    "home.control.title",
+    "启动控制",
+    "Kernel control"
+  ],
+  [
+    "home.fact.api",
+    "控制端口",
+    "Control port"
+  ],
+  [
+    "home.fact.config",
+    "配置文件",
+    "Config file"
+  ],
+  [
+    "home.fact.mixed",
+    "入站端口",
+    "Inbound port"
+  ],
+  [
+    "home.footer",
+    "版本 {version} · {platform} · {arch}",
+    "Version {version} · {platform} · {arch}"
+  ],
+  [
+    "home.footerLoading",
+    "版本 {version} · 读取中…",
+    "Version {version} · loading…"
+  ],
+  [
+    "home.kernelVersion",
+    "内核版本：{version}",
+    "Kernel version: {version}"
+  ],
+  [
+    "home.lastExit",
+    "上一次内核退出码 {code}，点「日志」看内核最后说了什么。",
+    "The kernel last exited with code {code}. Open Logs to see what it said."
+  ],
+  [
+    "home.mode.locked",
+    "运行中不能切换代理模式",
+    "The proxy mode cannot change while the kernel runs"
+  ],
+  [
+    "home.noEngine",
+    "还没有启动内核",
+    "No kernel running"
+  ],
+  [
+    "home.nodeLine",
+    "节点：{name}",
+    "Node: {name}"
+  ],
+  [
+    "home.nodesCount",
+    "已保存的节点数量",
+    "Saved nodes"
+  ],
+  [
+    "home.nodesEmptyHint",
+    "还没有节点，去「节点」页添加",
+    "No nodes yet — add some on the Nodes page"
+  ],
+  [
+    "home.progress.groups",
+    "策略组 · 选择 / 自动测速",
+    "Groups · select and url-test"
+  ],
+  [
+    "home.progress.i18n",
+    "多语言 · 中文 / English",
+    "UI languages · 中文 / English"
+  ],
+  [
+    "home.progress.left",
+    "待做 · 写类操作的人工验收",
+    "Todo · human acceptance of the write paths"
+  ],
+  [
+    "home.progress.m0",
+    "M0 · 契约层与工程骨架",
+    "M0 · Contract layer and skeleton"
+  ],
+  [
+    "home.progress.m1",
+    "M1 · 引擎启停、配置渲染、实时统计",
+    "M1 · Engine control, config rendering, live stats"
+  ],
+  [
+    "home.progress.m2",
+    "M2 · 路由规则、导入、系统代理",
+    "M2 · Rules, import, system proxy"
+  ],
+  [
+    "home.progress.m3",
+    "M3 · 测速、曲线、日志、自启、托盘",
+    "M3 · Latency, chart, logs, autostart, tray"
+  ],
+  [
+    "home.progress.polish",
+    "发布打磨 · 关于页、首启动引导、错误面",
+    "Release polish · about page, first-run guide, error surface"
+  ],
+  [
+    "home.progress.ruleSets",
+    "规则集 · 远程列表与本地列表",
+    "Rule sets · remote and local lists"
+  ],
+  [
+    "home.progress.sub",
+    "订阅 · 拉取、整包解析、定时更新",
+    "Subscriptions · fetch, parse, auto update"
+  ],
+  [
+    "home.progress.title",
+    "当前进度",
+    "Progress"
+  ],
+  [
+    "home.quota.expired",
+    "「{name}」已过期，节点会连不上。",
+    "\"{name}\" has expired; its nodes will stop connecting."
+  ],
+  [
+    "home.quota.expiring",
+    "「{name}」还有 {days} 天到期。",
+    "\"{name}\" expires in {days} day(s)."
+  ],
+  [
+    "home.quota.full",
+    "「{name}」的流量已用尽，节点会连不上。",
+    "\"{name}\" is out of traffic; its nodes will stop connecting."
+  ],
+  [
+    "home.quota.low",
+    "「{name}」已用 {percent}% 流量，剩下的不多了。",
+    "\"{name}\" has used {percent}% of its traffic — not much left."
+  ],
+  [
+    "home.quota.open",
+    "去订阅页看看",
+    "Open subscriptions"
+  ],
+  [
+    "home.quota.title",
+    "订阅提醒",
+    "Plan notices"
+  ],
+  [
+    "home.realDelay.result",
+    "真实延迟 {ms} ms",
+    "Real delay {ms} ms"
+  ],
+  [
+    "home.realDelay.testing",
+    "测试中…",
+    "Testing…"
+  ],
+  [
+    "home.realityHint",
+    "sing-box 1.14 的 REALITY 客户端与 Xray 26 服务端握手会失败（实测）。这个节点选 Xray 更稳。",
+    "sing-box 1.14 fails the REALITY handshake against Xray 26 servers (measured). Use the Xray engine for this node."
+  ],
+  [
+    "home.session.label",
+    "本次会话",
+    "This session"
+  ],
+  [
+    "home.session.reset",
+    "清零",
+    "Reset"
   ],
   [
     "home.speed.result",
@@ -2875,9 +1240,394 @@
     "Download speed {rate}"
   ],
   [
+    "home.speed.testing",
+    "测速中…",
+    "Measuring…"
+  ],
+  [
+    "home.stat.down",
+    "下载速率",
+    "Download"
+  ],
+  [
+    "home.stat.engine",
+    "引擎",
+    "Engine"
+  ],
+  [
+    "home.stat.nodes",
+    "节点",
+    "Nodes"
+  ],
+  [
+    "home.stat.up",
+    "上传速率",
+    "Upload"
+  ],
+  [
+    "home.total",
+    "累计 {value}",
+    "Total {value}"
+  ],
+  [
+    "import.andMore",
+    "还有 {count} 个。",
+    "and {count} more."
+  ],
+  [
+    "import.apply",
+    "导入",
+    "Import"
+  ],
+  [
+    "import.applying",
+    "导入中…",
+    "Importing…"
+  ],
+  [
+    "import.body",
+    "粘贴一行一个的分享链接（vless / vmess / trojan / ss），也可以粘贴整段 Base64 订阅内容，或从文件读取 Clash / sing-box 配置。",
+    "Paste one share link per line (vless / vmess / trojan / ss), paste a whole Base64 subscription, or load a Clash / sing-box config from a file."
+  ],
+  [
+    "import.err.clipboard",
+    "读不到剪贴板内容：系统拒绝了访问，请手动粘贴到下面的框里",
+    "Could not read the clipboard: access was denied, paste it into the box below instead"
+  ],
+  [
+    "import.err.clipboardEmpty",
+    "剪贴板是空的",
+    "The clipboard is empty"
+  ],
+  [
+    "import.err.none",
+    "这批内容里没有找到可识别的节点。",
+    "No recognisable node was found in this text."
+  ],
+  [
+    "import.first",
+    "前 {count} 个",
+    "First {count}"
+  ],
+  [
+    "import.found",
+    "识别 {count} 个节点",
+    "{count} nodes recognised"
+  ],
+  [
+    "import.fromClipboard",
+    "从剪贴板",
+    "From clipboard"
+  ],
+  [
     "import.fromFile",
     "从文件读取",
     "Load from file"
+  ],
+  [
+    "import.hint",
+    "先点「解析预览」看看会得到什么，再确认写入。",
+    "Preview first, then write."
+  ],
+  [
+    "import.label",
+    "链接或订阅内容",
+    "Links or subscription body"
+  ],
+  [
+    "import.moreLines",
+    "还有 {count} 行…",
+    "{count} more lines…"
+  ],
+  [
+    "import.parsing",
+    "解析中…",
+    "Parsing…"
+  ],
+  [
+    "import.placeholder",
+    "vless://uuid@example.com:443?security=reality&pbk=...#Tokyo",
+    "vless://uuid@example.com:443?security=reality&pbk=...#Tokyo"
+  ],
+  [
+    "import.preview",
+    "解析预览",
+    "Preview"
+  ],
+  [
+    "import.reparse",
+    "重新解析",
+    "Parse again"
+  ],
+  [
+    "import.skipped",
+    "{count} 行无法识别",
+    "{count} lines could not be recognised"
+  ],
+  [
+    "import.title",
+    "导入分享链接",
+    "Import share links"
+  ],
+  [
+    "log.empty.body",
+    "内核还没启动过，所以没有输出。启动一次之后，内核的 stdout 和 stderr 会写到这里。",
+    "The kernel has never started, so there is no output. After one start its stdout and stderr are written here."
+  ],
+  [
+    "log.empty.title",
+    "还没有日志",
+    "No logs yet"
+  ],
+  [
+    "log.openDir",
+    "打开日志目录",
+    "Open log folder"
+  ],
+  [
+    "log.title",
+    "内核日志",
+    "Kernel logs"
+  ],
+  [
+    "match.domain_full",
+    "完整域名",
+    "Exact domain"
+  ],
+  [
+    "match.domain_keyword",
+    "域名关键字",
+    "Domain keyword"
+  ],
+  [
+    "match.domain_suffix",
+    "域名后缀",
+    "Domain suffix"
+  ],
+  [
+    "match.geo_ip",
+    "国家",
+    "Country"
+  ],
+  [
+    "match.ip_cidr",
+    "IP 段",
+    "IP range"
+  ],
+  [
+    "match.port",
+    "端口",
+    "Port"
+  ],
+  [
+    "match.process_name",
+    "进程名",
+    "Process name"
+  ],
+  [
+    "match.rule_set",
+    "规则集",
+    "Rule set"
+  ],
+  [
+    "nav.about",
+    "关于",
+    "About"
+  ],
+  [
+    "nav.connections",
+    "连接",
+    "Connections"
+  ],
+  [
+    "nav.groups",
+    "策略组",
+    "Proxy groups"
+  ],
+  [
+    "nav.home",
+    "首页",
+    "Home"
+  ],
+  [
+    "nav.nodes",
+    "节点",
+    "Nodes"
+  ],
+  [
+    "nav.routing",
+    "路由",
+    "Routing"
+  ],
+  [
+    "nav.ruleSets",
+    "规则集",
+    "Rule sets"
+  ],
+  [
+    "nav.settings",
+    "设置",
+    "Settings"
+  ],
+  [
+    "nav.subscriptions",
+    "订阅",
+    "Subscriptions"
+  ],
+  [
+    "nodes.bulkDelete.body",
+    "将删除 {count} 个节点，引用它们的策略组会一并清理。",
+    "{count} nodes will be deleted; any group that references them is cleaned up too."
+  ],
+  [
+    "nodes.bulkDelete.title",
+    "删除选中的节点？",
+    "Delete the selected nodes?"
+  ],
+  [
+    "nodes.clearSearch",
+    "清空搜索",
+    "Clear search"
+  ],
+  [
+    "nodes.col.name",
+    "名称",
+    "Name"
+  ],
+  [
+    "nodes.col.protocol",
+    "协议",
+    "Protocol"
+  ],
+  [
+    "nodes.col.security",
+    "安全",
+    "Security"
+  ],
+  [
+    "nodes.col.server",
+    "服务器",
+    "Server"
+  ],
+  [
+    "nodes.col.transport",
+    "传输",
+    "Transport"
+  ],
+  [
+    "nodes.copied",
+    "已复制 {count} 条链接",
+    "Copied {count} link(s)"
+  ],
+  [
+    "nodes.copyFailed",
+    "复制失败，剪贴板不可用",
+    "Could not reach the clipboard"
+  ],
+  [
+    "nodes.copyLink",
+    "复制链接",
+    "Copy link"
+  ],
+  [
+    "nodes.count",
+    "{count} 个节点",
+    "{count} nodes"
+  ],
+  [
+    "nodes.delete.body",
+    "确认删除「{name}」？删除后无法恢复，需要重新填写或导入。",
+    "Delete \"{name}\"? This cannot be undone — you would have to fill it in or import it again."
+  ],
+  [
+    "nodes.delete.title",
+    "删除节点",
+    "Delete node"
+  ],
+  [
+    "nodes.deleteSelected",
+    "删除选中",
+    "Delete selected"
+  ],
+  [
+    "nodes.empty.body",
+    "列表为空，因为你还没有手写节点、也没有导入过分享链接。点「新增节点」逐项填写，或点「导入链接」批量粘贴。",
+    "The list is empty because no node was written by hand and no share link was imported yet. Use New node to fill one in, or Import links to paste a batch."
+  ],
+  [
+    "nodes.empty.title",
+    "还没有任何节点",
+    "No nodes yet"
+  ],
+  [
+    "nodes.engineHint",
+    "启动时使用的内核",
+    "Kernel used when starting"
+  ],
+  [
+    "nodes.fromSubscription",
+    "订阅：{name}",
+    "Subscription: {name}"
+  ],
+  [
+    "nodes.import",
+    "导入",
+    "Import"
+  ],
+  [
+    "nodes.importLinks",
+    "导入链接",
+    "Import links"
+  ],
+  [
+    "nodes.imported",
+    "已导入 {imported} 个节点",
+    "Imported {imported} nodes"
+  ],
+  [
+    "nodes.importedDup",
+    "{count} 个已存在，跳过",
+    "{count} already existed and were skipped"
+  ],
+  [
+    "nodes.importedSkipped",
+    "{count} 行无法识别",
+    "{count} lines could not be recognised"
+  ],
+  [
+    "nodes.latency.ms",
+    "{value} ms",
+    "{value} ms"
+  ],
+  [
+    "nodes.latency.none",
+    "未测速",
+    "Not tested"
+  ],
+  [
+    "nodes.latencyHint",
+    "测速只量到节点的 TCP 握手，不代表隧道一定能通；通了没网请看内核日志。",
+    "A latency test only measures the TCP handshake to the node — it does not prove the tunnel works. If traffic still fails, check the kernel log."
+  ],
+  [
+    "nodes.manualHint",
+    "上移 / 下移调整顺序，顺序会保存下来",
+    "Use the arrows to reorder; the order is saved"
+  ],
+  [
+    "nodes.moveDown",
+    "下移",
+    "Move down"
+  ],
+  [
+    "nodes.moveUp",
+    "上移",
+    "Move up"
+  ],
+  [
+    "nodes.new",
+    "新增节点",
+    "New node"
   ],
   [
     "nodes.saveToFile",
@@ -2890,9 +1640,334 @@
     "Saved to {path}"
   ],
   [
-    "nodes.fromSubscription",
-    "订阅：{name}",
-    "Subscription: {name}"
+    "nodes.search",
+    "搜索节点",
+    "Search nodes"
+  ],
+  [
+    "nodes.searchEmpty",
+    "没有匹配的节点",
+    "No node matches"
+  ],
+  [
+    "nodes.select",
+    "选择",
+    "Select"
+  ],
+  [
+    "nodes.selectAll",
+    "全选",
+    "Select all"
+  ],
+  [
+    "nodes.selectDone",
+    "完成",
+    "Done"
+  ],
+  [
+    "nodes.selectNone",
+    "取消选择",
+    "Clear"
+  ],
+  [
+    "nodes.selected",
+    "已选 {count}",
+    "{count} selected"
+  ],
+  [
+    "nodes.sort",
+    "排序",
+    "Sort"
+  ],
+  [
+    "nodes.sort.latency",
+    "按延迟",
+    "By latency"
+  ],
+  [
+    "nodes.sort.manual",
+    "手动",
+    "Manual"
+  ],
+  [
+    "nodes.sort.name",
+    "按名称",
+    "By name"
+  ],
+  [
+    "nodes.sort.protocol",
+    "按协议",
+    "By protocol"
+  ],
+  [
+    "nodes.sortHint",
+    "按延迟排序时，未测速的节点排在最后",
+    "When sorting by latency, untested nodes go last"
+  ],
+  [
+    "nodes.tag.action",
+    "打标签",
+    "Tag"
+  ],
+  [
+    "nodes.tag.add",
+    "添加",
+    "Add"
+  ],
+  [
+    "nodes.tag.hint",
+    "将作用于已选的 {count} 个节点。",
+    "Applies to the {count} selected node(s)."
+  ],
+  [
+    "nodes.tag.name",
+    "标签",
+    "Tag"
+  ],
+  [
+    "nodes.tag.placeholder",
+    "例如：常用",
+    "e.g. daily"
+  ],
+  [
+    "nodes.tag.remove",
+    "移除",
+    "Remove"
+  ],
+  [
+    "nodes.tag.title",
+    "给选中的节点打标签",
+    "Tag the selected nodes"
+  ],
+  [
+    "nodes.tagFilter",
+    "按标签筛选",
+    "Filter by tag"
+  ],
+  [
+    "nodes.tagFilterAll",
+    "全部标签",
+    "All tags"
+  ],
+  [
+    "nodes.testAll",
+    "全部测速",
+    "Test all"
+  ],
+  [
+    "nodes.testSelected",
+    "测速选中",
+    "Test selected"
+  ],
+  [
+    "onboarding.dismiss",
+    "不再显示",
+    "Do not show again"
+  ],
+  [
+    "onboarding.goNodes",
+    "去导入节点",
+    "Import nodes"
+  ],
+  [
+    "onboarding.openEngines",
+    "打开内核目录",
+    "Open kernels folder"
+  ],
+  [
+    "onboarding.step.engines",
+    "把 xray.exe 或 sing-box.exe 放进内核目录。",
+    "Put xray.exe or sing-box.exe into the kernels folder."
+  ],
+  [
+    "onboarding.step.nodes",
+    "导入订阅或粘贴分享链接，先把节点加进来。",
+    "Import a subscription or paste a share link to get nodes."
+  ],
+  [
+    "onboarding.step.start",
+    "选一个节点，点启动。系统代理会在启动时接管，停止时还原。",
+    "Pick a node and press start. The system proxy is taken over on start and restored on stop."
+  ],
+  [
+    "onboarding.title",
+    "三步开始用",
+    "Three steps to start"
+  ],
+  [
+    "page.about.subtitle",
+    "版本、目录与许可",
+    "Version, folders and licence"
+  ],
+  [
+    "page.about.title",
+    "关于",
+    "About"
+  ],
+  [
+    "page.connections.subtitle",
+    "实时连接与流量",
+    "Live connections and traffic"
+  ],
+  [
+    "page.connections.title",
+    "连接",
+    "Connections"
+  ],
+  [
+    "page.groups.subtitle",
+    "把几个节点打包成一个出口，规则可以指向它",
+    "Bundle nodes into one outbound that rules can point at"
+  ],
+  [
+    "page.groups.title",
+    "策略组",
+    "Proxy groups"
+  ],
+  [
+    "page.home.subtitle",
+    "运行状态总览",
+    "Everything at a glance"
+  ],
+  [
+    "page.home.title",
+    "首页",
+    "Home"
+  ],
+  [
+    "page.nodes.subtitle",
+    "节点、策略组与延迟",
+    "Nodes, groups and latency"
+  ],
+  [
+    "page.nodes.title",
+    "节点",
+    "Nodes"
+  ],
+  [
+    "page.routing.subtitle",
+    "分流规则",
+    "Rules that decide where traffic goes"
+  ],
+  [
+    "page.routing.title",
+    "路由",
+    "Routing"
+  ],
+  [
+    "page.ruleSets.subtitle",
+    "远程域名与 IP 列表，路由规则可以整份引用",
+    "Remote domain and IP lists that routing rules can reference"
+  ],
+  [
+    "page.ruleSets.title",
+    "规则集",
+    "Rule sets"
+  ],
+  [
+    "page.settings.subtitle",
+    "端口、模式与系统集成",
+    "Ports, modes and system integration"
+  ],
+  [
+    "page.settings.title",
+    "设置",
+    "Settings"
+  ],
+  [
+    "page.subscriptions.subtitle",
+    "机场链接与自动更新",
+    "Provider links and auto updates"
+  ],
+  [
+    "page.subscriptions.title",
+    "订阅",
+    "Subscriptions"
+  ],
+  [
+    "routing.col.action",
+    "动作",
+    "Action"
+  ],
+  [
+    "routing.col.actions",
+    "操作",
+    "Actions"
+  ],
+  [
+    "routing.col.match",
+    "匹配",
+    "Match"
+  ],
+  [
+    "routing.col.name",
+    "名称",
+    "Name"
+  ],
+  [
+    "routing.col.order",
+    "顺序",
+    "Order"
+  ],
+  [
+    "routing.col.status",
+    "状态",
+    "Status"
+  ],
+  [
+    "routing.col.value",
+    "内容",
+    "Value"
+  ],
+  [
+    "routing.delete.body",
+    "确认删除「{name}」？删除后规则表按新顺序重新生效。",
+    "Delete \"{name}\"? The rule table takes effect again in its new order."
+  ],
+  [
+    "routing.delete.title",
+    "删除规则",
+    "Delete rule"
+  ],
+  [
+    "routing.disable",
+    "停用",
+    "Disable"
+  ],
+  [
+    "routing.empty.body",
+    "规则列表为空，所以全部流量走当前节点。加一条规则可以按域名、IP 段、端口或进程决定直连或拦截。",
+    "The rule list is empty, so all traffic uses the current node. Add a rule to send domains, IP ranges, ports or processes direct or block them."
+  ],
+  [
+    "routing.empty.title",
+    "还没有路由规则",
+    "No rules yet"
+  ],
+  [
+    "routing.enable",
+    "启用",
+    "Enable"
+  ],
+  [
+    "routing.hint",
+    "从上到下逐条匹配，命中第一条即停止 · {enabled} / {total} 条已启用",
+    "Matched top to bottom, first hit wins · {enabled} of {total} enabled"
+  ],
+  [
+    "routing.moveDown",
+    "下移",
+    "Move down"
+  ],
+  [
+    "routing.moveUp",
+    "上移",
+    "Move up"
+  ],
+  [
+    "routing.new",
+    "新增规则",
+    "New rule"
   ],
   [
     "routing.test",
@@ -2900,9 +1975,9 @@
     "Test"
   ],
   [
-    "routing.test.title",
-    "这条域名会走哪条规则",
-    "Which rule catches this host"
+    "routing.test.action",
+    "去向：{action}",
+    "Goes to: {action}"
   ],
   [
     "routing.test.body",
@@ -2910,9 +1985,19 @@
     "Rules are evaluated top to bottom and the first hit wins, exactly as the kernel does it. Works without starting a kernel."
   ],
   [
+    "routing.test.hit",
+    "命中规则「{rule}」",
+    "Matched rule \"{rule}\""
+  ],
+  [
     "routing.test.label",
     "域名",
     "Hostname"
+  ],
+  [
+    "routing.test.miss",
+    "没有规则命中，走默认出口（代理）。",
+    "No rule matched, so it uses the default outbound (proxy)."
   ],
   [
     "routing.test.run",
@@ -2925,43 +2010,968 @@
     "Checking…"
   ],
   [
-    "routing.test.hit",
-    "命中规则「{rule}」",
-    "Matched rule \"{rule}\""
-  ],
-  [
-    "routing.test.action",
-    "去向：{action}",
-    "Goes to: {action}"
-  ],
-  [
-    "routing.test.miss",
-    "没有规则命中，走默认出口（代理）。",
-    "No rule matched, so it uses the default outbound (proxy)."
-  ],
-  [
     "routing.test.skipped",
     "有 {count} 条规则需要 IP 库、端口或进程名才能判断，已跳过。",
     "{count} rules need an IP database, a port or a process name to judge, and were skipped."
   ],
   [
-    "home.mode.locked",
-    "运行中不能切换代理模式",
-    "The proxy mode cannot change while the kernel runs"
+    "routing.test.title",
+    "这条域名会走哪条规则",
+    "Which rule catches this host"
   ],
   [
-    "import.fromClipboard",
-    "从剪贴板",
-    "From clipboard"
+    "rs.col.actions",
+    "操作",
+    "Actions"
   ],
   [
-    "import.err.clipboard",
-    "读不到剪贴板内容：系统拒绝了访问，请手动粘贴到下面的框里",
-    "Could not read the clipboard: access was denied, paste it into the box below instead"
+    "rs.col.entries",
+    "条目",
+    "Entries"
   ],
   [
-    "import.err.clipboardEmpty",
-    "剪贴板是空的",
-    "The clipboard is empty"
+    "rs.col.interval",
+    "自动更新",
+    "Auto update"
+  ],
+  [
+    "rs.col.name",
+    "名称",
+    "Name"
+  ],
+  [
+    "rs.col.source",
+    "来源",
+    "Source"
+  ],
+  [
+    "rs.col.status",
+    "状态",
+    "Status"
+  ],
+  [
+    "rs.col.updated",
+    "上次更新",
+    "Last update"
+  ],
+  [
+    "rs.delete.body",
+    "确认删除「{name}」？引用它的规则会被停用，不会静默指向空。",
+    "Delete “{name}”? Rules pointing at it will be disabled rather than silently pointing at nothing."
+  ],
+  [
+    "rs.delete.title",
+    "删除规则集",
+    "Delete rule set"
+  ],
+  [
+    "rs.editor.edit",
+    "编辑规则集",
+    "Edit rule set"
+  ],
+  [
+    "rs.editor.err.name",
+    "规则集需要名字",
+    "A rule set needs a name"
+  ],
+  [
+    "rs.editor.err.url",
+    "远程规则集的地址必须是 http:// 或 https://",
+    "A remote rule set needs an http:// or https:// URL"
+  ],
+  [
+    "rs.editor.interval",
+    "自动更新",
+    "Auto update"
+  ],
+  [
+    "rs.editor.name",
+    "名称",
+    "Name"
+  ],
+  [
+    "rs.editor.namePlaceholder",
+    "例如：广告拦截",
+    "e.g. Ads blocklist"
+  ],
+  [
+    "rs.editor.new",
+    "新建规则集",
+    "New rule set"
+  ],
+  [
+    "rs.editor.source",
+    "来源",
+    "Source"
+  ],
+  [
+    "rs.editor.url",
+    "列表地址",
+    "List URL"
+  ],
+  [
+    "rs.editor.urlHint",
+    "支持 Clash provider（payload:）、纯域名 / CIDR 列表，以及 v2ray 的 domain: / full: / keyword: 前缀。",
+    "Accepts Clash providers (payload:), plain domain or CIDR lists, and v2ray domain: / full: / keyword: prefixes."
+  ],
+  [
+    "rs.empty.body",
+    "规则集把一长串域名或 IP 收成一个名字，路由规则就能整份引用；可以从规则仓库拉取，也可以直接粘贴。",
+    "A rule set groups a long list of domains or IPs under one name so a routing rule can reference it whole. Fetch it from a provider or paste it in."
+  ],
+  [
+    "rs.empty.title",
+    "还没有规则集",
+    "No rule sets yet"
+  ],
+  [
+    "rs.hint",
+    "规则集是一份域名 / IP 列表，路由规则可以整份引用它。Xray 会把列表内联进配置，sing-box 会生成独立的 rule-set 文件。",
+    "A rule set is a list of domains or IPs that a routing rule can reference as a whole. Xray inlines the list into the config; sing-box gets a separate rule-set file."
+  ],
+  [
+    "rs.interval.12h",
+    "每 12 小时",
+    "Every 12 hours"
+  ],
+  [
+    "rs.interval.6h",
+    "每 6 小时",
+    "Every 6 hours"
+  ],
+  [
+    "rs.interval.custom",
+    "每 {count} 分钟",
+    "Every {count} minutes"
+  ],
+  [
+    "rs.interval.daily",
+    "每天",
+    "Daily"
+  ],
+  [
+    "rs.interval.hourly",
+    "每小时",
+    "Hourly"
+  ],
+  [
+    "rs.interval.manual",
+    "仅手动",
+    "Manual only"
+  ],
+  [
+    "rs.new",
+    "新建规则集",
+    "New rule set"
+  ],
+  [
+    "rs.note.deleted",
+    "规则集「{name}」已删除，引用它的规则已停用",
+    "Deleted “{name}”; rules pointing at it were disabled"
+  ],
+  [
+    "rs.note.refreshed",
+    "规则集「{name}」已刷新，共 {count} 条",
+    "Refreshed “{name}” with {count} entries"
+  ],
+  [
+    "rs.note.saved",
+    "规则集「{name}」已保存，共 {count} 条",
+    "Saved “{name}” with {count} entries"
+  ],
+  [
+    "rs.paste",
+    "粘贴列表",
+    "Paste list"
+  ],
+  [
+    "rs.paste.empty",
+    "列表是空的，先粘点内容进来",
+    "The list is empty — paste something first"
+  ],
+  [
+    "rs.paste.hint",
+    "一行一条：裸域名、DOMAIN-SUFFIX,example.com、IP-CIDR,10.0.0.0/8 都能识别；无法识别的行会被跳过并计数。",
+    "One entry per line: bare domains, DOMAIN-SUFFIX,example.com and IP-CIDR,10.0.0.0/8 all work. Lines that cannot be parsed are skipped and counted."
+  ],
+  [
+    "rs.paste.placeholder",
+    "一行一条规则…",
+    "One entry per line…"
+  ],
+  [
+    "rs.paste.save",
+    "保存列表",
+    "Save list"
+  ],
+  [
+    "rs.paste.title",
+    "粘贴规则列表",
+    "Paste a rule list"
+  ],
+  [
+    "rs.refresh",
+    "刷新",
+    "Refresh"
+  ],
+  [
+    "rs.source.local",
+    "本地",
+    "Local"
+  ],
+  [
+    "rs.source.remote",
+    "远程",
+    "Remote"
+  ],
+  [
+    "rs.status.disabled",
+    "已停用",
+    "Disabled"
+  ],
+  [
+    "rs.status.failed",
+    "上次失败",
+    "Last attempt failed"
+  ],
+  [
+    "rs.status.ok",
+    "正常",
+    "OK"
+  ],
+  [
+    "ruleEditor.action",
+    "动作",
+    "Action"
+  ],
+  [
+    "ruleEditor.edit",
+    "编辑规则",
+    "Edit rule"
+  ],
+  [
+    "ruleEditor.enabled",
+    "启用这条规则",
+    "Enable this rule"
+  ],
+  [
+    "ruleEditor.err.group",
+    "先选一个策略组",
+    "Pick a group first"
+  ],
+  [
+    "ruleEditor.err.name",
+    "请填写规则名称",
+    "Enter a rule name"
+  ],
+  [
+    "ruleEditor.err.port",
+    "端口需要是 1–65535 之间的整数",
+    "Port must be an integer from 1 to 65535"
+  ],
+  [
+    "ruleEditor.err.ruleSet",
+    "先选一个规则集",
+    "Pick a rule set first"
+  ],
+  [
+    "ruleEditor.err.value",
+    "请填写匹配内容",
+    "Enter a match value"
+  ],
+  [
+    "ruleEditor.group",
+    "策略组",
+    "Proxy group"
+  ],
+  [
+    "ruleEditor.groupEmpty",
+    "还没有启用的策略组，先去「策略组」页建一个",
+    "No enabled groups yet — create one on the Proxy groups page"
+  ],
+  [
+    "ruleEditor.hint",
+    "规则按顺序匹配，命中第一条就停止。",
+    "Rules match in order and stop at the first hit."
+  ],
+  [
+    "ruleEditor.matcher",
+    "匹配方式",
+    "Match type"
+  ],
+  [
+    "ruleEditor.name",
+    "名称",
+    "Name"
+  ],
+  [
+    "ruleEditor.namePlaceholder",
+    "例如：内网直连",
+    "e.g. LAN direct"
+  ],
+  [
+    "ruleEditor.new",
+    "新增规则",
+    "New rule"
+  ],
+  [
+    "ruleEditor.ruleSet",
+    "规则集",
+    "Rule set"
+  ],
+  [
+    "ruleEditor.ruleSetEmpty",
+    "还没有可用的规则集，先去「规则集」页添加一个",
+    "No rule sets yet — add one on the Rule sets page first"
+  ],
+  [
+    "ruleEditor.value",
+    "匹配内容",
+    "Match value"
+  ],
+  [
+    "settings.allowLan",
+    "允许局域网连接",
+    "Allow LAN connections"
+  ],
+  [
+    "settings.allowLanHint",
+    "其它设备可以经本机端口上网",
+    "Other devices on your network can use this machine as a proxy"
+  ],
+  [
+    "settings.api",
+    "控制端口",
+    "Control port"
+  ],
+  [
+    "settings.apiHint",
+    "统计与连接查询使用的端口，不能和混合端口相同",
+    "Used for stats and connection queries; must differ from the mixed port"
+  ],
+  [
+    "settings.autoConnect",
+    "启动时自动连接",
+    "Connect on launch"
+  ],
+  [
+    "settings.autoConnectHint",
+    "应用启动后自动启动上次使用的节点；内核不在内核目录时会跳过。",
+    "Starts the last used node once the app is up. Skipped when its kernel is not in the kernels folder."
+  ],
+  [
+    "settings.autoTest",
+    "自动测速",
+    "Automatic latency test"
+  ],
+  [
+    "settings.autoTest.min15",
+    "每 15 分钟",
+    "Every 15 min"
+  ],
+  [
+    "settings.autoTest.min5",
+    "每 5 分钟",
+    "Every 5 min"
+  ],
+  [
+    "settings.autoTest.min60",
+    "每小时",
+    "Hourly"
+  ],
+  [
+    "settings.autoTest.off",
+    "不自动",
+    "Off"
+  ],
+  [
+    "settings.autoTestHint",
+    "按这个间隔重新测一遍所有节点。选「不自动」就只在点按钮时测。",
+    "Re-test every node at this interval. Pick “Off” to test only when you press the button."
+  ],
+  [
+    "settings.autostart",
+    "开机自启",
+    "Start with Windows"
+  ],
+  [
+    "settings.autostartHint",
+    "登录 Windows 后自动启动本客户端（写入当前用户的启动项）",
+    "Start this client after you sign in, by writing the current user startup entry"
+  ],
+  [
+    "settings.autostartNote",
+    "保存设置时写入或删除注册表，所以关掉开关就是真的关掉。",
+    "Saving writes or removes the registry value, so switching it off really turns it off."
+  ],
+  [
+    "settings.autostartOff",
+    "未登记",
+    "not registered"
+  ],
+  [
+    "settings.autostartOn",
+    "已登记",
+    "registered"
+  ],
+  [
+    "settings.autostartState",
+    "启动项当前{state}。",
+    "The startup entry is currently {state}."
+  ],
+  [
+    "settings.autostartUnknown",
+    "未知",
+    "unknown"
+  ],
+  [
+    "settings.backup.export",
+    "导出配置",
+    "Export"
+  ],
+  [
+    "settings.backup.hint",
+    "导出会把节点、订阅、路由规则、策略组和规则集条目写进一个 JSON 文件。恢复是整体替换而不是合并，而且要先停止内核。",
+    "Export writes nodes, subscriptions, routing rules, groups and rule-set entries into one JSON file. Restoring replaces everything rather than merging, and the kernel must be stopped first."
+  ],
+  [
+    "settings.backup.restore",
+    "从备份恢复",
+    "Restore"
+  ],
+  [
+    "settings.backup.restored",
+    "已恢复：{nodes} 个节点、{rules} 条规则、{groups} 个策略组、{ruleSets} 个规则集",
+    "Restored {nodes} nodes, {rules} rules, {groups} groups, {ruleSets} rule sets"
+  ],
+  [
+    "settings.backup.saved",
+    "已导出到 {path}",
+    "Saved to {path}"
+  ],
+  [
+    "settings.backup.title",
+    "备份与恢复",
+    "Backup and restore"
+  ],
+  [
+    "settings.bypass",
+    "代理例外（bypass）",
+    "Proxy bypass"
+  ],
+  [
+    "settings.bypassHint",
+    "分号分隔。留空则用默认值（本机回环与内网段不走代理）。",
+    "Semicolon separated. Empty falls back to the default (loopback and private ranges stay direct)."
+  ],
+  [
+    "settings.closeToTray",
+    "关闭窗口时最小化到托盘",
+    "Minimize to tray on close"
+  ],
+  [
+    "settings.closeToTrayHint",
+    "关掉后，点窗口的 × 会退出程序并还原系统代理",
+    "When off, the window X quits and restores the system proxy"
+  ],
+  [
+    "settings.dns.hint",
+    "逗号分隔。三种写法：1.1.1.1（UDP）、tls://1.1.1.1（DoT）、https://1.1.1.1/dns-query（DoH）。主机部分只接受 IP 字面量——写 dns.google 这种域名会让解析器先去解析它自己。",
+    "Comma separated. Three forms: 1.1.1.1 (UDP), tls://1.1.1.1 (DoT), https://1.1.1.1/dns-query (DoH). The host must be an IP literal — a name like dns.google would have to be resolved by the resolver itself."
+  ],
+  [
+    "settings.dns.placeholder",
+    "留空则用系统 DNS，例如 1.1.1.1、tls://9.9.9.9、https://8.8.8.8/dns-query",
+    "Empty means the system resolver, e.g. 1.1.1.1, tls://9.9.9.9, https://8.8.8.8/dns-query"
+  ],
+  [
+    "settings.dns.servers",
+    "自定义 DNS 服务器",
+    "Custom DNS servers"
+  ],
+  [
+    "settings.dns.title",
+    "DNS",
+    "DNS"
+  ],
+  [
+    "settings.hotkeyToggle",
+    "Ctrl+Shift+X",
+    "Ctrl+Shift+X"
+  ],
+  [
+    "settings.hotkeyToggleHint",
+    "启动 / 停止内核",
+    "Start / stop the kernel"
+  ],
+  [
+    "settings.hotkeyWindow",
+    "Ctrl+Shift+W",
+    "Ctrl+Shift+W"
+  ],
+  [
+    "settings.hotkeyWindowHint",
+    "显示 / 隐藏窗口（内核继续跑）",
+    "Show / hide the window (the kernel keeps running)"
+  ],
+  [
+    "settings.hotkeysHint",
+    "在任意程序里都能用，窗口不用打开",
+    "Work from any app; the window does not have to be open"
+  ],
+  [
+    "settings.hotkeysTitle",
+    "全局快捷键",
+    "Global shortcuts"
+  ],
+  [
+    "settings.language",
+    "界面语言",
+    "Language"
+  ],
+  [
+    "settings.languageHint",
+    "切换后立即生效，不需要重启。",
+    "Takes effect immediately, no restart needed."
+  ],
+  [
+    "settings.logLevel",
+    "内核日志级别",
+    "Kernel log level"
+  ],
+  [
+    "settings.logLevel.debug",
+    "调试",
+    "Debug"
+  ],
+  [
+    "settings.logLevel.info",
+    "信息",
+    "Info"
+  ],
+  [
+    "settings.logLevel.warn",
+    "警告",
+    "Warn"
+  ],
+  [
+    "settings.logLevelHint",
+    "默认只记警告；排查连不上时切到 debug 再启动一次，然后看「日志」。",
+    "Warnings only by default. Switch to debug, start once, then read the log when a node will not connect."
+  ],
+  [
+    "settings.mixed",
+    "本地混合端口",
+    "Local mixed port"
+  ],
+  [
+    "settings.mixedHint",
+    "给 HTTP + SOCKS 共用的入口端口",
+    "One port serving both HTTP and SOCKS"
+  ],
+  [
+    "settings.mode",
+    "代理模式",
+    "Proxy mode"
+  ],
+  [
+    "settings.mode.direct",
+    "直连",
+    "Direct"
+  ],
+  [
+    "settings.mode.global",
+    "全局",
+    "Global"
+  ],
+  [
+    "settings.mode.rule",
+    "规则",
+    "Rule"
+  ],
+  [
+    "settings.modeHint",
+    "规则模式按路由规则分流；全局模式全部走代理；直连模式不经过任何节点。",
+    "Rule mode follows your rules, global sends everything through the proxy, direct bypasses every node."
+  ],
+  [
+    "settings.ports",
+    "端口",
+    "Ports"
+  ],
+  [
+    "settings.proxyHeldSuffix",
+    "，由 X-Matrix 接管",
+    ", held by X-Matrix"
+  ],
+  [
+    "settings.proxyIntent",
+    "设置在这里只保存意图，下次启动内核时生效。",
+    "Settings are only stored here; they take effect the next time the kernel starts."
+  ],
+  [
+    "settings.proxyOff",
+    "已关闭",
+    "off"
+  ],
+  [
+    "settings.proxyOn",
+    "已开启",
+    "on"
+  ],
+  [
+    "settings.proxyServer",
+    "（{server}）",
+    " ({server})"
+  ],
+  [
+    "settings.proxyState",
+    "系统代理当前",
+    "System proxy now"
+  ],
+  [
+    "settings.proxyWarning",
+    "两个客户端同时写注册表会互相覆盖：若系统代理已被其它客户端（例如 V2RayN）接管，先关掉它再启动本客户端。",
+    "Two clients writing the registry will overwrite each other: if another client (V2RayN, for example) already owns the system proxy, turn it off before starting this one."
+  ],
+  [
+    "settings.restoreProxy",
+    "还原系统代理",
+    "Restore system proxy"
+  ],
+  [
+    "settings.startMinimized",
+    "启动时隐藏窗口",
+    "Start hidden"
+  ],
+  [
+    "settings.startMinimizedHint",
+    "开机自启配合使用时有用：只在托盘里出现，不弹窗",
+    "Useful with launch at login: appear in the tray only"
+  ],
+  [
+    "settings.subAgent",
+    "订阅 User-Agent",
+    "Subscription User-Agent"
+  ],
+  [
+    "settings.subAgentHint",
+    "有些机场只认 Clash 的 UA，别的 UA 会返回空内容或 403；填 clash-verge/v2rayN 之类即可。",
+    "Some providers only serve a Clash UA and answer anything else with an empty body or a 403."
+  ],
+  [
+    "settings.subAgentLabel",
+    "拉取订阅时使用的 UA",
+    "User-Agent used when fetching subscriptions"
+  ],
+  [
+    "settings.subAgentPlaceholder",
+    "留空则使用默认（X-Matrix/版本号）",
+    "Empty means the default (X-Matrix/version)"
+  ],
+  [
+    "settings.system",
+    "系统集成",
+    "System integration"
+  ],
+  [
+    "settings.systemProxy",
+    "接管系统代理",
+    "Take over the system proxy"
+  ],
+  [
+    "settings.systemProxyHint",
+    "启动内核时把 Windows 系统代理指向本机混合端口，停止时还原原设置",
+    "Point the Windows system proxy at the local mixed port while the kernel runs, and restore the previous setting on stop"
+  ],
+  [
+    "settings.testUrl",
+    "测速地址",
+    "Probe URL"
+  ],
+  [
+    "settings.testUrlHint",
+    "「真实延迟」与「自动测速」策略组都打这个地址，必须是 http://（探测经本机代理，不带 TLS）。gstatic 被墙时换成 http://cp.cloudflare.com/ 之类。",
+    "The real-latency button and url-test groups probe this address. It must be http:// (the probe goes through the local proxy, which speaks no TLS). Swap it when gstatic is blocked."
+  ],
+  [
+    "settings.tray",
+    "关闭窗口不会退出：窗口只是隐藏到托盘，退出请用托盘菜单的「退出 X-Matrix」。退出前会先还原系统代理，再停内核。",
+    "Closing the window does not quit: it hides to the tray. Use \"Quit X-Matrix\" in the tray menu to exit — the system proxy is restored first, then the kernel stops."
+  ],
+  [
+    "sidebar.collapse",
+    "收起侧栏",
+    "Collapse sidebar"
+  ],
+  [
+    "sidebar.collapseShort",
+    "收起",
+    "Collapse"
+  ],
+  [
+    "sidebar.dark",
+    "深色",
+    "Dark"
+  ],
+  [
+    "sidebar.expand",
+    "展开侧栏",
+    "Expand sidebar"
+  ],
+  [
+    "sidebar.light",
+    "浅色",
+    "Light"
+  ],
+  [
+    "sidebar.toDark",
+    "切换到深色主题",
+    "Switch to dark theme"
+  ],
+  [
+    "sidebar.toLight",
+    "切换到浅色主题",
+    "Switch to light theme"
+  ],
+  [
+    "sub.col.actions",
+    "操作",
+    "Actions"
+  ],
+  [
+    "sub.col.interval",
+    "自动更新",
+    "Auto update"
+  ],
+  [
+    "sub.col.name",
+    "名称",
+    "Name"
+  ],
+  [
+    "sub.col.nodes",
+    "节点",
+    "Nodes"
+  ],
+  [
+    "sub.col.quota",
+    "流量",
+    "Traffic"
+  ],
+  [
+    "sub.col.status",
+    "状态",
+    "Status"
+  ],
+  [
+    "sub.col.updated",
+    "上次更新",
+    "Last update"
+  ],
+  [
+    "sub.col.url",
+    "地址",
+    "Address"
+  ],
+  [
+    "sub.delete.body",
+    "删除「{name}」会同时删掉它带进来的节点，手动添加的节点不受影响。",
+    "Deleting \"{name}\" also removes the nodes it brought in. Nodes added by hand are untouched."
+  ],
+  [
+    "sub.delete.title",
+    "删除订阅",
+    "Delete subscription"
+  ],
+  [
+    "sub.editor.edit",
+    "编辑订阅",
+    "Edit subscription"
+  ],
+  [
+    "sub.editor.enabled",
+    "启用",
+    "Enabled"
+  ],
+  [
+    "sub.editor.enabledHint",
+    "停用后不会自动更新，节点仍然留在列表里。",
+    "Disabled subscriptions stop updating, but their nodes stay in the list."
+  ],
+  [
+    "sub.editor.interval",
+    "自动更新",
+    "Auto update"
+  ],
+  [
+    "sub.editor.name",
+    "名称",
+    "Name"
+  ],
+  [
+    "sub.editor.namePlaceholder",
+    "机场名字",
+    "Provider name"
+  ],
+  [
+    "sub.editor.new",
+    "新增订阅",
+    "New subscription"
+  ],
+  [
+    "sub.editor.url",
+    "订阅地址",
+    "Subscription URL"
+  ],
+  [
+    "sub.editor.urlHint",
+    "只支持 http(s)。地址里的 token 就是密码，别分享给别人。",
+    "http(s) only. The token in the URL is a password — do not share it."
+  ],
+  [
+    "sub.empty.body",
+    "添加一个机场的订阅链接，它会按设定的间隔自动拉取节点；也可以直接在节点页粘贴分享链接。",
+    "Add a provider subscription link and it will pull nodes on your schedule. You can also paste share links directly on the Nodes page."
+  ],
+  [
+    "sub.empty.title",
+    "还没有订阅",
+    "No subscriptions yet"
+  ],
+  [
+    "sub.err.name",
+    "给这个订阅起个名字",
+    "Give this subscription a name"
+  ],
+  [
+    "sub.err.url",
+    "地址必须以 http:// 或 https:// 开头",
+    "The address must start with http:// or https://"
+  ],
+  [
+    "sub.hint",
+    "一个订阅只拥有它自己带进来的节点（标记为 sub:id），刷新时只替换那一批。",
+    "A subscription owns only the nodes it brought in (tagged sub:id); a refresh replaces just that batch."
+  ],
+  [
+    "sub.interval.12h",
+    "每 12 小时",
+    "Every 12 hours"
+  ],
+  [
+    "sub.interval.6h",
+    "每 6 小时",
+    "Every 6 hours"
+  ],
+  [
+    "sub.interval.custom",
+    "每 {count} 分钟",
+    "Every {count} minutes"
+  ],
+  [
+    "sub.interval.daily",
+    "每天",
+    "Daily"
+  ],
+  [
+    "sub.interval.hourly",
+    "每小时",
+    "Hourly"
+  ],
+  [
+    "sub.interval.manual",
+    "仅手动",
+    "Manual only"
+  ],
+  [
+    "sub.new",
+    "新增订阅",
+    "New subscription"
+  ],
+  [
+    "sub.note.deleted",
+    "已删除「{name}」及其节点",
+    "Deleted \"{name}\" and its nodes"
+  ],
+  [
+    "sub.note.due",
+    "已更新到期的订阅，共 {count} 个节点",
+    "Updated the due subscriptions, {count} nodes in total"
+  ],
+  [
+    "sub.note.noneDue",
+    "没有到期的订阅",
+    "No subscription is due"
+  ],
+  [
+    "sub.note.refreshed",
+    "「{name}」更新完成：{imported} 个节点（替换 {removed} 个）",
+    "\"{name}\" updated: {imported} nodes ({removed} replaced)"
+  ],
+  [
+    "sub.note.skipped",
+    "，跳过 {count} 个（重复或无法识别）",
+    " ({count} skipped: duplicates or unreadable)"
+  ],
+  [
+    "sub.quota.expires",
+    "到期 {day}",
+    "expires {day}"
+  ],
+  [
+    "sub.refreshDue",
+    "刷新到期",
+    "Refresh due"
+  ],
+  [
+    "sub.status.disabled",
+    "已停用",
+    "Disabled"
+  ],
+  [
+    "sub.status.failed",
+    "上次失败",
+    "Last attempt failed"
+  ],
+  [
+    "sub.status.ok",
+    "正常",
+    "OK"
+  ],
+  [
+    "time.days",
+    "{count} 天前",
+    "{count} days ago"
+  ],
+  [
+    "time.hours",
+    "{count} 小时前",
+    "{count} hours ago"
+  ],
+  [
+    "time.minutes",
+    "{count} 分钟前",
+    "{count} minutes ago"
+  ],
+  [
+    "time.months",
+    "{count} 个月前",
+    "{count} months ago"
+  ],
+  [
+    "time.never",
+    "从未",
+    "never"
+  ],
+  [
+    "time.now",
+    "刚刚",
+    "just now"
+  ],
+  [
+    "time.yesterday",
+    "昨天",
+    "yesterday"
   ]
 ]

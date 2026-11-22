@@ -196,8 +196,12 @@ onMounted(() => {
     <p v-if="store.error" class="alert">{{ store.error }}</p>
     <p v-if="note" class="notice">{{ note }}</p>
 
+    <p v-if="store.loading && !store.loaded" class="muted small">
+      {{ t('common.loading') }}
+    </p>
+
     <EmptyState
-      v-if="isEmpty"
+      v-else-if="isEmpty"
       icon="cloud"
       :title="t('sub.empty.title')"
       :body="t('sub.empty.body')"
@@ -234,12 +238,17 @@ onMounted(() => {
             <td class="num nowrap">{{ subscription.node_count ?? 0 }}</td>
             <td class="nowrap">{{ intervalLabel(subscription.update_interval_minutes) }}</td>
             <td class="nowrap">{{ formatWhen(subscription.updated_at_ms) }}</td>
-            <td class="nowrap">
+            <td>
               <span v-if="subscription.last_error" class="badge badge-danger" :title="subscription.last_error">
                 {{ t('sub.status.failed') }}
               </span>
               <span v-else-if="!subscription.enabled" class="badge">{{ t('sub.status.disabled') }}</span>
               <span v-else class="badge badge-success">{{ t('sub.status.ok') }}</span>
+              <!-- A badge saying "failed" with the reason hidden in a hover
+                   title is a dead end on touch and on OCR'd VMs alike. -->
+              <span v-if="subscription.last_error" class="failure-reason">
+                {{ subscription.last_error }}
+              </span>
             </td>
             <td class="actions">
               <button
@@ -363,6 +372,16 @@ onMounted(() => {
    到期 2026-03-01" on one line alone is 230px wide. */
 .nowrap {
   white-space: nowrap;
+}
+
+.failure-reason {
+  display: block;
+  max-width: 34ch;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
 }
 
 .sub-quota {

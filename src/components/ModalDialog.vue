@@ -19,6 +19,19 @@ const props = defineProps<{
 const emit = defineEmits<{ close: [] }>()
 
 const panel = ref<HTMLElement | null>(null)
+/** Where focus was before the dialog opened, so it can be handed back. */
+let restoreFocusTo: HTMLElement | null = null
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+function focusables(): HTMLElement[] {
+  const root = panel.value
+  if (!root) return []
+  return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+    (element) => element.offsetParent !== null,
+  )
+}
 
 function onBackdropClick() {
   if (props.closeOnOverlay === false) return
@@ -26,19 +39,51 @@ function onBackdropClick() {
 }
 
 function onKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') emit('close')
+  if (!props.open) return
+  if (event.key === 'Escape') {
+    emit('close')
+    return
+  }
+  if (event.key !== 'Tab') return
+  // Tab must cycle inside the panel: without this it walks out into the page
+  // behind the scrim, where nothing is clickable but everything is focusable.
+  const items = focusables()
+  if (items.length === 0) {
+    event.preventDefault()
+    return
+  }
+  const first = items[0]
+  const last = items[items.length - 1]
+  const active = document.activeElement as HTMLElement | null
+  if (event.shiftKey && (active === first || active === null || !panel.value?.contains(active))) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && (active === last || active === null || !panel.value?.contains(active))) {
+    event.preventDefault()
+    first.focus()
+  }
 }
 
 watch(
   () => props.open,
   (open) => {
-    if (!open) return
-    // Focus the first control so the dialog is usable without a mouse.
+    if (open) {
+      restoreFocusTo = document.activeElement as HTMLElement | null
+      // Focus the first control so the dialog is usable without a mouse.
+      requestAnimationFrame(() => {
+        const preferred = panel.value?.querySelector<HTMLElement>(
+          'input:not([disabled]), select:not([disabled]), textarea:not([disabled])',
+        )
+        ;(preferred ?? focusables()[0])?.focus()
+      })
+      return
+    }
+    // Handing focus back matters most for confirm dialogs: the row's button is
+    // where the eye and the keyboard both expect to land again.
+    const target = restoreFocusTo
+    restoreFocusTo = null
     requestAnimationFrame(() => {
-      const focusable = panel.value?.querySelector<HTMLElement>(
-        'input, select, textarea, button:not([data-close])',
-      )
-      focusable?.focus()
+      if (target && document.contains(target)) target.focus()
     })
   },
 )
@@ -85,7 +130,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(10, 12, 18, 0.42);
+  background: var(--overlay-scrim);
   backdrop-filter: blur(6px);
 }
 

@@ -132,11 +132,14 @@ async function confirmDelete() {
       :title="t('groups.empty.title')"
       :body="t('groups.empty.body')"
     >
-      <button class="btn btn-primary" type="button" @click="openNew">{{ t('groups.new') }}</button>
+      <template #actions>
+        <button class="btn btn-primary" type="button" @click="openNew">{{ t('groups.new') }}</button>
+      </template>
     </EmptyState>
 
     <div v-else-if="store.items.length > 0" class="surface-plain">
-      <table class="data-table">
+      <div class="table-wrap">
+        <table class="data-table">
         <thead>
           <tr>
             <th scope="col">{{ t('groups.col.name') }}</th>
@@ -182,7 +185,7 @@ async function confirmDelete() {
             </td>
             <td class="col-actions">
               <button class="btn btn-sm btn-ghost" type="button" @click="toggle(group)">
-                {{ group.enabled ? t('common.disabled') : t('common.enabled') }}
+                {{ group.enabled ? t('common.disable') : t('common.enable') }}
               </button>
               <button class="btn btn-sm btn-ghost" type="button" @click="openEdit(group)">
                 <AppIcon name="edit" :size="14" />
@@ -196,6 +199,7 @@ async function confirmDelete() {
           </tr>
         </tbody>
       </table>
+      </div>
     </div>
 
     <GroupEditor

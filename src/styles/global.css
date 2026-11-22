@@ -316,9 +316,12 @@ a {
 /* Both spellings are supported on purpose: `.active` is what the view-level
    toggles emit, `aria-pressed` is the accessible form used by the settings
    panel. Matching only one of them leaves segmented controls looking dead. */
+/* The raised surface, not the card surface: in the dark theme
+   --surface-solid is *darker* than the track, so the active segment read as
+   the pressed-in one. */
 .segmented button.active,
 .segmented button[aria-pressed="true"] {
-  background: var(--surface-solid);
+  background: var(--surface-raised);
   color: var(--text-primary);
   box-shadow: var(--shadow-card);
 }
@@ -376,7 +379,10 @@ a {
    end of the row. The opaque background is required, otherwise the cells
    scrolling underneath show through. Only the body cells are pinned: a sticky
    header cell painted over the header of the column before it and the two
-   labels ran together. */
+   labels ran together — which is why the header is pinned too, with the same
+   opaque skin: a pinned body cell whose header scrolls away is an unlabelled
+   cluster of buttons painted over the column before it. */
+.data-table th.actions,
 .data-table td.actions {
   position: sticky;
   right: 0;
@@ -384,10 +390,17 @@ a {
   box-shadow: inset 1px 0 0 var(--border-subtle);
 }
 
+.data-table th.actions {
+  z-index: 3;
+}
+
 .cell-mono {
   font-family: var(--font-mono);
   font-size: 12.5px;
   color: var(--text-secondary);
+  /* A host or a URL has no spaces to break at, so one long value used to push
+     the column — and with it the whole table — wider than the window. */
+  overflow-wrap: anywhere;
 }
 
 /* ---------- badges ---------- */
@@ -478,6 +491,10 @@ a {
 
 .mono {
   font-family: var(--font-mono);
+}
+
+.alert-inline {
+  margin: 0 0 12px;
 }
 
 .alert {
