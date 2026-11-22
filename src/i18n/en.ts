@@ -309,7 +309,7 @@ export const en: Record<string, string> = {
   "ruleEditor.err.ruleSet": "Pick a rule set first",
   // import
   "import.title": "Import share links",
-  "import.body": "Paste one share link per line (vless / vmess / trojan / ss), or a whole Base64 subscription body.",
+  "import.body": "Paste one share link per line (vless / vmess / trojan / ss), paste a whole Base64 subscription, or load a Clash / sing-box config from a file.",
   "import.hint": "Preview first, then write.",
   "import.label": "Links or subscription body",
   "import.placeholder": "vless://uuid@example.com:443?security=reality&pbk=...#Tokyo",

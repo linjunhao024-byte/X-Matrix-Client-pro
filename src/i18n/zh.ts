@@ -309,7 +309,7 @@ export const zh: Record<string, string> = {
   "ruleEditor.err.ruleSet": "先选一个规则集",
   // import
   "import.title": "导入分享链接",
-  "import.body": "粘贴一行一个的分享链接（vless / vmess / trojan / ss），也可以直接粘贴整段 Base64 订阅内容。",
+  "import.body": "粘贴一行一个的分享链接（vless / vmess / trojan / ss），也可以粘贴整段 Base64 订阅内容，或从文件读取 Clash / sing-box 配置。",
   "import.hint": "先点「解析预览」看看会得到什么，再确认写入。",
   "import.label": "链接或订阅内容",
   "import.placeholder": "vless://uuid@example.com:443?security=reality&pbk=...#Tokyo",
