@@ -37,6 +37,14 @@ export const useEngineStore = defineStore('engine', () => {
   const error = ref<string | null>(null)
   const rates = ref({ up: 0, down: 0 })
   const binaries = ref<EngineBinary[]>([])
+  /**
+   * Version string per kernel, filled lazily.
+   *
+   * Missing entry means "not asked yet" or "not installed"; the UI shows the
+   * version only when it has one, so a failed probe never becomes a scary
+   * banner.
+   */
+  const versions = ref<Partial<Record<EngineKind, string>>>({})
   const history = ref<TrafficPoint[]>([])
   /**
    * Bytes counted since the last reset, not since the kernel booted.
@@ -76,6 +84,15 @@ export const useEngineStore = defineStore('engine', () => {
    */
   function resetSession() {
     session.value = { up: 0, down: 0 }
+  }
+
+  async function refreshVersion(target: EngineKind): Promise<void> {
+    try {
+      versions.value = { ...versions.value, [target]: await api.engineVersion(target) }
+    } catch {
+      // A kernel that cannot self-report is not an error worth interrupting the
+      // user for: the binary check already explains a missing file.
+    }
   }
 
   async function refreshStatus() {
@@ -136,6 +153,11 @@ export const useEngineStore = defineStore('engine', () => {
       binaries.value = await api.engineBinaries()
     } catch (cause) {
       error.value = describeError(cause)
+    }
+    // Ask only about kernels that exist: a version probe on a missing file is a
+    // guaranteed error message with nothing to say.
+    for (const binary of binaries.value) {
+      if (binary.present) void refreshVersion(binary.kind)
     }
   }
 
@@ -212,7 +234,9 @@ export const useEngineStore = defineStore('engine', () => {
     resetSession,
     currentBinary,
     binaryMissing,
+    versions,
     refreshBinaries,
+    refreshVersion,
     openEnginesDir,
     startPolling,
     stopPolling,

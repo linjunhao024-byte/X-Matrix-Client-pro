@@ -87,6 +87,15 @@ export const commands = {
 	engineKinds: () => __TAURI_INVOKE<EngineKind[]>("engine_kinds"),
 	/**  Where each kernel binary is expected, and whether it is actually there. */
 	engineBinaries: () => __TAURI_INVOKE<EngineBinary[]>("engine_binaries"),
+	/**
+	 *  What version an installed kernel reports.
+	 * 
+	 *  Runs `version` (no config, no ports, no traffic), so it is safe to call on
+	 *  an idle machine and cheap enough for the home screen. The version is what
+	 *  tells a user whether the binary they dropped in `engines/` is the one the
+	 *  config format expects.
+	 */
+	engineVersion: (kind: EngineKind) => typedError<string, AppError>(__TAURI_INVOKE("engine_version", { kind })),
 	/**  Open the engines folder in Explorer, so the user can drop a kernel in. */
 	engineOpenDir: () => typedError<null, AppError>(__TAURI_INVOKE("engine_open_dir")),
 	/**  The tail of a kernel log. Empty string means "that kernel never ran". */

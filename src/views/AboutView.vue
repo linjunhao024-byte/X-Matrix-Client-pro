@@ -34,6 +34,33 @@ onMounted(async () => {
   }
 })
 
+/**
+ * What this client does and does not do, next to the two clients people
+ * compare it with.
+ *
+ * The "not supported" rows are deliberate: a switch that silently does nothing
+ * is worse than a line that says no and explains why. TUN needs a virtual
+ * adapter driver and would collide with an already-running proxy; PAC needs a
+ * script generator nobody has asked for yet.
+ */
+interface Capability {
+  key: string
+  supported: boolean
+  note: string
+}
+
+const capabilities: Capability[] = [
+  { key: 'proxy', supported: true, note: 'about.caps.proxy.note' },
+  { key: 'rules', supported: true, note: 'about.caps.rules.note' },
+  { key: 'groups', supported: true, note: 'about.caps.groups.note' },
+  { key: 'subscription', supported: true, note: 'about.caps.subscription.note' },
+  { key: 'connections', supported: true, note: 'about.caps.connections.note' },
+  { key: 'backup', supported: true, note: 'about.caps.backup.note' },
+  { key: 'tun', supported: false, note: 'about.caps.tun.note' },
+  { key: 'pac', supported: false, note: 'about.caps.pac.note' },
+  { key: 'update', supported: false, note: 'about.caps.update.note' },
+]
+
 async function openDataDir(): Promise<void> {
   try {
     await api.appOpenDataDir()
@@ -133,6 +160,20 @@ async function copy(value: string): Promise<void> {
       <p class="about-body">{{ t('about.engines.body') }}</p>
       <code class="engines-path mono">{{ paths?.engines_dir ?? t('about.engines.unknown') }}</code>
     </article>
+
+    <article class="card glass">
+      <h2 class="section-title">{{ t('about.caps.title') }}</h2>
+      <p class="about-body muted">{{ t('about.caps.hint') }}</p>
+      <ul class="cap-list">
+        <li v-for="item in capabilities" :key="item.key" class="cap-row">
+          <span class="cap-name">{{ t(`about.caps.${item.key}`) }}</span>
+          <span class="cap-badge" :class="item.supported ? 'cap-yes' : 'cap-no'">
+            {{ item.supported ? t('about.caps.supported') : t('about.caps.unsupported') }}
+          </span>
+          <span class="cap-note">{{ t(item.note) }}</span>
+        </li>
+      </ul>
+    </article>
   </section>
 </template>
 
@@ -226,5 +267,60 @@ async function copy(value: string): Promise<void> {
   white-space: nowrap;
   overflow-x: auto;
   scrollbar-width: thin;
+}
+
+.cap-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cap-row {
+  display: grid;
+  grid-template-columns: 140px 68px 1fr;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.cap-name {
+  color: var(--text-primary);
+}
+
+.cap-badge {
+  font-size: 11.5px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  text-align: center;
+  border: 1px solid transparent;
+}
+
+.cap-yes {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 14%, transparent);
+}
+
+.cap-no {
+  color: var(--text-tertiary);
+  background: var(--surface-sunken);
+  border-color: var(--border-subtle);
+}
+
+.cap-note {
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+@media (max-width: 720px) {
+  .cap-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .cap-note {
+    grid-column: 1 / -1;
+  }
 }
 </style>

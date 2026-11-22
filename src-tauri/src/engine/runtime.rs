@@ -465,11 +465,57 @@ impl EngineRuntime {
             .collect()
     }
 
+    /// Ask an installed kernel what version it is.
+    ///
+    /// `version` is a self-report: no config, no network, no port. Both kernels
+    /// print their build line first, so the first line is the answer and the
+    /// rest (a go runtime banner, a list of tags) is noise for this UI.
+    pub fn version(&self, kind: EngineKind) -> AppResult<String> {
+        let path = self.engines_dir.join(kind.engine().binary_name());
+        if !path.is_file() {
+            return Err(AppError::NotFound(format!(
+                "内核目录里没有 {}",
+                kind.engine().binary_name()
+            )));
+        }
+        let output = Command::new(&path)
+            .arg("version")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .map_err(|error| AppError::Io(format!("{} 跑不起来：{error}", path.display())))?;
+        if !output.status.success() {
+            return Err(AppError::Engine(format!(
+                "{} version 退出码 {}",
+                kind.engine().binary_name(),
+                output.status.code().unwrap_or(-1)
+            )));
+        }
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        first_line(&stdout).ok_or_else(|| {
+            AppError::Engine(format!("{} version 没有任何输出", kind.engine().binary_name()))
+        })
+    }
+
     pub fn stats_channel(&self) -> Option<StatsChannel> {
         let guard = self.running.lock();
         let running = guard.as_ref()?;
         Some(running.kind.engine().stats_channel(running.endpoints))
     }
+}
+
+/// The first non-blank line of a kernel's `version` output.
+///
+/// Kept separate so the parsing is testable without a binary: some builds lead
+/// with a blank line, and Windows line endings would otherwise leave a stray
+/// carriage return in a label the user reads.
+fn first_line(output: &str) -> Option<String> {
+    output
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(str::to_string)
 }
 
 impl Drop for EngineRuntime {
@@ -839,6 +885,29 @@ four"
             .is_err());
         assert!(!h.dir.join("configs").join("xray.json").exists());
         assert!(h.spawned.lock().is_empty());
+        std::fs::remove_dir_all(&h.dir).ok();
+    }
+
+    #[test]
+    fn the_version_line_is_the_first_non_blank_one() {
+        // Real output starts with a banner line and then a go runtime line;
+        // some builds put a blank line first, which must not become the label.
+        assert_eq!(
+            super::first_line("
+Xray 26.11.9 (Xray, Penetrates Everything.)
+A unified platform"),
+            Some("Xray 26.11.9 (Xray, Penetrates Everything.)".to_string())
+        );
+        assert_eq!(super::first_line("   
+
+"), None);
+    }
+
+    #[test]
+    fn a_missing_binary_is_reported_as_not_found() {
+        let h = harness(false, false);
+        let err = h.runtime.version(EngineKind::Xray).unwrap_err();
+        assert!(matches!(err, AppError::NotFound(_)));
         std::fs::remove_dir_all(&h.dir).ok();
     }
 }

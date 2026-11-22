@@ -117,6 +117,9 @@ export const api = {
   engineStatus: (): Promise<EngineStatus_Serialize> => commands.engineStatus(),
   engineKinds: (): Promise<EngineKind[]> => commands.engineKinds(),
   engineBinaries: (): Promise<EngineBinary[]> => commands.engineBinaries(),
+
+  /** Runs `version` on an installed kernel: no config, no ports, no traffic. */
+  engineVersion: (kind: EngineKind): Promise<string> => unwrap(commands.engineVersion(kind)),
   engineOpenDir: async (): Promise<void> => {
     await unwrap(commands.engineOpenDir())
   },

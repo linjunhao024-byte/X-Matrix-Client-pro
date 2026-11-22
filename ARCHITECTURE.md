@@ -274,7 +274,7 @@ pub enum StatsChannel {
 
 | 层 | 状态 | 证据 |
 |---|---|---|
-| 契约层 | 完成 | `tauri-specta` 生成 `src/services/bindings.ts`，52 个命令；`npm run check:contract` 校验不过期 |
+| 契约层 | 完成 | `tauri-specta` 生成 `src/services/bindings.ts`，55 个命令；`npm run check:contract` 校验不过期 |
 | 引擎层 | Xray + sing-box 配置渲染、启停、就绪探测、统计读取、日志尾部 | `cargo test --lib`（全库 182 项）；渲染是纯函数，测试不需要任何内核二进制 |
 | 数据层 | 单文件 JSON 原子替换 + 坏文件留证 | `store.rs`，重启后节点/设置/规则都在 |
 | 导入 | vless / vmess / trojan / ss + 整包 base64 | `import.rs`，不支持的行进 `skipped` 而不是报错 |
@@ -283,6 +283,7 @@ pub enum StatsChannel {
 | 系统代理 | 快照 → 接管 → 还原，异常退出可恢复 | `sysproxy/mod.rs`，7 项测试跑在假后端上 |
 | 启动行为 | 「启动时隐藏窗口」「关闭窗口时最小化到托盘」两个设置：前者在 setup 末尾 `window.hide()`（先创建再隐藏，避免闪一下）；后者决定 × 是 hide 还是 `quit_cleanly`（还原系统代理 + 杀内核 + 退出）。没有托盘时 × 一律退出——否则窗口既看不见又关不掉 | `src-tauri/src/lib.rs`、`domain/settings.rs`（2 项测试） |
 | 系统集成 | 开机自启（写 HKCU Run）、启动时自动连接（`settings.auto_connect` + 记住上次的节点与内核）、托盘三动词（显示窗口 / 启停内核 / 退出，标签与 tooltip 跟随状态）、节点 TCP 测速、流量曲线、内核日志（级别可选 warn/info/debug）、配置预览 | `autostart.rs` / `lib.rs` 的 `auto_connect`、`toggle_kernel`、`refresh_tray` / `net/latency.rs` / `runtime.log_tail` |
+| 内核版本 | 完成 | 首页显示已装内核自报的版本（`engine_version` 跑 `version`，不读配置、不开端口）；关于页列出与 V2RayN / Clash Verge 的能力对照，TUN / PAC / 在线更新内核明确写「不支持」并给原因 |
 | 托盘 | 关窗隐藏、左键唤回、菜单退出（退出前先还原代理再停内核） | `lib.rs` 的 `build_tray` / `quit_cleanly` |
 | 前端 | 9 个视图 + 组件库 + 单一轮询器 | `vue-tsc` / `vite build` / `check:arch`（48 文件）/ `vitest`（42 项，含 store → IPC 接线测试）全绿 |
 | 订阅 | 拉取（HTTP，UA 可配置）、整包解析（Clash YAML / sing-box / Xray / 分享链接）、只替换自己那批节点、**跨订阅按 `kind|server|port|credential` 去重**（手工节点不参与比较）、后台每 60 秒扫一次到期项、`subscription-userinfo` 头 → 已用/总量/到期 | `commands/subscription.rs`、`documents.rs`、`net/remote.rs`（`Fetched` 带响应头），含配额解析 3 项测试、去重 2 项测试 |

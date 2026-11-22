@@ -72,6 +72,21 @@ pub fn engine_binaries(runtime: Runtime<'_>) -> Vec<EngineBinary> {
     runtime.binaries()
 }
 
+/// What version an installed kernel reports.
+///
+/// Runs `version` (no config, no ports, no traffic), so it is safe to call on
+/// an idle machine and cheap enough for the home screen. The version is what
+/// tells a user whether the binary they dropped in `engines/` is the one the
+/// config format expects.
+#[tauri::command]
+#[specta::specta]
+pub fn engine_version(runtime: Runtime<'_>, kind: EngineKind) -> AppResult<String> {
+    // Deliberately synchronous: `version` is a ~30 ms self-report, and going
+    // through `run_blocking` would move the `Runtime` borrow into a `'static`
+    // closure it cannot escape.
+    runtime.version(kind)
+}
+
 /// The tail of a kernel log. Empty string means "that kernel never ran".
 #[tauri::command]
 #[specta::specta]

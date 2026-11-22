@@ -67,6 +67,14 @@ const canStart = computed(() => !engine.running && !engine.busy && selectedNodeI
  * `reality verification failed` and the user sees "no internet"; saying so
  * before the click is cheaper than explaining the log afterwards.
  */
+/**
+ * The version line for the kernel the user has selected.
+ *
+ * Shown only once the kernel has answered `version`: an empty string here means
+ * "not asked yet or not installed", and a placeholder would read as a failure.
+ */
+const kernelVersion = computed(() => engine.versions[engine.kind] ?? '')
+
 const realityOnSingBox = computed(() => {
   if (engine.kind !== 'sing-box') return false
   const node = nodes.items.find((item) => item.id === selectedNodeId.value)
@@ -254,6 +262,8 @@ async function stopEngine() {
           </p>
         </div>
       </div>
+
+      <p v-if="kernelVersion" class="field-hint kernel-version">{{ t('home.kernelVersion', { version: kernelVersion }) }}</p>
 
       <div v-if="engine.binaryMissing && engine.currentBinary" class="alert">
         <div class="row">
@@ -598,5 +608,9 @@ async function stopEngine() {
 
 .small {
   font-size: 12px;
+}
+
+.kernel-version {
+  margin: 0;
 }
 </style>

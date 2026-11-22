@@ -2643,5 +2643,120 @@
     "conn.exported",
     "已保存到 {path}",
     "Saved to {path}"
+  ],
+  [
+    "home.kernelVersion",
+    "内核版本：{version}",
+    "Kernel version: {version}"
+  ],
+  [
+    "about.caps.title",
+    "能力对照",
+    "Capability check"
+  ],
+  [
+    "about.caps.hint",
+    "与 V2RayN / Clash Verge 对得上的地方，以及明确没做的部分——没做的不会以开关形式出现。",
+    "What lines up with V2RayN / Clash Verge, and what is deliberately missing. Missing features do not appear as dead switches."
+  ],
+  [
+    "about.caps.supported",
+    "支持",
+    "Yes"
+  ],
+  [
+    "about.caps.unsupported",
+    "不支持",
+    "No"
+  ],
+  [
+    "about.caps.proxy",
+    "系统代理",
+    "System proxy"
+  ],
+  [
+    "about.caps.proxy.note",
+    "接管 Windows 的代理设置，启动时接管、停止或退出时还原。",
+    "Takes over the Windows proxy settings, restores them on stop or exit."
+  ],
+  [
+    "about.caps.rules",
+    "分流规则",
+    "Routing rules"
+  ],
+  [
+    "about.caps.rules.note",
+    "7 种匹配方式 × 4 种动作（代理 / 直连 / 拦截 / 策略组），外加远程与本地规则集。",
+    "Seven matchers by four actions, plus remote and local rule sets."
+  ],
+  [
+    "about.caps.groups",
+    "策略组",
+    "Proxy groups"
+  ],
+  [
+    "about.caps.groups.note",
+    "手动选择与自动测速；Xray 下组渲染成选中成员的静态副本。",
+    "Manual select and url-test. Under Xray a group renders as a static copy of the chosen member."
+  ],
+  [
+    "about.caps.subscription",
+    "订阅",
+    "Subscriptions"
+  ],
+  [
+    "about.caps.subscription.note",
+    "定时刷新、读流量配额与到期日、跨订阅去重。",
+    "Scheduled refresh, quota and expiry from the header, cross-subscription dedupe."
+  ],
+  [
+    "about.caps.connections",
+    "连接管理",
+    "Connections"
+  ],
+  [
+    "about.caps.connections.note",
+    "仅 sing-box：Xray 不提供连接列表接口。",
+    "sing-box only: Xray exposes no connection list."
+  ],
+  [
+    "about.caps.backup",
+    "配置备份",
+    "Config backup"
+  ],
+  [
+    "about.caps.backup.note",
+    "导出与恢复整份配置，含本地规则集内容。",
+    "Export and restore the whole configuration, local rule sets included."
+  ],
+  [
+    "about.caps.tun",
+    "TUN 虚拟网卡",
+    "TUN adapter"
+  ],
+  [
+    "about.caps.tun.note",
+    "没做：要装虚拟网卡驱动并接管全局流量，会和机器上已在跑的代理打架。",
+    "Not built: it needs a virtual adapter driver and hijacks all traffic, which fights with any proxy already running."
+  ],
+  [
+    "about.caps.pac",
+    "PAC 自动配置",
+    "PAC script"
+  ],
+  [
+    "about.caps.pac.note",
+    "没做：只接管系统代理，不生成 PAC 脚本。",
+    "Not built: only the system proxy is taken over, no PAC script is generated."
+  ],
+  [
+    "about.caps.update",
+    "在线更新内核",
+    "Kernel auto-update"
+  ],
+  [
+    "about.caps.update.note",
+    "没做：内核需手动放进 engines 目录，界面会显示它的版本号。",
+    "Not built: kernels are placed in the engines folder by hand; the UI shows their version."
   ]
 ]
