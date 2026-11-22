@@ -58,8 +58,8 @@ pub fn redact(text: &str) -> String {
         out.push_str(key);
         let after = &rest[pos + key.len()..];
         match mask_after_key(after) {
-            Some((_masked, tail)) => {
-                out.push_str(":***");
+            Some((masked, tail)) => {
+                out.push_str(&masked);
                 rest = tail;
             }
             None => rest = after,
@@ -97,20 +97,47 @@ fn after_key_is_separator(text: &str) -> bool {
     trimmed.starts_with(':') || trimmed.starts_with('=')
 }
 
-/// Consume up to and including the separator, then return the masked value form
-/// and the text that follows the value.
-fn mask_after_key(text: &str) -> Option<(&'static str, &str)> {
-    let mut rest = text;
-    rest = rest.trim_start_matches([' ', '\t']);
-    rest = rest.strip_prefix('"').unwrap_or(rest);
-    rest = rest.trim_start_matches([' ', '\t']);
-    let rest = rest.strip_prefix(':').or_else(|| rest.strip_prefix('='))?;
-    let rest = rest.trim_start_matches([' ', '\t']);
-    let rest = rest.strip_prefix('"').unwrap_or(rest);
-    let end = rest
-        .find(['"', ',', '}', ']', '&', ' ', '\t', '\n', '\r', ')'])
-        .unwrap_or(rest.len());
-    Some(("***", &rest[end..]))
+/// Replace the value that follows a key, keeping the key's own punctuation.
+///
+/// The separator, its spacing and the opening quote stay as written, so
+/// `"id": "***"` is still valid JSON, `password: ***` still valid YAML and
+/// `?token=***&x=1` still a URL. The text after the value is handed back so
+/// the caller can carry on with it.
+fn mask_after_key(text: &str) -> Option<(String, &str)> {
+    fn skip_spaces(text: &str, at: &mut usize) {
+        while matches!(text.as_bytes().get(*at), Some(b' ') | Some(b'\t')) {
+            *at += 1;
+        }
+    }
+    let mut at = 0;
+    skip_spaces(text, &mut at);
+    // A JSON key brings its own closing quote: `"id": "x"`.
+    if text.as_bytes().get(at) == Some(&b'"') {
+        at += 1;
+    }
+    skip_spaces(text, &mut at);
+    if !matches!(text.as_bytes().get(at), Some(b':') | Some(b'=')) {
+        return None;
+    }
+    at += 1;
+    skip_spaces(text, &mut at);
+    let quoted = text.as_bytes().get(at) == Some(&b'"');
+    if quoted {
+        at += 1;
+    }
+    let value_start = at;
+    let end = if quoted {
+        value_start + text[value_start..].find('"')?
+    } else {
+        let rest = &text[value_start..];
+        value_start
+            + rest
+                .find(['"', ',', '}', ']', '&', ' ', '\t', '\n', '\r', ')'])
+                .unwrap_or(rest.len())
+    };
+    // Everything before the value is kept verbatim; a closing quote stays at
+    // the head of the tail, so quotes remain balanced.
+    Some((format!("{}***", &text[..value_start]), &text[end..]))
 }
 
 /// Everything the report says, already flattened.
@@ -179,7 +206,14 @@ impl Snapshot {
         for (title, rows) in &self.rows {
             out.push_str(&format!("\n## {title}\n\n"));
             for (key, value) in rows {
-                out.push_str(&format!("- `{key}`：{}\n", redact(value)));
+                // An empty value renders as a dash: a key with nothing after it
+                // reads like the collector broke, not like the list is empty.
+                let value = if value.trim().is_empty() {
+                    "—".to_string()
+                } else {
+                    redact(value)
+                };
+                out.push_str(&format!("- `{key}`：{value}\n"));
             }
         }
 
@@ -462,6 +496,29 @@ mod tests {
         assert!(!redact("password: hunter2").contains("hunter2"));
         assert!(!redact("uuid = 55e1-aaaa").contains("55e1-aaaa"));
         assert!(!redact("https://example.com/sub?token=abc123&x=1").contains("abc123"));
+    }
+
+    #[test]
+    fn masking_keeps_the_punctuation_that_keeps_it_valid() {
+        // JSON stays parseable, and the neighbours of the masked value survive.
+        assert_eq!(
+            redact(r#"{"id": "abc-def", "port": 443}"#),
+            r#"{"id": "***", "port": 443}"#
+        );
+        assert_eq!(redact("password: hunter2\nrest"), "password: ***\nrest");
+        assert_eq!(
+            redact("https://example.com/sub?token=abc&x=1"),
+            "https://example.com/sub?token=***&x=1"
+        );
+        // The key itself is never swallowed.
+        assert!(redact(r#""uuid": "x""#).starts_with(r#""uuid""#));
+    }
+
+    #[test]
+    fn an_empty_row_reads_as_empty_not_as_a_failure() {
+        let mut snapshot = Snapshot::default();
+        snapshot.rows.push(("规模".into(), vec![("订阅".into(), String::new())]));
+        assert!(snapshot.render().contains("- `订阅`：—"));
     }
 
     #[test]
