@@ -239,3 +239,19 @@
 **为什么不保留"运行中禁用"**：Clash / V2RayN 都在运行中换节点，用户换节点的动机通常正是当前节点慢。代价是连接会断一秒（新进程 = 新 socket），这一点写在控件下面，不藏在文档里。
 
 **顺带修掉的一个日志页 bug**：`LogsView.vue` 的 reset 分支原来先 `cursor.value = 0` 再 return，日志被截断（内核重启 / 点清空）后如果那一轮读到的正文为空，游标停在旧的大值上，于是每轮都判定 reset、每轮都读不到东西，页面会一直空着直到文件长过旧长度。现在 reset 时先把游标对齐到 `delta.size` 再决定要不要 return。
+
+## 12. hysteria2 / tuic（2026-11-23，云电脑 cloudpc-test）
+
+这两种协议在 Clash 与 v2rayN 的订阅里很常见（QUIC 系，穿墙比 TCP 稳），原来 `import.rs` 认不出来直接丢掉。现在分享链接、Clash YAML、sing-box JSON、导出链接四条路都认，sing-box 内核原生跑，Xray 内核**明确拒绝**而不是悄悄把流量放直连。
+
+| 项 | 判据 | 结果 |
+| --- | --- | --- |
+| 从分享链接导入 | 在导入对话框里填 `hysteria2://testpass@51.79.100.10:8443?sni=hy.example.com&obfs=salamander&obfs-password=salt123&upmbps=30&downmbps=120#HY2-Test`，点「解析预览」再点「导入」 | **通过**。预览行显示 `HY2-Test / 51.79.100.10:8443 / Hysteria2`；`store.json` 里出现 `HY2-Test \| Hysteria2 \| 51.79.100.10:8443 \| security=Tls obfs=salt123 up=30 down=120`，`sni` 是 `hy.example.com` |
+| 用 sing-box 跑起来 | 内核切 sing-box，启动这个节点 | **通过**。`configs\sing-box.json` 里是 `"type": "hysteria2"`、`"server_port": 8443`、`"obfs": {…}`、`"up_mbps": 30`、`"down_mbps": 120`；`sing-box.exe` PID 7724 在跑，界面显示运行中 |
+| 用 Xray 启动必须被拒 | 内核切 Xray，再点这张卡的「启动」 | **通过**。页面顶部出现「Xray 内核不支持 Hysteria2 协议，请在首页把内核切换为 sing-box 后再启动」，内核没有被拉起来 |
+
+**为什么 Xray 侧要报错而不是渲染**：Xray 没有 hysteria2/tuic 的出站类型，硬渲染只能是「丢节点」或者「把流量全直连」——两种都比报错更坏。同理，sing-box 侧 hysteria2/tuic 一定带 `tls.enabled: true`（分享链接常常一个字都不提 TLS，而 sing-box 会直接拒绝没有 TLS 的 QUIC 出站），`up_mbps`/`down_mbps` 为 0 时不写入（0 会被内核理解成没有带宽）。
+
+**这段验收踩到的两个坑（工具层面，不是产品缺陷）**：
+- 像素点击在这里不可信：PowerShell 进程是 DPI-unaware，UIA 报出来的 BoundingRectangle 是虚拟化过的；`x-act.ps1` 的 `focus` 原来用 `ShowWindow($h, 9)`（= SW_RESTORE，会把最大化的窗口**还原**），一 focus 整个布局就平移。现在 `focus` 改成 `ShowWindow($h, 3)`（SW_MAXIMIZE），并且按按钮一律走 UI Automation 的 `InvokePattern` / `SelectionItemPattern` / `TogglePattern`（`uia2.ps1`），不再按像素。
+- 远端 OCR 结果必须 `scp` 回来读：走 `type` + ssh 会把 UTF-8 中文打散成 `�?`，关键字 grep 会漏判（我就是这样先误判成"没有报错"）。
