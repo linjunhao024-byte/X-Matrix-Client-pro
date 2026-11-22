@@ -77,6 +77,14 @@ export const commands = {
 	 *  report a cancelled dialog as `None`" dance.
 	 */
 	saveTextFile: (defaultName: string, contents: string) => typedError<string | null, AppError>(__TAURI_INVOKE("save_text_file", { defaultName, contents })),
+	/**
+	 *  Write a redacted markdown report and let the user keep it.
+	 * 
+	 *  The report is built *before* the dialog opens: it reads several locks and
+	 *  runs both kernels' `version`, and doing that while a modal file dialog owns
+	 *  the window would look like a freeze.
+	 */
+	exportDiagnostics: () => typedError<string | null, AppError>(__TAURI_INVOKE("export_diagnostics")),
 	openTextFile: () => typedError<string | null, AppError>(__TAURI_INVOKE("open_text_file")),
 	/**
 	 *  The title bar is drawn by the OS, so CSS cannot theme it: a dark app with a

@@ -28,6 +28,7 @@ pub fn builder() -> Builder<tauri::Wry> {
         commands::system::app_open_data_dir,
         commands::system::app_open_log_dir,
         commands::system::save_text_file,
+        commands::system::export_diagnostics,
         commands::system::open_text_file,
         commands::system::ui_set_window_theme,
         commands::engine::engine_status,

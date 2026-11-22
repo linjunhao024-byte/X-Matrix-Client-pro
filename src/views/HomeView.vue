@@ -52,6 +52,9 @@ const subscriptions = useSubscriptionsStore()
  */
 const quotaNotices = computed(() => quotaAlerts(subscriptions.items))
 
+/** The roadmap list only means something to whoever is building this. */
+const showProgress = import.meta.env.DEV
+
 /** One line per source, worded by how it hurts. */
 function quotaText(notice: ReturnType<typeof quotaAlerts>[number]): string {
   const { level, report } = notice
@@ -259,6 +262,18 @@ async function stopEngine() {
     <p v-if="infoError" class="alert">{{ infoError }}</p>
     <p v-if="engine.error" class="alert">{{ engine.error }}</p>
 
+    <!-- A plan that runs out in two days is page news, not a footnote of the
+         start card: it used to scroll away with the control panel. -->
+    <div v-if="quotaNotices.length" class="alert alert-warn quota-notices">
+      <div class="quota-head">{{ t('home.quota.title') }}</div>
+      <p v-for="notice in quotaNotices" :key="notice.id" class="quota-line">
+        {{ quotaText(notice) }}
+      </p>
+      <RouterLink :to="{ name: 'subscriptions' }" class="quota-link">
+        {{ t('home.quota.open') }}
+      </RouterLink>
+    </div>
+
     <!-- First run: three steps, then it never comes back. -->
     <section v-if="showOnboarding" class="glass onboard">
       <div class="row">
@@ -341,16 +356,6 @@ async function stopEngine() {
       </div>
 
       <p v-if="realityOnSingBox" class="alert alert-info">{{ t('home.realityHint') }}</p>
-
-      <div v-if="quotaNotices.length" class="alert alert-warn quota-notices">
-        <div class="quota-head">{{ t('home.quota.title') }}</div>
-        <p v-for="notice in quotaNotices" :key="notice.id" class="quota-line">
-          {{ quotaText(notice) }}
-        </p>
-        <RouterLink :to="{ name: 'subscriptions' }" class="quota-link">
-          {{ t('home.quota.open') }}
-        </RouterLink>
-      </div>
 
       <div class="control-row">
         <div class="field control-actions">
@@ -518,7 +523,7 @@ async function stopEngine() {
     </section>
 
 
-    <section class="surface-plain panel">
+    <section v-if="showProgress" class="surface-plain panel">
       <h2 class="section-title">{{ t('home.progress.title') }}</h2>
       <ol class="steps">
         <li class="step done">
@@ -638,6 +643,8 @@ async function stopEngine() {
 }
 
 .stat-value {
+  /* Numbers change every tick; proportional digits make the row jitter. */
+  font-variant-numeric: tabular-nums;
   font-size: 24px;
   font-weight: 650;
   letter-spacing: -0.02em;

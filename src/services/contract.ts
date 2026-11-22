@@ -81,6 +81,9 @@ export const api = {
   saveTextFile: (defaultName: string, contents: string): Promise<string | null> =>
     unwrap(commands.saveTextFile(defaultName, contents)),
 
+  /** Write the redacted support report; `null` means they cancelled. */
+  exportDiagnostics: (): Promise<string | null> => unwrap(commands.exportDiagnostics()),
+
   /** Read a text file the user picked; `null` means they cancelled. */
   openTextFile: (): Promise<string | null> => unwrap(commands.openTextFile()),
 

@@ -291,15 +291,50 @@ pub fn engine_config_preview(
     state: State<'_, AppState>,
     runtime: Runtime<'_>,
 ) -> AppResult<String> {
-    let node = lookup_node(&state, &node_id)?;
-    let endpoints = endpoints_from(&state)?;
+    render_preview(kind, &node_id, &state, &runtime)
+}
+
+/// The same document for the node the app would start next.
+///
+/// The diagnostics report needs the config the user is *actually* about to run,
+/// which is whatever the engine selection and last node say — not a node id the
+/// caller had to invent.
+pub(crate) fn render_for_preview(
+    state: &AppState,
+    runtime: &EngineRuntime,
+) -> AppResult<String> {
+    let (kind, node_id) = {
+        let settings = state.settings.read();
+        let kind = settings
+            .last_engine
+            .as_deref()
+            .and_then(EngineKind::parse)
+            .unwrap_or(EngineKind::Xray);
+        let node_id = settings
+            .last_node_id
+            .clone()
+            .or_else(|| state.nodes.read().first().map(|node| node.id.clone()));
+        (kind, node_id)
+    };
+    let node_id = node_id.ok_or_else(|| AppError::InvalidInput("还没有任何节点".into()))?;
+    render_preview(kind, &node_id, state, runtime)
+}
+
+fn render_preview(
+    kind: EngineKind,
+    node_id: &str,
+    state: &AppState,
+    runtime: &EngineRuntime,
+) -> AppResult<String> {
+    let node = lookup_node(state, node_id)?;
+    let endpoints = endpoints_from(state)?;
     let engine = kind.engine();
     engine.validate_node(&node)?;
     let rules = state.rules.read().clone();
     let settings = state.settings.read().clone();
     let nodes = state.nodes.read().clone();
     let groups = state.groups.read().clone();
-    let rule_sets = crate::commands::ruleset::loaded_sets(&state);
+    let rule_sets = crate::commands::ruleset::loaded_sets(state);
     let options = RunOptions::from_settings(&settings, &rules)
         .with_catalog(&nodes, &groups)
         .with_rule_sets(&rule_sets);

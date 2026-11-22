@@ -689,7 +689,7 @@ function securityLabel(node: Node_Serialize): string {
                 class="btn btn-sm btn-primary"
                 type="button"
                 :disabled="engine.busy || startingId !== null"
-                @click="startNode(node)"
+                @click.stop="startNode(node)"
               >
                 <AppIcon name="play" :size="14" />
                 {{ startingId === node.id ? t('common.starting') : t('common.start') }}
@@ -700,7 +700,7 @@ function securityLabel(node: Node_Serialize): string {
                 :disabled="testingId !== null"
                 :title="t('common.test')"
                 :aria-label="t('common.test')"
-                @click="testLatency(node)"
+                @click.stop="testLatency(node)"
               >
                 <AppIcon name="refresh" :size="14" />
               </button>
@@ -731,7 +731,7 @@ function securityLabel(node: Node_Serialize): string {
                 type="button"
                 :title="t('common.edit')"
                 :aria-label="t('common.edit')"
-                @click="openEdit(node)"
+                @click.stop="openEdit(node)"
               >
                 <AppIcon name="edit" :size="14" />
               </button>
@@ -750,7 +750,7 @@ function securityLabel(node: Node_Serialize): string {
                 type="button"
                 :title="t('common.delete')"
                 :aria-label="t('common.delete')"
-                @click="pendingDelete = node"
+                @click.stop="pendingDelete = node"
               >
                 <AppIcon name="trash" :size="14" />
               </button>
@@ -966,6 +966,16 @@ function securityLabel(node: Node_Serialize): string {
   color: var(--text-secondary);
 }
 
+.node-meta > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.node-meta > .dot {
+  flex: none;
+}
+
 .node-meta {
   display: flex;
   align-items: center;
@@ -985,6 +995,9 @@ function securityLabel(node: Node_Serialize): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* Manual order adds two arrows next to start/test/edit/copy/delete; without
+     wrapping those seven controls run past the card and delete hangs outside it. */
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 2px;
 }

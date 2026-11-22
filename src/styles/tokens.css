@@ -13,16 +13,19 @@
 
   /* Backdrop */
   --bg-base: #f2f3f8;
+  /* The halo is derived from --accent, not hand-picked: an indigo backdrop under
+     a violet accent reads as two competing brands. color-mix keeps them in step
+     when the accent changes (WebView2 ships Chromium ≥111). */
   --bg-glow:
-    radial-gradient(900px 620px at 10% -10%, rgba(99, 102, 241, 0.22), transparent 70%),
-    radial-gradient(820px 540px at 98% 2%, rgba(56, 189, 248, 0.18), transparent 68%),
-    radial-gradient(760px 700px at 50% 112%, rgba(168, 85, 247, 0.13), transparent 72%);
+    radial-gradient(900px 620px at 10% -10%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 70%),
+    radial-gradient(820px 540px at 98% 2%, color-mix(in srgb, var(--accent) 14%, #38bdf8 8%), transparent 68%),
+    radial-gradient(760px 700px at 50% 112%, color-mix(in srgb, var(--accent) 10%, #a855f7 6%), transparent 72%);
 
   /* Surfaces */
   --surface-glass: rgba(255, 255, 255, 0.56);
   --surface-glass-strong: rgba(255, 255, 255, 0.8);
   --surface-solid: #ffffff;
-  --surface-sunken: rgba(15, 23, 42, 0.045);
+  --surface-sunken: rgba(15, 23, 42, 0.03);
   --surface-hover: rgba(15, 23, 42, 0.045);
   --glass-border: rgba(255, 255, 255, 0.72);
   --glass-highlight: rgba(255, 255, 255, 0.9);
@@ -80,16 +83,16 @@
 
   --bg-base: #0a0c12;
   --bg-glow:
-    radial-gradient(900px 620px at 8% -12%, rgba(99, 102, 241, 0.28), transparent 70%),
-    radial-gradient(820px 540px at 100% 0%, rgba(14, 165, 233, 0.2), transparent 68%),
-    radial-gradient(760px 700px at 48% 114%, rgba(168, 85, 247, 0.18), transparent 72%);
+    radial-gradient(900px 620px at 8% -12%, color-mix(in srgb, var(--accent) 26%, transparent), transparent 70%),
+    radial-gradient(820px 540px at 100% 0%, color-mix(in srgb, var(--accent) 16%, #0ea5e9 10%), transparent 68%),
+    radial-gradient(760px 700px at 48% 114%, color-mix(in srgb, var(--accent) 12%, #a855f7 8%), transparent 72%);
 
   --surface-glass: rgba(26, 30, 42, 0.6);
   --surface-glass-strong: rgba(32, 37, 51, 0.84);
   --surface-solid: #141822;
-  --surface-sunken: rgba(255, 255, 255, 0.05);
+  --surface-sunken: rgba(255, 255, 255, 0.035);
   --surface-hover: rgba(255, 255, 255, 0.07);
-  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-border: rgba(255, 255, 255, 0.15);
   --glass-highlight: rgba(255, 255, 255, 0.08);
 
   --text-primary: #eef1f7;

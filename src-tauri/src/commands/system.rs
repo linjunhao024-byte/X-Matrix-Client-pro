@@ -1,11 +1,15 @@
 use serde::Serialize;
 use specta::Type;
+use std::sync::Arc;
+use tauri::State;
 use tauri::{AppHandle, Manager, WebviewWindow};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
 use crate::engine::EngineRuntime;
 use crate::error::{AppError, AppResult};
+use crate::state::AppState;
+use crate::sysproxy::ProxyGuard;
 
 #[derive(Debug, Clone, Serialize, Type)]
 pub struct AppInfo {
@@ -114,8 +118,43 @@ pub async fn save_text_file(app: AppHandle, default_name: String, contents: Stri
     .map_err(|error| AppError::Internal(format!("保存任务没有跑完：{error}")))?
 }
 
-/// Ask for a text file and return its contents.
+/// Write a redacted markdown report and let the user keep it.
 ///
+/// The report is built *before* the dialog opens: it reads several locks and
+/// runs both kernels' `version`, and doing that while a modal file dialog owns
+/// the window would look like a freeze.
+#[tauri::command]
+#[specta::specta]
+pub async fn export_diagnostics(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    runtime: State<'_, Arc<EngineRuntime>>,
+    proxy: State<'_, Arc<ProxyGuard>>,
+) -> AppResult<Option<String>> {
+    let snapshot = crate::diagnostics::collect(&state, &runtime, &proxy);
+    let handle = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(path) = handle
+            .dialog()
+            .file()
+            .set_title("导出诊断报告")
+            .set_file_name("x-matrix-diagnostics.md")
+            .add_filter("Markdown", &["md"])
+            .blocking_save_file()
+        else {
+            return Ok(None);
+        };
+        let path = path
+            .into_path()
+            .map_err(|error| AppError::InvalidInput(format!("所选路径不可用：{error}")))?;
+        crate::diagnostics::write_to(&path, &snapshot)?;
+        Ok(Some(path.display().to_string()))
+    })
+    .await
+    .map_err(|error| AppError::Internal(format!("诊断报告没有写完：{error}")))?
+}
+
+/// Ask for a text file and return its contents.
 /// Subscription files, Clash configs and exported link lists are all just text,
 /// so the importer can stay one code path: read the file, hand the string to
 /// `import_preview`, done. The size cap keeps a mis-click on a 2 GB log from

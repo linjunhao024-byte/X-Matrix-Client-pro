@@ -1,4 +1,5 @@
 mod commands;
+mod diagnostics;
 mod documents;
 mod export;
 mod domain;
@@ -18,6 +19,7 @@ use std::sync::Arc;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, WindowEvent};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 use engine::{EngineKind, EngineRuntime};
 use state::AppState;
@@ -44,6 +46,29 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        // Global chords: the point of a proxy client is that it keeps working
+        // while you are in some other app, so start/stop and "bring it back"
+        // must not require finding the window first.
+        //
+        // Best effort on purpose: an app that refuses to start because another
+        // client already owns Ctrl+Shift+X would be worse than one without
+        // hotkeys, so a failed registration is only logged (see setup).
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, shortcut, event| {
+                    // Windows delivers both press and release; acting on both
+                    // would toggle twice and land where it started.
+                    if event.state() != ShortcutState::Pressed {
+                        return;
+                    }
+                    if shortcut == &hotkey_toggle() {
+                        toggle_kernel(app);
+                    } else if shortcut == &hotkey_window() {
+                        toggle_window(app);
+                    }
+                })
+                .build(),
+        )
         // Remember where the user put the window. Only the three flags that
         // describe geometry: `visible` is ours (the "start hidden" setting),
         // and restoring a hidden/decorated state from disk would fight it.
@@ -105,6 +130,14 @@ pub fn run() {
             // `update_interval_minutes = 0` is never touched automatically.
             start_subscription_sweep(app.handle().clone());
             auto_connect(app.handle().clone());
+
+            // Both chords are fixed for now. A shortcut the user cannot find is
+            // the same as no shortcut, so the settings page lists them.
+            for shortcut in [hotkey_toggle(), hotkey_window()] {
+                if let Err(error) = app.global_shortcut().register(shortcut) {
+                    eprintln!("x-matrix: 全局快捷键 {shortcut} 注册失败：{error}");
+                }
+            }
 
             // "Start hidden" is applied after the window exists but before the
             // user sees it: hiding later would flash a window first.
@@ -421,12 +454,36 @@ fn ensure_window_reachable(window: &tauri::WebviewWindow) {
     }
 }
 
+/// Ctrl+Shift+X — start or stop the tunnel from anywhere.
+fn hotkey_toggle() -> Shortcut {
+    Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyX)
+}
+
+/// Ctrl+Shift+W — show the window, or get it out of the way.
+fn hotkey_window() -> Shortcut {
+    Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyW)
+}
+
 /// Bring the window back from the tray (or from minimised).
 fn reveal(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
+    }
+}
+
+/// Hide the window without touching the tunnel — the whole reason this runs
+/// from a global chord is that the user is working in another app.
+fn toggle_window(app: &AppHandle) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    let hidden = !window.is_visible().unwrap_or(true) || window.is_minimized().unwrap_or(false);
+    if hidden {
+        reveal(app);
+    } else {
+        let _ = window.hide();
     }
 }
 

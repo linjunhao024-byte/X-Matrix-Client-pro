@@ -69,6 +69,22 @@ async function openDataDir(): Promise<void> {
   }
 }
 
+/** Where the last report landed, so the hint can say so instead of "done". */
+const reportPath = ref<string | null>(null)
+const exporting = ref(false)
+
+async function exportDiagnostics(): Promise<void> {
+  exporting.value = true
+  try {
+    const written = await api.exportDiagnostics()
+    reportPath.value = written ? written : null
+  } catch (problem) {
+    error.value = describeError(problem)
+  } finally {
+    exporting.value = false
+  }
+}
+
 async function copy(value: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(value)
@@ -153,6 +169,20 @@ async function copy(value: string): Promise<void> {
           </button>
         </li>
       </ul>
+    </article>
+
+    <article class="card glass">
+      <h2 class="section-title">{{ t('about.diagnostics.title') }}</h2>
+      <p class="about-body">{{ t('about.diagnostics.hint') }}</p>
+      <div class="diagnostics-row">
+        <button type="button" class="btn btn-primary btn-sm" :disabled="exporting" @click="exportDiagnostics">
+          <AppIcon name="file" :size="15" />
+          {{ t('about.diagnostics.export') }}
+        </button>
+        <code v-if="reportPath" class="path-value mono">
+          {{ t('about.diagnostics.saved', { path: reportPath }) }}
+        </code>
+      </div>
     </article>
 
     <article class="card glass">
@@ -255,6 +285,13 @@ async function copy(value: string): Promise<void> {
   width: 96px;
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+.diagnostics-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .path-value {

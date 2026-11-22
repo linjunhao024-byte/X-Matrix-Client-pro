@@ -350,6 +350,19 @@ async function save() {
       </p>
 
       <section class="surface-plain panel">
+        <h2 class="section-title">{{ t('settings.hotkeysTitle') }}</h2>
+        <p class="field-hint">{{ t('settings.hotkeysHint') }}</p>
+        <div class="hotkey-row">
+          <kbd>Ctrl+Shift+X</kbd>
+          <span>{{ t('settings.hotkeyToggleHint') }}</span>
+        </div>
+        <div class="hotkey-row">
+          <kbd>Ctrl+Shift+W</kbd>
+          <span>{{ t('settings.hotkeyWindowHint') }}</span>
+        </div>
+      </section>
+
+      <section class="surface-plain panel">
         <h2 class="section-title">{{ t('settings.language') }}</h2>
         <div class="segmented">
           <button
@@ -370,6 +383,38 @@ async function save() {
 </template>
 
 <style scoped>
+/* Nine panels do not fit in a 944px window, and saving is the only way to
+   commit any of them: pin the header so the button cannot scroll out of reach. */
+.page-header {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  margin: -28px -32px 0;
+  padding: 22px 32px 14px;
+  background: var(--surface-glass-strong);
+  backdrop-filter: blur(var(--blur-glass));
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.hotkey-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+kbd {
+  flex: none;
+  padding: 3px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
 .panel {
   display: flex;
   flex-direction: column;
