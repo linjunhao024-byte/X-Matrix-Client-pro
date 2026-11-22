@@ -44,6 +44,18 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        // Remember where the user put the window. Only the three flags that
+        // describe geometry: `visible` is ours (the "start hidden" setting),
+        // and restoring a hidden/decorated state from disk would fight it.
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::SIZE
+                        | tauri_plugin_window_state::StateFlags::POSITION
+                        | tauri_plugin_window_state::StateFlags::MAXIMIZED,
+                )
+                .build(),
+        )
         .setup(|app| {
             // Everything the engine layer needs lives under one app-owned
             // directory: kernels in `engines/`, generated configs in `configs/`,
@@ -101,10 +113,11 @@ pub fn run() {
                 .settings
                 .read()
                 .start_minimized;
-            if start_hidden
-                && let Some(window) = app.get_webview_window("main")
-            {
-                let _ = window.hide();
+            if let Some(window) = app.get_webview_window("main") {
+                ensure_window_reachable(&window);
+                if start_hidden {
+                    let _ = window.hide();
+                }
             }
             Ok(())
         })
@@ -373,6 +386,38 @@ pub fn refresh_tray(app: &AppHandle) {
             "X-Matrix · 未连接".to_string()
         };
         let _ = tray.set_tooltip(Some(tooltip));
+    }
+}
+
+/// Keep a restored window reachable.
+///
+/// The geometry plugin replays the last position verbatim, and a saved position
+/// can point at a monitor that is gone — unplugged dock, projector, VM session
+/// with a different resolution. Restoring an invisible window is worse than
+/// forgetting where it was, so a window that lands on no monitor at all is
+/// re-centred on the primary one.
+fn ensure_window_reachable(window: &tauri::WebviewWindow) {
+    let Ok(position) = window.outer_position() else {
+        return;
+    };
+    let Ok(size) = window.outer_size() else {
+        return;
+    };
+    let monitors = window.available_monitors().unwrap_or_default();
+    if monitors.is_empty() {
+        return;
+    }
+    let overlaps_any = monitors.iter().any(|monitor| {
+        let origin = monitor.position();
+        let area = monitor.size();
+        let left = position.x.max(origin.x);
+        let top = position.y.max(origin.y);
+        let right = (position.x + size.width as i32).min(origin.x + area.width as i32);
+        let bottom = (position.y + size.height as i32).min(origin.y + area.height as i32);
+        right > left && bottom > top
+    });
+    if !overlaps_any {
+        let _ = window.center();
     }
 }
 

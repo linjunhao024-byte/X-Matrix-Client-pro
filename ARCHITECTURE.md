@@ -282,6 +282,7 @@ pub enum StatsChannel {
 | DNS | 设置页填自定义解析器（逗号分隔），三种写法：`1.1.1.1` / `tls://1.1.1.1`（DoT）/ `https://1.1.1.1/dns-query`（DoH）。`DnsEntry::parse` 解析成带标签的枚举，两个渲染器各说各的方言：Xray 拼回 `tls://`/`https://` 字符串，sing-box 用 `{type:"udp"|"tls"|"https", tag:"dns-N"}` + `final`。留空完全不生成 `dns` 键。主机部分只接受 IP 字面量（域名要先被解析，那正是解析器的活） | `domain/settings.rs` 的 `DnsEntry`、`engine/xray.rs`、`engine/singbox.rs`，含 4 项解析校验 + 3 项渲染测试；`xray -test` 与 `sing-box check` 真二进制验过 |
 | 系统代理 | 快照 → 接管 → 还原，异常退出可恢复 | `sysproxy/mod.rs`，7 项测试跑在假后端上 |
 | 启动行为 | 「启动时隐藏窗口」「关闭窗口时最小化到托盘」两个设置：前者在 setup 末尾 `window.hide()`（先创建再隐藏，避免闪一下）；后者决定 × 是 hide 还是 `quit_cleanly`（还原系统代理 + 杀内核 + 退出）。没有托盘时 × 一律退出——否则窗口既看不见又关不掉 | `src-tauri/src/lib.rs`、`domain/settings.rs`（2 项测试） |
+| 窗口几何 | `tauri-plugin-window-state` 记住大小、位置、最大化状态；flags 只要这三样——`visible` 归「启动时隐藏」管，把磁盘上的可见性也还原回来会跟设置打架。还原前过一次 `ensure_window_reachable`：拔掉扩展屏后旧坐标可能落在不存在的显示器上，落在任何显示器外就 `window.center()`，宁可不记得也不能还原出一个看不见的窗口 | `src-tauri/src/lib.rs` 的 `ensure_window_reachable`、`Cargo.toml` |
 | 系统集成 | 开机自启（写 HKCU Run）、启动时自动连接（`settings.auto_connect` + 记住上次的节点与内核）、托盘三动词（显示窗口 / 启停内核 / 退出，标签与 tooltip 跟随状态）、节点 TCP 测速、流量曲线、内核日志（级别可选 warn/info/debug）、配置预览 | `autostart.rs` / `lib.rs` 的 `auto_connect`、`toggle_kernel`、`refresh_tray` / `net/latency.rs` / `runtime.log_tail` |
 | 速度测试 | 完成 | `proxy_speed` 经隧道读 5 秒 / 上限 8 MiB 的响应体算吞吐（`net/latency.rs::download_speed_via_proxy`，只数正文不数响应头），首页「测速」按钮显示 `下载速度 xx MB/s` |
 | 规则试跑 | 完成 | `test_domain` 按内核的顺序从上到下匹配，只报第一条命中；geoip / 端口 / 进程三种规则无法只凭域名判断，如实计入 `skipped` 而不是猜 |
