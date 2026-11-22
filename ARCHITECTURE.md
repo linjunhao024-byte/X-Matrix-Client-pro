@@ -288,7 +288,8 @@ pub enum StatsChannel {
 | 文件导入导出 | 完成 | 导入会先按分享链接解析，一条都不认得时再按整份文档（Clash YAML / sing-box JSON）解析——粘贴一份配置不该静默得到零个节点； 节点链接可「保存为文件」（`save_text_file`），导入对话框可「从文件读取」（`open_text_file`，4 MB 上限）——订阅、Clash 配置、链接列表都只是文本，所以导入只有一条代码路径 |
 | 内核版本 | 完成 | 首页显示已装内核自报的版本（`engine_version` 跑 `version`，不读配置、不开端口）；关于页列出与 V2RayN / Clash Verge 的能力对照，TUN / PAC / 在线更新内核明确写「不支持」并给原因 |
 | 托盘 | 关窗隐藏、左键唤回、菜单退出（退出前先还原代理再停内核） | `lib.rs` 的 `build_tray` / `quit_cleanly` |
-| 前端 | 9 个视图 + 组件库 + 单一轮询器 | `vue-tsc` / `vite build` / `check:arch`（50 文件）/ `vitest`（49 项，含 store → IPC 接线测试）全绿 |
+| 前端 | 9 个视图 + 组件库 + 单一轮询器 | `vue-tsc` / `vite build` / `check:arch`（52 文件）/ `vitest`（57 项，含 store → IPC 接线测试）全绿 |
+| 套餐提醒 | 后端只如实存「已用 / 总量 / 到期」，判断留给前端一处：`quotaReport` 按「已过期 > 用尽 > 用掉九成 > 一周内到期」出结论，`quotaAlerts` 过滤掉停用的源并按严重度排序；首页在启动控制卡里以 `alert-warn` 提示「快用完 / 已用尽 / 快到期 / 已过期」并给出订阅页入口。停用源不提醒——用户已经说了不用它，再唠叨就是噪音 | `src/services/quota.ts`（8 项测试）、`HomeView` 的 `quotaNotices` |
 | 订阅 | 拉取（HTTP，UA 可配置）、整包解析（Clash YAML / sing-box / Xray / 分享链接）、只替换自己那批节点、**跨订阅按 `kind|server|port|credential` 去重**（手工节点不参与比较）、后台每 60 秒扫一次到期项、`subscription-userinfo` 头 → 已用/总量/到期 | `commands/subscription.rs`、`documents.rs`、`net/remote.rs`（`Fetched` 带响应头），含配额解析 3 项测试、去重 2 项测试 |
 | 策略组 | `select` / `url-test`；sing-box 渲染成原生 selector/urltest，Xray 渲染成选中成员的静态副本（Xray 没有 selector，UI 会说出来）；删组时指向它的规则自动回落到「代理」，删节点时从各组里摘掉 | `domain/group.rs`、`commands/group.rs`、`engine/{xray,singbox}.rs` |
 | 界面多语言 | 中文 / English 全量；`scripts/i18n-pairs.json` 是唯一真相源，`scripts/gen_i18n.py` 生成两份字典，测试断言键集一致（半翻译会 fail 而不是上线）；语言存 `localStorage['xm.ui.locale']` | `src/i18n/`、`src/i18n/i18n.test.ts` |

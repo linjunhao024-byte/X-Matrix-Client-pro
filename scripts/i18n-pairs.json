@@ -2210,6 +2210,36 @@
     "sing-box 1.14 fails the REALITY handshake against Xray 26 servers (measured). Use the Xray engine for this node."
   ],
   [
+    "home.quota.title",
+    "订阅提醒",
+    "Plan notices"
+  ],
+  [
+    "home.quota.low",
+    "「{name}」已用 {percent}% 流量，剩下的不多了。",
+    "\"{name}\" has used {percent}% of its traffic — not much left."
+  ],
+  [
+    "home.quota.full",
+    "「{name}」的流量已用尽，节点会连不上。",
+    "\"{name}\" is out of traffic; its nodes will stop connecting."
+  ],
+  [
+    "home.quota.expiring",
+    "「{name}」还有 {days} 天到期。",
+    "\"{name}\" expires in {days} day(s)."
+  ],
+  [
+    "home.quota.expired",
+    "「{name}」已过期，节点会连不上。",
+    "\"{name}\" has expired; its nodes will stop connecting."
+  ],
+  [
+    "home.quota.open",
+    "去订阅页看看",
+    "Open subscriptions"
+  ],
+  [
     "nodes.searchEmpty",
     "没有匹配的节点",
     "No node matches"

@@ -17,9 +17,11 @@ const ConfigDialog = defineAsyncComponent(() => import('../components/ConfigDial
 import { t } from '../i18n'
 import { api, describeError, type AppInfo, type EngineKind, type ProxyMode } from '../services/contract'
 import { formatBytes, formatRate } from '../services/format'
+import { quotaAlerts } from '../services/quota'
 import { useEngineStore } from '../stores/engine'
 import { useNodesStore } from '../stores/nodes'
 import { useSettingsStore } from '../stores/settings'
+import { useSubscriptionsStore } from '../stores/subscriptions'
 
 const info = ref<AppInfo | null>(null)
 const infoError = ref<string | null>(null)
@@ -39,6 +41,30 @@ const router = useRouter()
 const nodes = useNodesStore()
 const engine = useEngineStore()
 const settings = useSettingsStore()
+const subscriptions = useSubscriptionsStore()
+
+/**
+ * Sources whose plan is running out.
+ *
+ * The home screen is where the user looks when the tunnel stops working, so a
+ * plan that expired yesterday belongs here rather than buried on the
+ * subscription page.
+ */
+const quotaNotices = computed(() => quotaAlerts(subscriptions.items))
+
+/** One line per source, worded by how it hurts. */
+function quotaText(notice: ReturnType<typeof quotaAlerts>[number]): string {
+  const { level, report } = notice
+  if (level === 'expired') return t('home.quota.expired', { name: notice.name })
+  if (level === 'full') return t('home.quota.full', { name: notice.name })
+  if (level === 'low') {
+    return t('home.quota.low', {
+      name: notice.name,
+      percent: Math.round((report.ratio ?? 0) * 100),
+    })
+  }
+  return t('home.quota.expiring', { name: notice.name, days: report.daysLeft ?? 0 })
+}
 
 const ONBOARDING_KEY = 'xm.ui.onboarding-dismissed'
 const onboardingDismissed = ref(localStorage.getItem(ONBOARDING_KEY) === 'true')
@@ -142,6 +168,7 @@ onMounted(async () => {
   }
   await nodes.load()
   void settings.load()
+  void subscriptions.load()
   await engine.refreshBinaries()
   if (!selectedNodeId.value && nodes.items.length > 0) {
     selectedNodeId.value = nodes.items[0].id
@@ -314,6 +341,16 @@ async function stopEngine() {
       </div>
 
       <p v-if="realityOnSingBox" class="alert alert-info">{{ t('home.realityHint') }}</p>
+
+      <div v-if="quotaNotices.length" class="alert alert-warn quota-notices">
+        <div class="quota-head">{{ t('home.quota.title') }}</div>
+        <p v-for="notice in quotaNotices" :key="notice.id" class="quota-line">
+          {{ quotaText(notice) }}
+        </p>
+        <RouterLink :to="{ name: 'subscriptions' }" class="quota-link">
+          {{ t('home.quota.open') }}
+        </RouterLink>
+      </div>
 
       <div class="control-row">
         <div class="field control-actions">
@@ -627,6 +664,26 @@ async function stopEngine() {
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 14px;
+}
+
+/* Plan notices: the alert supplies the tone, this only lays the lines out. */
+.quota-notices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.quota-head {
+  font-weight: 600;
+}
+
+.quota-line {
+  margin: 0;
+}
+
+.quota-link {
+  align-self: flex-start;
+  font-size: 12px;
 }
 
 .control-node {
