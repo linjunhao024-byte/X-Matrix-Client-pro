@@ -330,6 +330,10 @@ function chainLabel(chains: string[]): string {
 }
 
 .rate-value {
+  /* Ratings tick every second: fixed-width digits and a floor width keep the
+     three stat blocks from twitching as "980 KB/s" becomes "1.2 MB/s". */
+  font-variant-numeric: tabular-nums;
+  min-width: 9ch;
   font-family: var(--font-mono);
   font-size: 15px;
   font-weight: 600;
@@ -342,6 +346,7 @@ function chainLabel(chains: string[]): string {
 .col-num {
   text-align: right;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .ellipsis {

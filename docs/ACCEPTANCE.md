@@ -186,12 +186,27 @@
 
 ## 8. 首页代理模式切换（2026-11-23，云电脑 cloudpc-test）
 
-分段控件「规则 / 全局 / 直连」是首页唯一会改配置又不显眼的东西：写错了不报错，只是所有流量悄悄走错方向。分两半验：
+分段控件「规则 / 全局 / 直连」是首页唯一会改配置又不显眼的东西：写错了不报错，只是所有流量悄悄走错方向。六项全部在真机上走完（点击 → 读 `store.json` → 读 `configs\xray.json` → 像素对比）：
 
 | 项 | 判据 | 结果 |
 | --- | --- | --- |
-| 点击落到存储 | 依次点「全局」→「直连」→「规则」，每次之后读 `%APPDATA%\com.xmatrix.client\store.json` | 通过。最终 `settings.mode = "rule"`（最后一次点击），说明控件不是只改内存里的 `draft` |
-| 运行中锁定 | 启动内核后看三个胶囊 | 通过。`shot-c3-locked.png` 的 OCR 拿到「运行中不能切换代理模式」，三个按钮均为 disabled；停止后台账里才出现下一次点击（`act-c4` 先 `c4-stopped` 再点直连） |
-| 渲染成 catch-all | 「全局」下 `configs/xray.json` 的 `routing.rules` 应只有一条 `{"type":"field","network":"tcp,udp","outboundTag":"proxy"}` | **只做了代码级证明**：云电脑上最后一次真实启动是「规则」模式，`configs/xray.json` 里是用户规则表。补了两条单测把这条固定住：`engine::render::rule_tests::global_mode_is_one_catch_all_rule_to_the_proxy`（Xray 一条 catch-all → `proxy`，sing-box `{"outbound":"proxy"}`；「直连」同理指向 `direct`）与 `rule_mode_still_renders_the_users_table`（切模式不吃掉用户规则表） |
+| 点击落到存储 | 空闲态点「全局」 | **通过**。`store.json` 出现原文 `    "mode": "global",`；截图里高亮项从「规则」（x=1282）迁到「全局」（x=1362），采样点 `F1F1F2` 与 `F5F5F6` 互换 |
+| 全局模式渲染 catch-all | 启动内核后看 `configs\xray.json` | **通过**。89 行文件，第 78–86 行是 `"routing"` → `"rules"` → `{ "network": "tcp,udp", "outboundTag": "proxy", "type": "field" }`，与约定一字不差（字段序无关） |
+| 运行中锁定 | 内核运行中点「直连」 | **通过**。四面证据：`store.json` 仍是 `"mode": "global",`；全窗口像素采样差异仅 129 点、差异框仅 `(1416,353)-(1453,370)`（「直连」两字的 hover 变色，没有胶囊迁移）；x=1362 仍 `F1F1F2`、x=1434 仍 `F5F5F6`；特写 OCR 拿到「运行中不能切换代理模式」 |
+| 直连模式渲染 | 停止 → 切「直连」→ 启动 | **通过**。同一条规则变成 `"outboundTag": "direct"`，其余字段不动 |
+| 规则模式不留 catch-all | 停止 → 切回「规则」→ 启动 | **通过**。`findstr /c:"tcp,udp"` 无输出；`routing.rules` 是空数组（83 行文件，比全局少 6 行） |
+| 纯函数兜底 | 单测锁死映射 | `engine::render::rule_tests::global_mode_is_one_catch_all_rule_to_the_proxy`（Xray 一条 catch-all → `proxy`，sing-box `{"outbound":"proxy"}`；「直连」指向 `direct`）与 `rule_mode_still_renders_the_users_table`（切模式不吃掉用户规则表） |
 
-**没做**：把「全局」在真机上抓一次生成配置的截图。原因与取舍：云电脑那套截图/点击脚本在计划任务会话里多次中途死掉（`b710fb38`、`aa2bd97c` 都无收尾消息），再跑一轮的收益低于它占用的时间；模式→渲染的映射是纯函数，单测比截图更稳。真机已有的那两条（存储落地、运行中锁定）是用户能看见的部分。
+**没验**：托盘右键「退出 X-Matrix」这条退出路线。云电脑上图标落在通知区溢出区，UIA / 跨进程 `TB_GETITEMRECT` / 99 点 hover 全部拿不到名字，而溢出区里还可能是 Tailscale（其菜单含 `Exit`，盲点会切断唯一的 SSH 通路），所以放弃。设置里把「关闭窗口时最小化到托盘」关掉后点 × 走 `quit_cleanly()` 的路已验（见 §9）。
+
+## 9. 窗口几何记忆 + 设置页固定页头（2026-11-23，云电脑 cloudpc-test）
+
+| 项 | 判据 | 结果 |
+| --- | --- | --- |
+| 几何写入 | 改窗口到 `200,90 1180x760` 后正常退出 | **通过**。数据目录多出 `.window-state.json`：`{"main":{"width":1158,"height":704,"x":200,"y":90,"prev_x":109,"prev_y":7,...}}`（1158×704 是客户区，加窗口装饰即 1180×760） |
+| 几何还原 | `schtasks /run` 重启 | **通过**。重启后 `rect=200,90,1180x760`，与退出前完全一致；第二次退出/重启同样还原 |
+| 正常退出的前提 | `close_to_tray: true` 时点 × 只是隐藏 | 记录：要触发写盘必须真退出（设置里关掉「关闭窗口时最小化到托盘」，点 × 走 `quit_cleanly()`），`tauri-plugin-window-state` 只在真退出时写文件 |
+| 设置页固定页头 | 九个区块在 944 高下装不下，保存按钮必须常驻可见 | **改了两版**。第一版 `.page-header` 用 `position: sticky` + `--surface-glass-strong`（0.8 透明），滚动到中段时下面板子的文字从条上方透出来（OCR 在 y=74/75 读到「系统代理当前已开启…」），两层字叠一起；第二版把页头移出滚动容器、面板放进 `.page-body` 自己滚。实测滚到「代理例外 / 开机自启 / 内核日志级别」时页头标题仍在 y=109、内容从 y=212 起，**没有任何文字越过页头**，保存按钮全程在位 |
+| 设置页全局快捷键面板 | 底部应有 `Ctrl+Shift+X` / `Ctrl+Shift+W` 说明 | **通过**。滚到底 OCR 到「全局快捷键」标题（y=1047）与两行 `<kbd>` |
+
+**一条未复现的异常**：验收中途在设置页点「保存」，绿条「已保存」出现后进程消失、`store.json` 未落盘、没有 `.window-state.json`（不是正常退出路径），Application 日志里没有 APPCRASH 记录；同操作随后两次都正常。判断为环境可疑（同期 explorer.exe 崩过一次）而非必现 bug，但要查得先给应用加 panic hook / 崩溃日志——记在待办里，不在本轮修。

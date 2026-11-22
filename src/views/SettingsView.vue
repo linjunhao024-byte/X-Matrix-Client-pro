@@ -134,7 +134,7 @@ async function save() {
 </script>
 
 <template>
-  <div class="page">
+  <div class="page settings-page">
     <header class="page-header">
       <div>
         <h1 class="page-title">{{ t('page.settings.title') }}</h1>
@@ -148,6 +148,7 @@ async function save() {
       </div>
     </header>
 
+    <div class="page-body">
     <p v-if="store.error" class="alert">{{ store.error }}</p>
     <p v-if="error" class="alert">{{ error }}</p>
 
@@ -379,21 +380,37 @@ async function save() {
         <p class="field-hint">{{ t('settings.languageHint') }}</p>
       </section>
     </template>
+    </div>
   </div>
 </template>
 
 <style scoped>
 /* Nine panels do not fit in a 944px window, and saving is the only way to
    commit any of them: pin the header so the button cannot scroll out of reach. */
+.settings-page {
+  /* Header out of the scroller, panels in their own scroller: a sticky bar has
+     to be opaque and still let a band of panels show above it, and the one
+     control that matters (保存) must never scroll away. */
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
 .page-header {
-  position: sticky;
-  top: 0;
-  z-index: 6;
-  margin: -28px -32px 0;
+  flex: none;
   padding: 22px 32px 14px;
-  background: var(--surface-glass-strong);
-  backdrop-filter: blur(var(--blur-glass));
+  background: var(--surface-solid);
   border-bottom: 1px solid var(--border-subtle);
+}
+
+.page-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px 32px 40px;
 }
 
 .hotkey-row {
