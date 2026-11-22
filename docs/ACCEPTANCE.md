@@ -223,3 +223,19 @@
 | `Ctrl+Shift+W` 显隐窗口 | 同上注入 Ctrl+Shift+W | **通过**。`visible=True` → `visible=False`（窗口消失、进程仍在）→ 再按一次 `visible=True` |
 
 **诊断包**：关于页「导出诊断报告」→ 另存框 → 写出 **12,575 字节 / 239 行** markdown，`scp` 回来看内容：版本/时间（`2026-11-22 19:11:27 UTC`，与本地 03:11 +08 对得上）、内核表（`xray 33.2 MB Xray 26.11.9 (go1.27.3 windows/amd64)`、`sing-box 78.3 MB 1.14.4`）、四个目录、设置摊平、规模、引擎状态、系统代理、两段各 200 行日志、生成配置。**打码一开始有两个缺陷**：把分隔符和引号连值一起吃掉了，`"id": "abc"` 变成 `"id:***"`（非法 JSON），`"auth": "noauth"` 这类非机密字段也丢了值；现在只吃值、保留键与标点（`"id": "***"`、`password: ***`、`?token=***&x=1`），并有单测 `masking_keeps_the_punctuation_that_keeps_it_valid` 锁住；空节从悬空冒号改成 `—`（单测 `an_empty_row_reads_as_empty_not_as_a_failure`）。
+
+## 11. 运行中热切换（节点 / 内核 / 代理模式）（2026-11-23，云电脑 cloudpc-test）
+
+以前首页三个控件在内核运行时全部禁用（"停止再换"）。现在换成一个命令 `engine_apply`：后端在运行中先 `runtime.stop()` 再用同一套 `prepare_start` + `start_engine` 起新内核，**端口不变、系统代理不动**——代理在切换前后一直指向同一个混合端口，所以既不用 `disable()`（那会把流量短暂放直连，是漏洞，而且重写注册表比内核重绑端口更慢），也不会留下指向死端口的代理。
+
+| 项 | 判据 | 结果 |
+| --- | --- | --- |
+| 空闲切模式 | 首页点「全局」 | **通过**。`store.json` 变 `"mode": "global"`，随后启动：`configs\xray.json` 出现 catch-all `"outboundTag": "proxy"`，xray PID 3876 |
+| **运行中切模式** | 内核运行中点「直连」 | **通过**。同一秒内 xray PID 由 **3876 → 5488**（内核真被换掉了，不是假切换）；`configs\xray.json` 的同一条规则变 `"outboundTag": "direct"`；`store.json` 变 `"mode": "direct"`；`ProxyEnable` 前后都是 `0x1`（接管没有中断） |
+| **运行中换内核** | 运行中点「sing-box」 | **通过**。xray 进程消失、`sing-box.exe` PID 4208 起来；`store.json` 的 `last_engine` 变 `"sing-box"`；首页 OCR 仍显示「运行中」，内核版本行变 `sing-box version 1.14.4` |
+| **运行中换节点** | 运行中在下拉里选另一个节点（键盘 Down + Enter：原生下拉是独立窗口，截图抓不到，只能键盘） | **通过**。`last_node_id` 变 `vless-18ea6cbc39a2c758-0`；sing-box PID 由 4208 → **9432**；`configs\sing-box.json` 的 `server_port` 由 18081 变 **443**；首页节点行 OCR 到「节点：Clip-Test」；`ProxyEnable` 仍是 `0x1` |
+| 界面提示 | 运行中三个控件都带一行说明 | **通过**。OCR 读到「切换会立刻重启内核，连接会短暂中断」与「运行中切换会重启内核，连接会短暂中断」，不再出现「运行中不能切换」 |
+
+**为什么不保留"运行中禁用"**：Clash / V2RayN 都在运行中换节点，用户换节点的动机通常正是当前节点慢。代价是连接会断一秒（新进程 = 新 socket），这一点写在控件下面，不藏在文档里。
+
+**顺带修掉的一个日志页 bug**：`LogsView.vue` 的 reset 分支原来先 `cursor.value = 0` 再 return，日志被截断（内核重启 / 点清空）后如果那一轮读到的正文为空，游标停在旧的大值上，于是每轮都判定 reset、每轮都读不到东西，页面会一直空着直到文件长过旧长度。现在 reset 时先把游标对齐到 `delta.size` 再决定要不要 return。

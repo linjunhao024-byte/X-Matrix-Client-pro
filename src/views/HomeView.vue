@@ -149,6 +149,31 @@ const modes: { value: ProxyMode; labelKey: string }[] = [
 ]
 const modeSaving = ref(false)
 
+/**
+ * Switching under a running kernel is a restart on the same ports: the backend
+ * swaps the process and keeps the proxy takeover up, so the cost is a second of
+ * dropped connections instead of a stop, a click, and a start.
+ */
+async function applyLive(): Promise<void> {
+  if (!engine.running || !selectedNodeId.value) return
+  delayError.value = null
+  try {
+    await engine.apply(selectedNodeId.value)
+  } catch (error) {
+    delayError.value = describeError(error)
+  }
+}
+
+function onNodeChange(): void {
+  void applyLive()
+}
+
+function pickKind(value: EngineKind): void {
+  if (engine.kind === value) return
+  engine.kind = value
+  void applyLive()
+}
+
 async function setMode(mode: ProxyMode): Promise<void> {
   const current = settings.settings
   if (!current || current.mode === mode) return
@@ -156,6 +181,7 @@ async function setMode(mode: ProxyMode): Promise<void> {
   delayError.value = null
   try {
     await settings.save({ ...current, mode })
+    await applyLive()
   } catch (error) {
     delayError.value = describeError(error)
   } finally {
@@ -311,7 +337,7 @@ async function stopEngine() {
       <div v-else class="control-row">
         <label class="field control-node">
           <span class="field-label">{{ t('home.control.node') }}</span>
-          <select v-model="selectedNodeId" class="select" :disabled="engine.running">
+          <select v-model="selectedNodeId" class="select" :disabled="engine.busy" @change="onNodeChange">
             <option v-for="node in nodes.items" :key="node.id" :value="node.id">
               {{ node.name }} · {{ node.server }}:{{ node.port }}
             </option>
@@ -327,13 +353,13 @@ async function stopEngine() {
               type="button"
               :class="{ active: engine.kind === item.value }"
               :aria-pressed="engine.kind === item.value"
-              :disabled="engine.running"
-              @click="engine.kind = item.value"
+              :disabled="engine.busy"
+              @click="pickKind(item.value)"
             >
               {{ item.label }}
             </button>
           </div>
-          <p v-if="engine.running" class="field-hint">{{ t('home.control.locked') }}</p>
+          <p v-if="engine.running" class="field-hint">{{ t('home.control.live') }}</p>
         </div>
 
         <div class="field control-mode">
@@ -345,13 +371,13 @@ async function stopEngine() {
               type="button"
               :class="{ active: settings.settings?.mode === item.value }"
               :aria-pressed="settings.settings?.mode === item.value"
-              :disabled="engine.running || modeSaving || !settings.settings"
+              :disabled="engine.busy || modeSaving || !settings.settings"
               @click="setMode(item.value)"
             >
               {{ t(item.labelKey) }}
             </button>
           </div>
-          <p v-if="engine.running" class="field-hint">{{ t('home.mode.locked') }}</p>
+          <p v-if="engine.running" class="field-hint">{{ t('home.mode.live') }}</p>
         </div>
       </div>
 

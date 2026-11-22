@@ -167,6 +167,8 @@ export const api = {
   backupLoad: (): Promise<BackupSummary | null> => unwrap(commands.backupLoad()),
   engineStart: (kind: EngineKind, nodeId: string): Promise<EngineStatus_Serialize> =>
     unwrap(commands.engineStart(kind, nodeId)),
+  engineApply: (kind: EngineKind, nodeId: string): Promise<EngineStatus_Serialize> =>
+    unwrap(commands.engineApply(kind, nodeId)),
   engineStop: (): Promise<EngineStatus_Serialize> => unwrap(commands.engineStop()),
   trafficSample: (): Promise<TrafficSample | null> => unwrap(commands.trafficSample()),
   engineConfigPreview: (kind: EngineKind, nodeId: string): Promise<string> =>

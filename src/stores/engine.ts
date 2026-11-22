@@ -208,6 +208,28 @@ export const useEngineStore = defineStore('engine', () => {
     }
   }
 
+  /**
+   * Change what is running without the stop/start dance: the backend stops the
+   * old kernel and starts the new one on the same ports, so the proxy takeover
+   * never has to be torn down. Connections in flight still die — a new process
+   * means new sockets — which is why the UI says so before the click.
+   */
+  async function apply(nodeId: string) {
+    busy.value = true
+    error.value = null
+    try {
+      status.value = await api.engineApply(kind.value, nodeId)
+      resetRates()
+      session.value = { up: 0, down: 0 }
+      await refreshTraffic()
+    } catch (cause) {
+      error.value = describeError(cause)
+      throw cause
+    } finally {
+      busy.value = false
+    }
+  }
+
   async function stop() {
     busy.value = true
     error.value = null
@@ -230,6 +252,7 @@ export const useEngineStore = defineStore('engine', () => {
     kind,
     busy,
     error,
+    apply,
     rates,
     running,
     hasConnectionsApi,

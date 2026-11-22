@@ -262,6 +262,39 @@ pub async fn engine_start(
     Ok(status)
 }
 
+/// Swap what is running without making the user stop and start it: same ports,
+/// same proxy takeover, a kernel replaced underneath.
+///
+/// The system proxy stays enabled across the swap on purpose. Handing it back
+/// first would send traffic direct for the gap — a leak, and a longer one
+/// (registry rewrite) than the second a kernel needs to bind a port that never
+/// went away.
+#[tauri::command]
+#[specta::specta]
+pub async fn engine_apply(
+    app: AppHandle,
+    kind: EngineKind,
+    node_id: String,
+    state: State<'_, AppState>,
+    runtime: Runtime<'_>,
+    proxy: Proxy<'_>,
+) -> AppResult<EngineStatus> {
+    let request = prepare_start(&state, kind, &node_id)?;
+    let runtime = Arc::clone(runtime.inner());
+    let proxy = Arc::clone(proxy.inner());
+    let was_running = runtime.status().running;
+    let status = run_blocking(move || {
+        if was_running {
+            runtime.stop()?;
+        }
+        start_engine(&runtime, &proxy, request)
+    })
+    .await?;
+    remember_session(&state, kind, &node_id);
+    crate::refresh_tray(&app);
+    Ok(status)
+}
+
 /// Stop the kernel, giving the system proxy back first.
 #[tauri::command]
 #[specta::specta]

@@ -43,6 +43,7 @@ pub fn builder() -> Builder<tauri::Wry> {
         commands::engine::proxy_speed,
         commands::engine::close_connection,
         commands::engine::engine_start,
+        commands::engine::engine_apply,
         commands::engine::engine_stop,
         commands::engine::traffic_sample,
         commands::engine::engine_config_preview,

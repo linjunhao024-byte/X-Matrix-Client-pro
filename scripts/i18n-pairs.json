@@ -1030,9 +1030,9 @@
     "Kernel"
   ],
   [
-    "home.control.locked",
-    "内核运行中不能切换，先停止再换",
-    "Stop the kernel before switching"
+    "home.control.live",
+    "切换会立刻重启内核，连接会短暂中断",
+    "Switching restarts the kernel at once and drops connections briefly"
   ],
   [
     "home.control.log",
@@ -1100,9 +1100,9 @@
     "The kernel last exited with code {code}. Open Logs to see what it said."
   ],
   [
-    "home.mode.locked",
-    "运行中不能切换代理模式",
-    "The proxy mode cannot change while the kernel runs"
+    "home.mode.live",
+    "运行中切换会重启内核，连接会短暂中断",
+    "Switching while running restarts the kernel and drops connections briefly"
   ],
   [
     "home.noEngine",

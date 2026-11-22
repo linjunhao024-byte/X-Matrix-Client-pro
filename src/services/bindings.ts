@@ -138,6 +138,16 @@ export const commands = {
 	closeConnection: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("close_connection", { id })),
 	/**  Start `node_id` on `kind`. Stops whatever was running first. */
 	engineStart: (kind: EngineKind, nodeId: string) => typedError<EngineStatus_Serialize, AppError>(__TAURI_INVOKE("engine_start", { kind, nodeId })),
+	/**
+	 *  Swap what is running without making the user stop and start it: same ports,
+	 *  same proxy takeover, a kernel replaced underneath.
+	 * 
+	 *  The system proxy stays enabled across the swap on purpose. Handing it back
+	 *  first would send traffic direct for the gap — a leak, and a longer one
+	 *  (registry rewrite) than the second a kernel needs to bind a port that never
+	 *  went away.
+	 */
+	engineApply: (kind: EngineKind, nodeId: string) => typedError<EngineStatus_Serialize, AppError>(__TAURI_INVOKE("engine_apply", { kind, nodeId })),
 	/**  Stop the kernel, giving the system proxy back first. */
 	engineStop: () => typedError<EngineStatus_Serialize, AppError>(__TAURI_INVOKE("engine_stop")),
 	/**

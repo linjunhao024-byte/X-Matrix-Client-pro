@@ -60,10 +60,11 @@ async function poll(): Promise<void> {
       // The file shrank: the kernel was restarted with a fresh log, or the
       // user pressed clear. Either way what we hold is from another run.
       lines.value = []
-      cursor.value = 0
+      cursor.value = delta.size ?? 0
       if (delta.text === '') return
+    } else {
+      cursor.value = delta.size ?? 0
     }
-    cursor.value = delta.size ?? 0
     if (delta.text === '') return
     const incoming = delta.text.split(/\r?\n/)
     // A trailing newline means the last element is not a line yet.
