@@ -10,7 +10,7 @@ Tauri 2 + Vue 3 + TypeScript。Rust 侧管配置、进程、系统代理与持�
 
 | 能力 | 说明 |
 |---|---|
-| 节点管理 | 手填或粘贴分享链接（`vless` / `vmess` / `trojan` / `ss`，支持整包 base64），重复节点自动跳过 |
+| 节点管理 | 手填或粘贴分享链接（`vless` / `vmess` / `trojan` / `ss` / `hysteria2`(`hy2`) / `tuic`，支持整包 base64），重复节点自动跳过；hysteria2 与 tuic 走 sing-box 内核，选 Xray 启动时会明确告诉你换内核 |
 | 启动内核 | Xray 或 sing-box 二选一，启动前生成配置、等就绪、失败自动清理 |
 | 实时统计 | 上下行累计值与速率、最近一分钟曲线、本次会话的用量（可清零）；sing-box 额外提供连接列表，可搜索 / 排序 / 逐条「断开」 |
 | 路由规则（含「试一试」：输入域名看命中哪条规则） | 7 种匹配器（域名后缀/关键字/完整、IP 段、GeoIP、端口、进程名）× 4 种动作（代理/直连/拦截/策略组），双内核各自渲染 |
@@ -78,7 +78,7 @@ src-tauri/src/
   engine/                引擎抽象 + 双内核渲染 + 进程运行时 + 统计
   net/                   最小 HTTP 客户端 + TCP 测速（唯一离开 loopback 的地方）
   sysproxy/              系统代理接管与还原（快照、Drop 兜底）
-  commands/              命令层（IPC 边界，62 个命令）
+  commands/              命令层（IPC 边界，65 个命令）
   store.rs               单文件 JSON 原子替换持久化
   autostart.rs           开机自启
 docs/ENGINE-SPEC.md      两个内核的行为规格（每条结论都带上游源码行号）

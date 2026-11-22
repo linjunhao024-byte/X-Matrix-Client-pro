@@ -23,7 +23,85 @@ pub fn link(node: &Node) -> AppResult<String> {
         Protocol::Shadowsocks { method, password } => {
             with_name(shadowsocks(node, method, password)?, &node.name)
         }
+        Protocol::Hysteria2 {
+            password,
+            obfs_password,
+            up_mbps,
+            down_mbps,
+        } => with_name(
+            hysteria2(node, password, obfs_password.as_deref(), *up_mbps, *down_mbps),
+            &node.name,
+        ),
+        Protocol::Tuic {
+            uuid,
+            password,
+            congestion_control,
+            udp_relay_mode,
+        } => with_name(
+            tuic(
+                node,
+                uuid,
+                password,
+                congestion_control.as_deref(),
+                udp_relay_mode.as_deref(),
+            ),
+            &node.name,
+        ),
     })
+}
+
+/// hysteria2 keeps its password in the userinfo and its tuning knobs in the
+/// query string; the transport is QUIC by definition, so a node that was
+/// imported from a Clash file with `ws` still exports as plain hysteria2.
+fn hysteria2(
+    node: &Node,
+    password: &str,
+    obfs_password: Option<&str>,
+    up_mbps: Option<u32>,
+    down_mbps: Option<u32>,
+) -> String {
+    let mut query = Vec::new();
+    if let Some(obfs) = obfs_password.filter(|value| !value.trim().is_empty()) {
+        query.push(("obfs".into(), "salamander".into()));
+        query.push(("obfs-password".into(), obfs.to_string()));
+    }
+    if let Some(up) = up_mbps.filter(|value| *value > 0) {
+        query.push(("upmbps".into(), up.to_string()));
+    }
+    if let Some(down) = down_mbps.filter(|value| *value > 0) {
+        query.push(("downmbps".into(), down.to_string()));
+    }
+    security_query(node, &mut query);
+    format!(
+        "hysteria2://{}@{}?{}",
+        encode(password),
+        authority(node),
+        render(&query)
+    )
+}
+
+fn tuic(
+    node: &Node,
+    uuid: &str,
+    password: &str,
+    congestion_control: Option<&str>,
+    udp_relay_mode: Option<&str>,
+) -> String {
+    let mut query = Vec::new();
+    if let Some(cc) = congestion_control.filter(|value| !value.trim().is_empty()) {
+        query.push(("congestion_control".into(), cc.to_string()));
+    }
+    if let Some(mode) = udp_relay_mode.filter(|value| !value.trim().is_empty()) {
+        query.push(("udp_relay_mode".into(), mode.to_string()));
+    }
+    security_query(node, &mut query);
+    format!(
+        "tuic://{}:{}@{}?{}",
+        encode(uuid),
+        encode(password),
+        authority(node),
+        render(&query)
+    )
 }
 
 fn with_name(link: String, name: &str) -> String {

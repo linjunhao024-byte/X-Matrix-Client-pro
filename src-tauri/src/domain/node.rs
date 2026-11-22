@@ -41,6 +41,35 @@ pub enum Protocol {
         method: String,
         password: String,
     },
+    // QUIC-based, and sing-box only: Xray has no hysteria2 outbound. A node
+    // of this kind can be stored and edited, but starting it while Xray is the
+    // selected kernel fails with a message that says why — better than
+    // rendering a config that silently drops the node.
+    Hysteria2 {
+        password: String,
+        // salamander obfuscation password (`obfs-password`); empty means the
+        // server does not obfuscate, which is the common case.
+        #[serde(default)]
+        obfs_password: Option<String>,
+        // Bandwidth hints in Mbps; only used to pace congestion control when
+        // the server sends no estimate of its own.
+        #[serde(default)]
+        up_mbps: Option<u32>,
+        #[serde(default)]
+        down_mbps: Option<u32>,
+    },
+    // TUIC v5, also sing-box only. The credential is a uuid *and* a password
+    // — real providers require both, so the type demands both.
+    Tuic {
+        uuid: String,
+        password: String,
+        // `cubic` (the kernel default), `new_reno` or `bbr`.
+        #[serde(default)]
+        congestion_control: Option<String>,
+        // `native` or `quic`.
+        #[serde(default)]
+        udp_relay_mode: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
@@ -193,12 +222,37 @@ impl Node {
             Protocol::Vmess { uuid, .. } => ("vmess", uuid.as_str()),
             Protocol::Trojan { password } => ("trojan", password.as_str()),
             Protocol::Shadowsocks { password, .. } => ("shadowsocks", password.as_str()),
+            Protocol::Hysteria2 { password, .. } => ("hysteria2", password.as_str()),
+            // TUIC needs both halves to be the same server; the uuid is the
+            // part that identifies the account.
+            Protocol::Tuic { uuid, .. } => ("tuic", uuid.as_str()),
         };
         format!(
             "{kind}|{}|{}|{credential}",
             self.server.trim().to_lowercase(),
             self.port
         )
+    }
+}
+
+impl Protocol {
+    /// The protocols that live inside their own QUIC TLS handshake. Only
+    /// sing-box can run these; Xray has no outbound for either, so its
+    /// renderer has to refuse rather than pretend.
+    pub fn is_quic(&self) -> bool {
+        matches!(self, Protocol::Hysteria2 { .. } | Protocol::Tuic { .. })
+    }
+
+    /// How the protocol is spelled on the screen and in error messages.
+    pub fn label(&self) -> &'static str {
+        match self {
+            Protocol::Vless { .. } => "VLESS",
+            Protocol::Vmess { .. } => "VMess",
+            Protocol::Trojan { .. } => "Trojan",
+            Protocol::Shadowsocks { .. } => "Shadowsocks",
+            Protocol::Hysteria2 { .. } => "Hysteria2",
+            Protocol::Tuic { .. } => "TUIC",
+        }
     }
 }
 

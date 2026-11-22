@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import ModalDialog from './ModalDialog.vue'
 import ToggleSwitch from './ToggleSwitch.vue'
 import { t } from '../i18n'
@@ -12,14 +12,24 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ close: [] }>()
 
-type ProtocolKind = 'Vless' | 'Vmess' | 'Trojan' | 'Shadowsocks'
+type ProtocolKind = 'Vless' | 'Vmess' | 'Trojan' | 'Shadowsocks' | 'Hysteria2' | 'Tuic'
 type TransportKind = 'Tcp' | 'Ws' | 'Grpc'
 type SecurityKind = 'None' | 'Tls' | 'Reality'
 
-const protocolOptions: ProtocolKind[] = ['Vless', 'Vmess', 'Trojan', 'Shadowsocks']
+const protocolOptions: ProtocolKind[] = ['Vless', 'Vmess', 'Trojan', 'Shadowsocks', 'Hysteria2', 'Tuic']
 const transportOptions: TransportKind[] = ['Tcp', 'Ws', 'Grpc']
-const securityOptions: SecurityKind[] = ['None', 'Tls', 'Reality']
 const ssMethods = ['aes-128-gcm', 'aes-256-gcm', 'chacha20-ietf-poly1305', '2022-blake3-aes-256-gcm']
+const congestionOptions = ['', 'bbr', 'cubic', 'new_reno']
+const udpRelayOptions = ['', 'native', 'quic']
+
+/** hysteria2 and TUIC run over QUIC: the transport is quoted by the protocol
+ *  itself and REALITY does not exist there, so the editor must not offer
+ *  either — a stored `ws` block would be silently ignored by the kernel. */
+const isQuic = (kind: ProtocolKind) => kind === 'Hysteria2' || kind === 'Tuic'
+
+const securityOptions = computed<SecurityKind[]>(() =>
+  isQuic(draft.protocolKind) ? ['Tls'] : ['None', 'Tls', 'Reality'],
+)
 
 const draft = reactive({
   id: '',
@@ -32,6 +42,11 @@ const draft = reactive({
   alterId: 0,
   password: '',
   method: 'aes-256-gcm',
+  obfsPassword: '',
+  upMbps: 0,
+  downMbps: 0,
+  congestionControl: '',
+  udpRelayMode: '',
   transportKind: 'Tcp' as TransportKind,
   wsPath: '/',
   wsHost: '',
@@ -72,6 +87,11 @@ function reset(source?: Node_Serialize | null) {
   draft.alterId = 0
   draft.password = ''
   draft.method = 'aes-256-gcm'
+  draft.obfsPassword = ''
+  draft.upMbps = 0
+  draft.downMbps = 0
+  draft.congestionControl = ''
+  draft.udpRelayMode = ''
 
   draft.transportKind = source?.transport.kind ?? 'Tcp'
   draft.wsPath = '/'
@@ -88,6 +108,13 @@ function reset(source?: Node_Serialize | null) {
   draft.realityServerName = ''
   draft.realityFingerprint = 'chrome'
   draft.realitySpiderX = '/'
+
+  // A QUIC node has no transport and always speaks TLS; normalise old data
+  // here rather than letting the form show a `ws` selector that does nothing.
+  if (isQuic(draft.protocolKind)) {
+    draft.transportKind = 'Tcp'
+    draft.securityKind = 'Tls'
+  }
 
   const sourceTags = source?.tags ?? []
   lockedTags.value = sourceTags.filter((tag) => tag.startsWith('sub:'))
@@ -106,9 +133,19 @@ function reset(source?: Node_Serialize | null) {
     draft.alterId = protocol.alter_id
   } else if (protocol.kind === 'Trojan') {
     draft.password = protocol.password
-  } else {
+  } else if (protocol.kind === 'Shadowsocks') {
     draft.method = protocol.method
     draft.password = protocol.password
+  } else if (protocol.kind === 'Hysteria2') {
+    draft.password = protocol.password
+    draft.obfsPassword = protocol.obfs_password ?? ''
+    draft.upMbps = protocol.up_mbps ?? 0
+    draft.downMbps = protocol.down_mbps ?? 0
+  } else {
+    draft.uuid = protocol.uuid
+    draft.password = protocol.password
+    draft.congestionControl = protocol.congestion_control ?? ''
+    draft.udpRelayMode = protocol.udp_relay_mode ?? ''
   }
 
   const transport = source.transport
@@ -152,10 +189,30 @@ function buildProtocol(): Node_Deserialize['protocol'] {
       return { kind: 'Trojan', password: draft.password }
     case 'Shadowsocks':
       return { kind: 'Shadowsocks', method: draft.method, password: draft.password }
+    case 'Hysteria2':
+      return {
+        kind: 'Hysteria2',
+        password: draft.password,
+        obfs_password: draft.obfsPassword.trim() || null,
+        // Zero reads as "no hint" to the kernel, so store absence instead.
+        up_mbps: Number(draft.upMbps) > 0 ? Number(draft.upMbps) : null,
+        down_mbps: Number(draft.downMbps) > 0 ? Number(draft.downMbps) : null,
+      }
+    case 'Tuic':
+      return {
+        kind: 'Tuic',
+        uuid: draft.uuid.trim(),
+        password: draft.password,
+        congestion_control: draft.congestionControl || null,
+        udp_relay_mode: draft.udpRelayMode || null,
+      }
   }
 }
 
 function buildTransport(): Node_Deserialize['transport'] {
+  // QUIC protocols carry no stream transport; anything but Tcp here would be
+  // written into the document and then ignored by the renderer.
+  if (isQuic(draft.protocolKind)) return { kind: 'Tcp' }
   switch (draft.transportKind) {
     case 'Tcp':
       return { kind: 'Tcp' }
@@ -167,6 +224,20 @@ function buildTransport(): Node_Deserialize['transport'] {
 }
 
 function buildSecurity(): Node_Deserialize['security'] {
+  // hysteria2 and TUIC handshake inside their own TLS; there is no plaintext
+  // variant and no REALITY, so the form cannot produce anything else.
+  if (isQuic(draft.protocolKind)) {
+    return {
+      kind: 'Tls',
+      sni: draft.sni.trim() || null,
+      alpn: [],
+      allow_insecure: draft.allowInsecure,
+      pinned_cert_sha256: draft.certPin
+        .split(',')
+        .map((item) => item.trim().replace(/[:\\s]/g, '').toLowerCase())
+        .filter(Boolean),
+    }
+  }
   switch (draft.securityKind) {
     case 'None':
       return { kind: 'None' }
@@ -214,6 +285,17 @@ async function submit() {
   const port = Number(draft.port)
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     error.value = t('editor.err.port')
+    return
+  }
+  // Both QUIC protocols live or die by their credential, and a TUIC link also
+  // needs the uuid; an empty one produces a kernel error the user cannot act
+  // on, so name the field here.
+  if (draft.protocolKind === 'Tuic' && !draft.uuid.trim()) {
+    error.value = t('editor.err.uuid')
+    return
+  }
+  if (isQuic(draft.protocolKind) && !draft.password) {
+    error.value = t('editor.err.password')
     return
   }
   // A truncated fingerprint makes Xray refuse the whole config, so catch the
@@ -330,7 +412,54 @@ async function submit() {
           </label>
         </template>
 
-        <template v-else>
+        <template v-else-if="draft.protocolKind === 'Hysteria2'">
+          <label class="field grid-span">
+            <span class="field-label">{{ t('editor.password') }}</span>
+            <input v-model="draft.password" class="input input-mono" type="password" />
+          </label>
+          <label class="field grid-span">
+            <span class="field-label">{{ t('editor.obfsPassword') }}</span>
+            <input v-model="draft.obfsPassword" class="input input-mono" type="password" />
+            <span class="field-hint">{{ t('editor.obfsPasswordHint') }}</span>
+          </label>
+          <label class="field">
+            <span class="field-label">{{ t('editor.upMbps') }}</span>
+            <input v-model.number="draft.upMbps" class="input" type="number" min="0" />
+          </label>
+          <label class="field">
+            <span class="field-label">{{ t('editor.downMbps') }}</span>
+            <input v-model.number="draft.downMbps" class="input" type="number" min="0" />
+          </label>
+        </template>
+
+        <template v-else-if="draft.protocolKind === 'Tuic'">
+          <label class="field grid-span">
+            <span class="field-label">{{ t('editor.uuid') }}</span>
+            <input v-model="draft.uuid" class="input input-mono" placeholder="xxxxxxxx-xxxx-…" />
+          </label>
+          <label class="field grid-span">
+            <span class="field-label">{{ t('editor.password') }}</span>
+            <input v-model="draft.password" class="input input-mono" type="password" />
+          </label>
+          <label class="field">
+            <span class="field-label">{{ t('editor.congestionControl') }}</span>
+            <select v-model="draft.congestionControl" class="select">
+              <option v-for="cc in congestionOptions" :key="cc" :value="cc">
+                {{ cc || t('editor.kernelDefault') }}
+              </option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="field-label">{{ t('editor.udpRelayMode') }}</span>
+            <select v-model="draft.udpRelayMode" class="select">
+              <option v-for="mode in udpRelayOptions" :key="mode" :value="mode">
+                {{ mode || t('editor.kernelDefault') }}
+              </option>
+            </select>
+          </label>
+        </template>
+
+        <template v-else-if="draft.protocolKind === 'Shadowsocks'">
           <label class="field">
             <span class="field-label">{{ t('editor.method') }}</span>
             <select v-model="draft.method" class="select">
@@ -343,12 +472,17 @@ async function submit() {
           </label>
         </template>
 
-        <label class="field">
-          <span class="field-label">{{ t('editor.transport') }}</span>
-          <select v-model="draft.transportKind" class="select">
-            <option v-for="kind in transportOptions" :key="kind" :value="kind">{{ kind }}</option>
-          </select>
-        </label>
+        <template v-if="isQuic(draft.protocolKind)">
+          <p class="field grid-span field-hint">{{ t('editor.quicHint') }}</p>
+        </template>
+        <template v-else>
+          <label class="field">
+            <span class="field-label">{{ t('editor.transport') }}</span>
+            <select v-model="draft.transportKind" class="select">
+              <option v-for="kind in transportOptions" :key="kind" :value="kind">{{ kind }}</option>
+            </select>
+          </label>
+        </template>
         <label v-if="draft.transportKind === 'Ws'" class="field">
           <span class="field-label">{{ t('editor.wsPath') }}</span>
           <input v-model="draft.wsPath" class="input input-mono" placeholder="/" />

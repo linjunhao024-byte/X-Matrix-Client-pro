@@ -65,6 +65,10 @@ pub fn parse_link(line: &str, index: usize) -> AppResult<Node> {
         parse_trojan(line, index)
     } else if lower.starts_with("ss://") {
         parse_shadowsocks(line, index)
+    } else if lower.starts_with("hysteria2://") || lower.starts_with("hy2://") {
+        parse_hysteria2(line, index)
+    } else if lower.starts_with("tuic://") {
+        parse_tuic(line, index)
     } else {
         Err(AppError::InvalidInput(format!(
             "不支持的链接类型：{}",
@@ -252,6 +256,91 @@ fn parse_shadowsocks(line: &str, index: usize) -> AppResult<Node> {
         security: Security::None,
         tags: vec![],
     })
+}
+
+/// hysteria2 is QUIC and therefore always TLS; the link only adds the details.
+/// `obfs= salamander` comes with `obfs-password` (some panels write
+/// `obfs-password`, others `obfspassword`), and the bandwidth hints are
+/// `upmbps` / `downmbps` outside Clash and `up` / `down` inside it.
+fn parse_hysteria2(line: &str, index: usize) -> AppResult<Node> {
+    // `hy2://` is the short spelling clients accept; strip by the scheme that
+    // is actually present, because `strip_scheme` works by length.
+    let rest = if line.len() >= 6 && line[..6].eq_ignore_ascii_case("hy2://") {
+        &line[6..]
+    } else {
+        strip_scheme(line, "hysteria2://")
+    };
+    let (head, query, name) = split_link(rest);
+    let (password, host, port) = split_authority(head)?;
+    if password.is_empty() {
+        return Err(AppError::InvalidInput("hysteria2 链接缺少密码".into()));
+    }
+
+    let obfs_password = non_empty(query.get("obfs-password"))
+        .or_else(|| non_empty(query.get("obfspassword")));
+
+    Ok(Node {
+        id: make_id("hysteria2", index),
+        name: name.unwrap_or_else(|| format!("hysteria2-{}", index + 1)),
+        server: host,
+        port,
+        protocol: Protocol::Hysteria2 {
+            password,
+            obfs_password,
+            up_mbps: query_u32(&query, &["upmbps", "up"]),
+            down_mbps: query_u32(&query, &["downmbps", "down"]),
+        },
+        transport: Transport::Tcp,
+        security: quic_security(&query),
+        tags: vec![],
+    })
+}
+
+/// TUIC puts `uuid:password` in the userinfo — both halves are required, so a
+/// link with only one of them is reported instead of guessed at.
+fn parse_tuic(line: &str, index: usize) -> AppResult<Node> {
+    let rest = strip_scheme(line, "tuic://");
+    let (head, query, name) = split_link(rest);
+    let (credentials, host, port) = split_authority(head)?;
+    let (uuid, password) = credentials
+        .split_once(':')
+        .ok_or_else(|| AppError::InvalidInput("tuic 链接缺少 uuid 或密码".into()))?;
+    if uuid.is_empty() || password.is_empty() {
+        return Err(AppError::InvalidInput("tuic 凭据不完整".into()));
+    }
+
+    Ok(Node {
+        id: make_id("tuic", index),
+        name: name.unwrap_or_else(|| format!("tuic-{}", index + 1)),
+        server: host,
+        port,
+        protocol: Protocol::Tuic {
+            uuid: uuid.to_string(),
+            password: password.to_string(),
+            congestion_control: non_empty(query.get("congestion_control")),
+            udp_relay_mode: non_empty(query.get("udp_relay_mode")),
+        },
+        transport: Transport::Tcp,
+        security: quic_security(&query),
+        tags: vec![],
+    })
+}
+
+/// The TLS block both QUIC dialects share: on by definition, with an optional
+/// SNI (the panels disagree on `sni` vs `peer`) and the usual insecure flag.
+fn quic_security(query: &Query) -> Security {
+    Security::Tls {
+        sni: non_empty(query.get("sni")).or_else(|| non_empty(query.get("peer"))),
+        alpn: vec![],
+        allow_insecure: insecure_flag(query),
+        pinned_cert_sha256: cert_pins(query),
+    }
+}
+
+fn query_u32(query: &Query, keys: &[&str]) -> Option<u32> {
+    keys.iter()
+        .filter_map(|key| query.get(*key))
+        .find_map(|raw| raw.trim().parse::<u32>().ok().filter(|value| *value > 0))
 }
 
 /// `pcs` / `pinnedPeerCertSha256` carry one or more SHA-256 fingerprints of the
@@ -664,6 +753,59 @@ mod tests {
         let node = &report.nodes[0];
         assert_eq!(node.server, "2001:db8::1");
         assert_eq!(node.port, 443);
+    }
+
+    #[test]
+    fn a_hysteria2_link_keeps_its_obfuscation_and_bandwidth_hints() {
+        let report = parse(
+            "hysteria2://pw@hy.example.com:8443?obfs=salamander&obfs-password=salt&upmbps=120&downmbps=380&sni=hy.example.com&insecure=1#hy",
+        );
+        let node = &report.nodes[0];
+        match &node.protocol {
+            Protocol::Hysteria2 {
+                password,
+                obfs_password,
+                up_mbps,
+                down_mbps,
+            } => {
+                assert_eq!(password, "pw");
+                assert_eq!(obfs_password.as_deref(), Some("salt"));
+                assert_eq!((*up_mbps, *down_mbps), (Some(120), Some(380)));
+            }
+            other => panic!("unexpected protocol {other:?}"),
+        }
+        assert!(matches!(node.security, Security::Tls { .. }), "QUIC is always TLS");
+        assert_eq!(node.port, 8443);
+    }
+
+    #[test]
+    fn a_hy2_alias_parses_the_same_way_and_missing_obfs_stays_none() {
+        let report = parse("hy2://pw@hy.example.com:443#alias");
+        match &report.nodes[0].protocol {
+            Protocol::Hysteria2 { obfs_password, up_mbps, down_mbps, .. } => {
+                assert_eq!(*obfs_password, None, "no obfs-password means no obfuscation");
+                assert_eq!((*up_mbps, *down_mbps), (None, None));
+            }
+            other => panic!("unexpected protocol {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_tuic_link_needs_both_halves_of_the_credential() {
+        let report = parse("tuic://uuid-1:pw@tu.example.com:443?congestion_control=bbr&udp_relay_mode=quic#tu");
+        match &report.nodes[0].protocol {
+            Protocol::Tuic { uuid, password, congestion_control, udp_relay_mode } => {
+                assert_eq!(uuid, "uuid-1");
+                assert_eq!(password, "pw");
+                assert_eq!(congestion_control.as_deref(), Some("bbr"));
+                assert_eq!(udp_relay_mode.as_deref(), Some("quic"));
+            }
+            other => panic!("unexpected protocol {other:?}"),
+        }
+
+        let broken = parse("tuic://just-a-uuid@tu.example.com:443#bad");
+        assert!(broken.nodes.is_empty());
+        assert!(broken.skipped[0].contains("uuid 或密码"), "{}", broken.skipped[0]);
     }
 
     #[test]

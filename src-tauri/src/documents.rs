@@ -63,6 +63,7 @@ fn node_from_outbound(outbound: &Json) -> Option<Node> {
     let (server, port, protocol) = match kind {
         "vless" | "vmess" => v_outbound(outbound, kind)?,
         "trojan" | "shadowsocks" | "ss" => password_outbound(outbound, kind)?,
+        "hysteria2" | "tuic" => quic_outbound(outbound, kind)?,
         _ => return None, // direct / block / selector are structural
     };
     let (transport, security) = match outbound.get("streamSettings") {
@@ -143,6 +144,47 @@ fn password_outbound(outbound: &Json, kind: &str) -> Option<(String, u16, Protoc
     let password = entry.get("password").and_then(Json::as_str)?;
     let method = entry.get("method").and_then(Json::as_str);
     Some((server.into(), port, build(password, method)))
+}
+
+/// sing-box's QUIC outbounds. Both keep `password` at the top level, so the
+/// only protocol-specific parts are the obfuscation (hysteria2) and the
+/// congestion knobs (TUIC).
+fn quic_outbound(outbound: &Json, kind: &str) -> Option<(String, u16, Protocol)> {
+    let server = outbound.get("server").and_then(Json::as_str)?;
+    let port = outbound.get("server_port").and_then(Json::as_u64)? as u16;
+    let password = outbound.get("password").and_then(Json::as_str)?;
+    let protocol = if kind == "hysteria2" {
+        Protocol::Hysteria2 {
+            password: password.into(),
+            obfs_password: outbound
+                .get("obfs")
+                .and_then(|obfs| obfs.get("password"))
+                .and_then(Json::as_str)
+                .map(str::to_string),
+            up_mbps: outbound
+                .get("up_mbps")
+                .and_then(Json::as_u64)
+                .map(|value| value as u32),
+            down_mbps: outbound
+                .get("down_mbps")
+                .and_then(Json::as_u64)
+                .map(|value| value as u32),
+        }
+    } else {
+        Protocol::Tuic {
+            uuid: outbound.get("uuid").and_then(Json::as_str)?.into(),
+            password: password.into(),
+            congestion_control: outbound
+                .get("congestion_control")
+                .and_then(Json::as_str)
+                .map(str::to_string),
+            udp_relay_mode: outbound
+                .get("udp_relay_mode")
+                .and_then(Json::as_str)
+                .map(str::to_string),
+        }
+    };
+    Some((server.into(), port, protocol))
 }
 
 fn xray_stream(stream: &Json) -> (Transport, Security) {
@@ -312,6 +354,22 @@ fn node_from_clash(proxy: &Yaml) -> Option<Node> {
         "ss" | "shadowsocks" => Protocol::Shadowsocks {
             method: yaml_str(proxy, "cipher").unwrap_or_else(|| "aes-256-gcm".into()),
             password: yaml_str(proxy, "password")?,
+        },
+        "hysteria2" | "hy2" => Protocol::Hysteria2 {
+            password: yaml_str(proxy, "password")?,
+            // Clash only obfuscates when `obfs: salamander` is present; an
+            // `obfs-password` on its own means nothing.
+            obfs_password: yaml_str(proxy, "obfs")
+                .filter(|obfs| obfs.eq_ignore_ascii_case("salamander"))
+                .and_then(|_| yaml_str(proxy, "obfs-password")),
+            up_mbps: yaml_u64(proxy, "up").map(|value| value as u32),
+            down_mbps: yaml_u64(proxy, "down").map(|value| value as u32),
+        },
+        "tuic" => Protocol::Tuic {
+            uuid: yaml_str(proxy, "uuid")?,
+            password: yaml_str(proxy, "password")?,
+            congestion_control: yaml_str(proxy, "congestion-controller"),
+            udp_relay_mode: yaml_str(proxy, "udp-relay-mode"),
         },
         _ => return None,
     };

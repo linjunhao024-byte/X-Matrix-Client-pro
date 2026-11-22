@@ -39,6 +39,15 @@ impl Engine for XrayEngine {
 
     fn validate_node(&self, node: &Node) -> AppResult<()> {
         ensure_node_usable(node)?;
+        // Xray has no hysteria2 or TUIC outbound at all. Saying so here beats
+        // rendering a config that quietly leaves the node out, which would
+        // look like a working tunnel that sends everything direct.
+        if node.protocol.is_quic() {
+            return Err(crate::error::AppError::InvalidInput(format!(
+                "Xray 内核不支持 {} 协议，请在首页把内核切换为 sing-box 后再启动",
+                node.protocol.label()
+            )));
+        }
         // Xray refuses an empty Shadowsocks method outright; catching it here
         // gives the UI a field-level error instead of a kernel stderr dump.
         if let Protocol::Shadowsocks { method, .. } = &node.protocol {
@@ -189,6 +198,15 @@ fn xray_outbound(node: &Node, tag: &str) -> AppResult<Value> {
                 }],
             }),
         ),
+        // Unreachable: `validate_node` rejects QUIC protocols before any
+        // outbound is built. The arm exists so the match stays exhaustive
+        // and a future protocol cannot slip through unnoticed.
+        Protocol::Hysteria2 { .. } | Protocol::Tuic { .. } => {
+            return Err(crate::error::AppError::InvalidInput(format!(
+                "Xray 内核不支持 {} 协议",
+                node.protocol.label()
+            )))
+        }
     };
 
     Ok(json!({
@@ -576,4 +594,27 @@ mod tests {
         assert!(cfg["dns"].is_null());
     }
 
+    /// Xray has no hysteria2 or TUIC outbound. Rendering a config that dropped
+    /// the node would look like a working tunnel that sends everything direct,
+    /// so the renderer refuses and names the fix.
+    #[test]
+    fn a_quic_node_is_refused_with_a_pointer_to_sing_box() {
+        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let node = node(
+            Protocol::Hysteria2 {
+                password: "pw".into(),
+                obfs_password: None,
+                up_mbps: None,
+                down_mbps: None,
+            },
+            Transport::Tcp,
+            Security::None,
+        );
+        let error = XrayEngine
+            .render_config(&RenderInput::new(&node, endpoints))
+            .expect_err("xray cannot carry hysteria2");
+        let text = format!("{error:?}");
+        assert!(text.contains("Hysteria2"), "{text}");
+        assert!(text.contains("sing-box"), "{text}");
+    }
 }

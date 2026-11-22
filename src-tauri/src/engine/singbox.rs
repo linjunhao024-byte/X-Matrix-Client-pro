@@ -231,6 +231,45 @@ fn singbox_outbound(node: &Node, tag: &str) -> AppResult<Value> {
             out.insert("method".into(), json!(method));
             out.insert("password".into(), json!(password));
         }
+        Protocol::Hysteria2 {
+            password,
+            obfs_password,
+            up_mbps,
+            down_mbps,
+        } => {
+            out.insert("type".into(), json!("hysteria2"));
+            out.insert("password".into(), json!(password));
+            if let Some(obfs) = obfs_password.as_deref().filter(|o| !o.trim().is_empty()) {
+                out.insert(
+                    "obfs".into(),
+                    json!({ "type": "salamander", "password": obfs }),
+                );
+            }
+            // Zero means "no hint"; sending 0 makes the kernel treat the
+            // link as having no bandwidth at all.
+            if let Some(up) = up_mbps.filter(|v| *v > 0) {
+                out.insert("up_mbps".into(), json!(up));
+            }
+            if let Some(down) = down_mbps.filter(|v| *v > 0) {
+                out.insert("down_mbps".into(), json!(down));
+            }
+        }
+        Protocol::Tuic {
+            uuid,
+            password,
+            congestion_control,
+            udp_relay_mode,
+        } => {
+            out.insert("type".into(), json!("tuic"));
+            out.insert("uuid".into(), json!(uuid));
+            out.insert("password".into(), json!(password));
+            if let Some(cc) = congestion_control.as_deref().filter(|c| !c.trim().is_empty()) {
+                out.insert("congestion_control".into(), json!(cc));
+            }
+            if let Some(mode) = udp_relay_mode.as_deref().filter(|m| !m.trim().is_empty()) {
+                out.insert("udp_relay_mode".into(), json!(mode));
+            }
+        }
     }
 
     if let Some(transport) = singbox_transport(&node.transport) {
@@ -238,6 +277,11 @@ fn singbox_outbound(node: &Node, tag: &str) -> AppResult<Value> {
     }
     if let Some(tls) = singbox_tls(&node.security) {
         out.insert("tls".into(), tls);
+    } else if node.protocol.is_quic() {
+        // hysteria2 and TUIC carry their own TLS handshake: sing-box refuses
+        // the outbound unless `tls.enabled` is true, even when the user
+        // imported a share link that names no TLS at all.
+        out.insert("tls".into(), json!({ "enabled": true }));
     }
 
     Ok(Value::Object(out))
@@ -441,6 +485,58 @@ mod tests {
             members: members.iter().map(|member| member.to_string()).collect(),
             selected: None,
         }
+    }
+
+    #[test]
+    fn hysteria2_gets_a_tls_block_even_when_the_node_has_no_security() {
+        let cfg = render(&node(
+            Protocol::Hysteria2 {
+                password: "pw".into(),
+                obfs_password: Some("salt".into()),
+                up_mbps: Some(120),
+                down_mbps: Some(0),
+            },
+            Transport::Tcp,
+            Security::None,
+        ));
+        let out = &cfg["outbounds"][0];
+        assert_eq!(out["type"], json!("hysteria2"));
+        assert_eq!(out["password"], json!("pw"));
+        assert_eq!(
+            out["obfs"],
+            json!({ "type": "salamander", "password": "salt" })
+        );
+        assert_eq!(out["up_mbps"], json!(120));
+        assert!(out.get("down_mbps").is_none(), "a zero hint is not a hint");
+        // sing-box refuses the outbound without it.
+        assert_eq!(out["tls"]["enabled"], json!(true));
+    }
+
+    #[test]
+    fn tuic_keeps_both_halves_of_the_credential_and_its_knobs() {
+        let cfg = render(&node(
+            Protocol::Tuic {
+                uuid: "uuid-1".into(),
+                password: "pw".into(),
+                congestion_control: Some("bbr".into()),
+                udp_relay_mode: Some("quic".into()),
+            },
+            Transport::Tcp,
+            Security::Tls {
+                sni: Some("tu.example.com".into()),
+                alpn: vec![],
+                allow_insecure: true,
+                pinned_cert_sha256: vec![],
+            },
+        ));
+        let out = &cfg["outbounds"][0];
+        assert_eq!(out["type"], json!("tuic"));
+        assert_eq!(out["uuid"], json!("uuid-1"));
+        assert_eq!(out["password"], json!("pw"));
+        assert_eq!(out["congestion_control"], json!("bbr"));
+        assert_eq!(out["udp_relay_mode"], json!("quic"));
+        assert_eq!(out["tls"]["server_name"], json!("tu.example.com"));
+        assert_eq!(out["tls"]["insecure"], json!(true));
     }
 
     #[test]

@@ -456,9 +456,9 @@ export type Node_Serialize = {
 
 export type Protocol = Protocol_Serialize | Protocol_Deserialize;
 
-export type Protocol_Deserialize = { kind: "Vless"; uuid: string; flow?: string | null } | { kind: "Vmess"; uuid: string; alter_id?: number } | { kind: "Trojan"; password: string } | { kind: "Shadowsocks"; method: string; password: string };
+export type Protocol_Deserialize = { kind: "Vless"; uuid: string; flow?: string | null } | { kind: "Vmess"; uuid: string; alter_id?: number } | { kind: "Trojan"; password: string } | { kind: "Shadowsocks"; method: string; password: string } | { kind: "Hysteria2"; password: string; obfs_password?: string | null; up_mbps?: number | null; down_mbps?: number | null } | { kind: "Tuic"; uuid: string; password: string; congestion_control?: string | null; udp_relay_mode?: string | null };
 
-export type Protocol_Serialize = { kind: "Vless"; uuid: string; flow: string | null } | { kind: "Vmess"; uuid: string; alter_id: number } | { kind: "Trojan"; password: string } | { kind: "Shadowsocks"; method: string; password: string };
+export type Protocol_Serialize = { kind: "Vless"; uuid: string; flow: string | null } | { kind: "Vmess"; uuid: string; alter_id: number } | { kind: "Trojan"; password: string } | { kind: "Shadowsocks"; method: string; password: string } | { kind: "Hysteria2"; password: string; obfs_password: string | null; up_mbps: number | null; down_mbps: number | null } | { kind: "Tuic"; uuid: string; password: string; congestion_control: string | null; udp_relay_mode: string | null };
 
 export type ProxyGroup = ProxyGroup_Serialize | ProxyGroup_Deserialize;
 

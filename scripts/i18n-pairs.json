@@ -3048,5 +3048,55 @@
     "time.yesterday",
     "昨天",
     "yesterday"
+  ],
+  [
+    "editor.obfsPassword",
+    "混淆密码（obfs-password）",
+    "Obfuscation password (obfs-password)"
+  ],
+  [
+    "editor.obfsPasswordHint",
+    "服务端没开 salamander 混淆就留空。",
+    "Leave empty unless the server enables salamander obfuscation."
+  ],
+  [
+    "editor.upMbps",
+    "上行带宽提示（Mbps）",
+    "Upstream hint (Mbps)"
+  ],
+  [
+    "editor.downMbps",
+    "下行带宽提示（Mbps）",
+    "Downstream hint (Mbps)"
+  ],
+  [
+    "editor.congestionControl",
+    "拥塞控制",
+    "Congestion control"
+  ],
+  [
+    "editor.udpRelayMode",
+    "UDP 中继模式",
+    "UDP relay mode"
+  ],
+  [
+    "editor.kernelDefault",
+    "内核默认",
+    "Kernel default"
+  ],
+  [
+    "editor.quicHint",
+    "hysteria2 / TUIC 走 QUIC，传输层由协议自己决定，内核只支持 sing-box。",
+    "hysteria2 and TUIC run over QUIC, so there is no stream transport to pick — and only the sing-box kernel can run them."
+  ],
+  [
+    "editor.err.uuid",
+    "请填写 uuid",
+    "Enter the uuid"
+  ],
+  [
+    "editor.err.password",
+    "请填写密码",
+    "Enter the password"
   ]
 ]
