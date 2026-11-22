@@ -169,6 +169,20 @@ pub fn delete_node(
     Ok(snapshot)
 }
 
+/// Why a TCP handshake cannot measure this node, if it cannot.
+///
+/// A QUIC node speaks UDP: there is no TCP handshake to time, so the number
+/// would be an error message pretending to be a measurement.
+pub(crate) fn tcp_handshake_refusal(node: &Node) -> Option<AppError> {
+    if !node.protocol.is_quic() {
+        return None;
+    }
+    Some(AppError::InvalidInput(format!(
+        "{} 走 QUIC，TCP 握手测不出延迟；启动内核后用首页的「真实延迟」",
+        node.protocol.label()
+    )))
+}
+
 /// TCP handshake latency to a node, in milliseconds.
 ///
 /// Runs off the UI thread: a node that silently blackholes packets costs the
@@ -183,6 +197,10 @@ pub async fn test_node_latency(state: State<'_, AppState>, id: NodeId) -> AppRes
         .find(|node| node.id == id)
         .cloned()
         .ok_or_else(|| AppError::NotFound(format!("节点 {id} 不存在")))?;
+
+    if let Some(refusal) = tcp_handshake_refusal(&node) {
+        return Err(refusal);
+    }
 
     tauri::async_runtime::spawn_blocking(move || {
         crate::net::latency::tcp_latency(&node.server, node.port)
@@ -295,6 +313,24 @@ mod tests {
         let state = AppState::load(Store::new(scratch().join("store.json")));
         state.nodes.write().extend(nodes);
         state
+    }
+
+    #[test]
+    fn a_quic_node_is_refused_a_tcp_handshake_number() {
+        // Printing a millisecond figure for a node we never timed would be a
+        // measurement that measured nothing.
+        let mut quic = node("q", &[]);
+        quic.protocol = Protocol::Hysteria2 {
+            password: "p".into(),
+            obfs_password: None,
+            up_mbps: None,
+            down_mbps: None,
+        };
+        let refusal = tcp_handshake_refusal(&quic).expect("QUIC node must be refused");
+        let text = format!("{refusal}");
+        assert!(text.contains("QUIC"), "message says why: {text}");
+        assert!(text.contains("真实延迟"), "message says what to use: {text}");
+        assert!(tcp_handshake_refusal(&node("t", &[])).is_none());
     }
 
     #[test]

@@ -147,6 +147,12 @@ const canApply = () => (preview.value?.nodes.length ?? 0) > 0 && !applying.value
     <div v-if="preview" class="preview">
       <div class="row preview-head">
         <span class="badge badge-success">{{ t('import.found', { count: preview.nodes.length }) }}</span>
+        <span v-if="preview.groups.length" class="badge badge-accent">
+          {{ t('import.groups', { count: preview.groups.length }) }}
+        </span>
+        <span v-if="preview.rules.length" class="badge badge-accent">
+          {{ t('import.rules', { count: preview.rules.length }) }}
+        </span>
         <span v-if="preview.skipped.length" class="badge badge-warning">
           {{ t('import.skipped', { count: preview.skipped.length }) }}
         </span>
@@ -167,6 +173,26 @@ const canApply = () => (preview.value?.nodes.length ?? 0) > 0 && !applying.value
           {{ t('import.andMore', { count: preview.nodes.length - 8 }) }}
         </li>
       </ul>
+
+      <div v-if="preview.groups.length || preview.rules.length" class="preview-routing">
+        <p class="preview-routing-head">{{ t('import.routingHead') }}</p>
+        <ul v-if="preview.groups.length" class="preview-list">
+          <li v-for="name in preview.groups.slice(0, 4)" :key="name">
+            <span class="preview-name">{{ name }}</span>
+          </li>
+          <li v-if="preview.groups.length > 4" class="muted">
+            {{ t('import.andMore', { count: preview.groups.length - 4 }) }}
+          </li>
+        </ul>
+        <ul v-if="preview.rules.length" class="preview-list preview-rules">
+          <li v-for="line in preview.rules.slice(0, 5)" :key="line">
+            <span class="cell-mono">{{ line }}</span>
+          </li>
+          <li v-if="preview.rules.length > 5" class="muted">
+            {{ t('import.moreLines', { count: preview.rules.length - 5 }) }}
+          </li>
+        </ul>
+      </div>
 
       <ul v-if="preview.skipped.length" class="preview-skipped">
         <li v-for="line in preview.skipped.slice(0, 5)" :key="line">{{ line }}</li>
@@ -233,5 +259,21 @@ const canApply = () => (preview.value?.nodes.length ?? 0) > 0 && !applying.value
   padding-top: 10px;
   border-top: 1px dashed var(--border-subtle);
   color: var(--warning);
+}
+
+.preview-routing {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-subtle);
+}
+
+.preview-routing-head {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.preview-rules .cell-mono {
+  font-size: 12px;
 }
 </style>

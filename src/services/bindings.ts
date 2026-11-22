@@ -355,6 +355,10 @@ export type ImportOutcome_Deserialize = {
 	imported: number | null,
 	/**  Nodes that were already present (same name + server + port). */
 	duplicates: number | null,
+	/**  Proxy groups added. */
+	groups: number | null,
+	/**  Routing rules added. */
+	rules: number | null,
 	skipped: string[],
 	/**  The full node list after the import. */
 	nodes: Node_Deserialize[],
@@ -371,6 +375,10 @@ export type ImportOutcome_Serialize = {
 	imported: number | null,
 	/**  Nodes that were already present (same name + server + port). */
 	duplicates: number | null,
+	/**  Proxy groups added. */
+	groups: number | null,
+	/**  Routing rules added. */
+	rules: number | null,
 	skipped: string[],
 	/**  The full node list after the import. */
 	nodes: Node_Serialize[],
@@ -385,6 +393,16 @@ export type ImportPreview_Deserialize = {
 	nodes: Node_Deserialize[],
 	/**  One line per input line that could not be understood. */
 	skipped: string[],
+	/**
+	 *  Names of the proxy groups the document declares.
+	 * 
+	 *  A Clash config is not only a server list: its groups say how the nodes
+	 *  are meant to be used together. The preview names them so the user knows
+	 *  an import will also write routing, not just nodes.
+	 */
+	groups: string[],
+	/**  One line per rule the document declares, in file order. */
+	rules: string[],
 };
 
 /**  What a paste would add, shown to the user before anything is written. */
@@ -393,6 +411,16 @@ export type ImportPreview_Serialize = {
 	nodes: Node_Serialize[],
 	/**  One line per input line that could not be understood. */
 	skipped: string[],
+	/**
+	 *  Names of the proxy groups the document declares.
+	 * 
+	 *  A Clash config is not only a server list: its groups say how the nodes
+	 *  are meant to be used together. The preview names them so the user knows
+	 *  an import will also write routing, not just nodes.
+	 */
+	groups: string[],
+	/**  One line per rule the document declares, in file order. */
+	rules: string[],
 };
 
 export type Language = "zh" | "en";

@@ -10,7 +10,9 @@
 
 use serde::Serialize;
 
+use crate::domain::group::GroupKind;
 use crate::domain::node::{Node, Protocol, Security, Transport};
+use crate::domain::routing::RuleMatcher;
 use crate::error::{AppError, AppResult};
 
 /// Result of a parse attempt: what could be read, and what was skipped.
@@ -19,6 +21,32 @@ pub struct ParseReport {
     pub nodes: Vec<Node>,
     /// One human-readable line per line that could not be understood.
     pub skipped: Vec<String>,
+    /// Proxy groups the document declares.
+    ///
+    /// A Clash config is not just a node list: its `proxy-groups` say how the
+    /// nodes are meant to be used together, and dropping them turns a curated
+    /// config into a pile of servers. Members are *names* here because ids only
+    /// exist once the nodes have been merged.
+    pub groups: Vec<ParsedGroup>,
+    /// Rules the document declares, in file order.
+    pub rules: Vec<ParsedRule>,
+}
+
+/// A group as a document writes it: names, not ids.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ParsedGroup {
+    pub name: String,
+    pub kind: GroupKind,
+    /// Member names, as the document spells them.
+    pub members: Vec<String>,
+}
+
+/// A rule as a document writes it: a matcher and the *name* traffic goes to.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ParsedRule {
+    pub matcher: RuleMatcher,
+    /// `DIRECT`, `REJECT`, `PROXY`, a group name, or a node name.
+    pub target: String,
 }
 
 /// Parse a blob of text: a subscription body, a file, or a pasted list.

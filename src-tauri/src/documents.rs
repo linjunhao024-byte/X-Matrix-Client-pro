@@ -8,8 +8,10 @@
 use serde_json::Value as Json;
 use serde_yaml::Value as Yaml;
 
+use crate::domain::group::GroupKind;
 use crate::domain::node::{Node, Protocol, Security, Transport};
-use crate::import::{unique_suffix, ParseReport};
+use crate::domain::routing::RuleMatcher;
+use crate::import::{unique_suffix, ParseReport, ParsedGroup, ParsedRule};
 
 /// Parse whatever a subscription URL handed back.
 pub fn parse_document(text: &str) -> ParseReport {
@@ -324,7 +326,90 @@ fn from_clash_yaml(text: &str) -> Option<ParseReport> {
             }
         }
     }
+
+    // Groups and rules are what make a config more than a server list, and they
+    // are parsed here rather than at import time because they are part of the
+    // document. They still name each other, so only the merge step can turn
+    // names into ids.
+    if let Some(groups) = document.get("proxy-groups").and_then(Yaml::as_sequence) {
+        for group in groups {
+            clash_group(group, &mut report);
+        }
+    }
+    if let Some(rules) = document.get("rules").and_then(Yaml::as_sequence) {
+        for rule in rules {
+            let Some(text) = rule.as_str() else { continue };
+            clash_rule(text, &mut report);
+        }
+    }
     Some(report)
+}
+
+/// Read one `proxy-groups` entry.
+///
+/// Only the two kinds the app can render are kept. `fallback` and
+/// `load-balance` have no equivalent outbound in either kernel, so they become
+/// a `url-test` and the preview says so — a silent rewrite would leave the user
+/// wondering why a config behaves differently than it did in Clash.
+fn clash_group(group: &Yaml, report: &mut ParseReport) {
+    let Some(name) = yaml_str(group, "name") else { return };
+    let kind = match yaml_str(group, "type").unwrap_or_else(|| "select".into()).as_str() {
+        "select" => GroupKind::Select,
+        "url-test" => GroupKind::UrlTest,
+        other => {
+            report.skipped.push(format!(
+                "策略组「{name}」类型 {other}，已按 url-test 导入（两个内核都没有这种出站）"
+            ));
+            GroupKind::UrlTest
+        }
+    };
+    let members: Vec<String> = group
+        .get("proxies")
+        .and_then(Yaml::as_sequence)
+        .map(|items| items.iter().filter_map(Yaml::as_str).map(str::to_string).collect())
+        .unwrap_or_default();
+    if members.is_empty() {
+        report.skipped.push(format!("策略组「{name}」没有成员，已跳过"));
+        return;
+    }
+    report.groups.push(ParsedGroup { name, kind, members });
+}
+
+/// Read one `rules` entry: `TYPE,argument,target[,no-resolve]`.
+///
+/// Anything the app cannot express becomes a line in `skipped` rather than a
+/// rule that quietly matches nothing.
+fn clash_rule(text: &str, report: &mut ParseReport) {
+    let parts: Vec<&str> = text.split(',').map(str::trim).collect();
+    let Some(kind) = parts.first().map(|p| p.to_ascii_uppercase()) else { return };
+    if kind == "MATCH" {
+        report.skipped.push(format!("规则「{text}」是兜底匹配，没有对应写法，已跳过"));
+        return;
+    }
+    let (Some(argument), Some(target)) = (parts.get(1), parts.get(2)) else { return };
+    if argument.is_empty() || target.is_empty() {
+        return;
+    }
+    let matcher = match kind.as_str() {
+        "DOMAIN-SUFFIX" => RuleMatcher::DomainSuffix { value: argument.to_string() },
+        "DOMAIN-KEYWORD" => RuleMatcher::DomainKeyword { value: argument.to_string() },
+        "DOMAIN" | "DOMAIN-FULL" => RuleMatcher::DomainFull { value: argument.to_string() },
+        "IP-CIDR" => RuleMatcher::IpCidr { value: argument.to_string() },
+        "GEOIP" => RuleMatcher::GeoIp { value: argument.to_ascii_lowercase() },
+        "DST-PORT" => match argument.parse::<u16>() {
+            Ok(port) => RuleMatcher::Port { value: port },
+            Err(_) => {
+                report.skipped.push(format!("规则「{text}」的端口不是数字，已跳过"));
+                return;
+            }
+        },
+        "PROCESS-NAME" => RuleMatcher::ProcessName { value: argument.to_string() },
+        other => {
+            report.skipped.push(format!("规则「{text}」类型 {other} 暂不支持，已跳过"));
+            return;
+        }
+    };
+    report.rules.push(ParsedRule { matcher, target: target.to_string() });
 }
 
 fn yaml_str(value: &Yaml, key: &str) -> Option<String> {
@@ -511,6 +596,55 @@ proxies:
         assert_eq!(report.nodes[0].server, "old.example.com");
         assert_eq!(report.nodes[0].port, 10086);
         assert!(matches!(report.nodes[0].protocol, Protocol::Vmess { alter_id: 4, .. }));
+    }
+
+    #[test]
+    fn a_clash_file_brings_its_groups_and_rules() {
+        // A config is not only a server list. Losing these on import would mean
+        // the user rebuilds by hand the routing the subscription already had.
+        let text = r#"proxies:
+  - name: one
+    type: ss
+    server: a.example.com
+    port: 8388
+    cipher: aes-128-gcm
+    password: secret
+proxy-groups:
+  - name: 手动
+    type: select
+    proxies: [one, DIRECT]
+  - name: 自动
+    type: fallback
+    proxies: [one]
+  - name: 空的
+    type: select
+    proxies: []
+rules:
+  - DOMAIN-SUFFIX,example.com,手动
+  - GEOIP,CN,DIRECT
+  - DST-PORT,443,自动
+  - MATCH,手动
+  - RULE-SET,adblock,REJECT
+"#;
+        let report = parse_document(text);
+        assert_eq!(report.nodes.len(), 1);
+        assert_eq!(report.groups.len(), 2, "groups: {:?}", report.groups);
+        assert_eq!(report.groups[0].name, "手动");
+        assert!(matches!(report.groups[0].kind, GroupKind::Select));
+        assert_eq!(report.groups[0].members, vec!["one".to_string(), "DIRECT".to_string()]);
+        // `fallback` has no equivalent outbound in either kernel.
+        assert!(matches!(report.groups[1].kind, GroupKind::UrlTest));
+        assert!(
+            report.skipped.iter().any(|line| line.contains("fallback")),
+            "a rewrite must be announced: {:?}",
+            report.skipped
+        );
+        assert_eq!(report.rules.len(), 3, "rules: {:?}", report.rules);
+        assert!(matches!(report.rules[0].matcher, RuleMatcher::DomainSuffix { .. }));
+        assert_eq!(report.rules[0].target, "手动");
+        assert!(matches!(report.rules[1].matcher, RuleMatcher::GeoIp { .. }));
+        assert!(report.skipped.iter().any(|line| line.contains("兜底")));
+        assert!(report.skipped.iter().any(|line| line.contains("RULE-SET")));
     }
 
     #[test]

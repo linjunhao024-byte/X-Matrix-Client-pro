@@ -1286,8 +1286,8 @@
   ],
   [
     "import.body",
-    "粘贴一行一个的分享链接（vless / vmess / trojan / ss），也可以粘贴整段 Base64 订阅内容，或从文件读取 Clash / sing-box 配置。",
-    "Paste one share link per line (vless / vmess / trojan / ss), paste a whole Base64 subscription, or load a Clash / sing-box config from a file."
+    "粘贴一行一个的分享链接（vless / vmess / trojan / ss），也可以粘贴整段 Base64 订阅内容，或从文件读取 Clash / sing-box 配置。配置里的策略组与规则会一并导入。",
+    "Paste one share link per line (vless / vmess / trojan / ss), paste a whole Base64 subscription, or load a Clash / sing-box config from a file. Its proxy groups and rules are imported too."
   ],
   [
     "import.err.clipboard",
@@ -1668,6 +1668,11 @@
     "nodes.latency.none",
     "未测速",
     "Not tested"
+  ],
+  [
+    "nodes.latency.quic",
+    "走 QUIC",
+    "QUIC"
   ],
   [
     "nodes.latencyHint",
@@ -3098,5 +3103,30 @@
     "editor.err.password",
     "请填写密码",
     "Enter the password"
+  ],
+  [
+    "import.groups",
+    "含 {count} 个策略组",
+    "includes {count} proxy groups"
+  ],
+  [
+    "import.rules",
+    "含 {count} 条规则",
+    "includes {count} routing rules"
+  ],
+  [
+    "import.routingHead",
+    "配置里的策略组与规则会一起导入：",
+    "The config's proxy groups and rules come along:"
+  ],
+  [
+    "nodes.importedGroups",
+    "含 {count} 个策略组",
+    "with {count} proxy groups"
+  ],
+  [
+    "nodes.importedRules",
+    "含 {count} 条规则",
+    "with {count} routing rules"
   ]
 ]

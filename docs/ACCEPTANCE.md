@@ -270,3 +270,26 @@
 **为什么托盘点击没验成**：图标落在通知区的溢出区。`traydump.ps1` 枚举桌面（110 个 UIA 元素）只看到 `Shell_TrayWnd`、`TrayNotifyWnd`、`ToolbarWindow32`（用户提示通知区域，1056,760 72x40）、`TrayClockWClass`、`TrayButton`、`TrayShowDesktopButtonWClass`——我们的图标不在其中任何可寻址元素里，`traymenu.ps1` 按 UIA 找到的 `X-Matrix` 是主窗口本身（`73,5 1135x757 class=Tauri Window`），右键后 `FindWindow('#32768')` 返回 0。这个会话里点不出托盘菜单，所以「点某一行会重启内核」只有代码路径与 `engine_apply` 的既有验收支撑（§11 已在真机验过运行中换节点/模式），没有本节的像素证据。
 
 **为了能验，加了一条日志**：`tray::build` 每次构建都打一行 `托盘菜单 N 个节点 · 模式 X · 内核是否运行`。托盘菜单无法用测试断言，"那一刻托盘以为自己在显示什么"是出问题时第一个要问的问题，而它只有日志能回答。
+
+## 14. 从 Clash 配置导入：节点、策略组、规则一起进来（2026-11-23，云电脑 cloudpc-test）
+
+原来 `documents.rs` 读到 `proxies` 就收工，`proxy-groups` 和 `rules` 被整段忽略——用户从 Clash 搬过来，节点在、规则没了，所有流量都走同一个节点，而界面上没有任何提示。现在三样一起导入，认得的是 `select` / `url-test`，能翻译的规则见下表。
+
+| 项 | 判据 | 结果 |
+| --- | --- | --- |
+| 预览要说清会来什么 | 导入对话框粘一段带 groups/rules 的 Clash YAML，点「解析预览」 | **通过**。OCR 读到「识别 2 个节点」「含 2 个策略组」「含 4 条规则」「3 行无法识别」，预览行是 `Clash-One / 51.79.100.11:8388 / Shadowsocks` 与 `Clash-Two / 51.79.100.12:443` |
+| 导入后落库 | 点「导入」，读远端 `store.json` | **通过**。`nodes: 5`（新增 `Clash-One | Shadowsocks`、`Clash-Two | Trojan`）、`groups: 2`（`manual | select`、`auto | url-test`，成员都是 `clash-*` 的节点 id）、`rules: 4`（`域名后缀 github.com → group`、`域名关键词 google → group`、`地区 cn → direct`、`端口 22 → direct`，全部 `enabled=True`） |
+| 界面确认 | 导入后的 toast | **通过**。OCR 读到「已导入 2 个节点 · 含 2 个策略组 · 含 4 条规则 · 4 行无法识别」 |
+
+**映射表（`documents.rs::clash_rule`）**：`DOMAIN-SUFFIX` / `DOMAIN-KEYWORD` / `DOMAIN`·`DOMAIN-FULL` / `IP-CIDR` / `GEOIP` / `DST-PORT` / `PROCESS-NAME` 一一对应；`MATCH`（兜底）与 `RULE-SET` 记进「无法识别」，不猜。`clash_group` 里 `select` / `url-test` 原样保留，`fallback` / `load-balance` / `relay` 降级成 `url-test` **并在预览里说明**——两个内核都没有这种出站，静默改写会让人以为配置坏了。
+
+**两条不覆盖原则**（`commands/import.rs`）：
+- 同名策略组已存在就跳过，不覆盖用户手工调过的成员。
+- **用户已经有规则时，导入的规则一条都不写**：规则自顶向下求值，把别人的表追加到你排好的兜底之后，等于一条都没生效。宁可整批拒绝并说明。
+
+**成员里的 `DIRECT` / `REJECT`**：Clash 允许策略组把 `DIRECT` 当成员，我们是"组只能含节点"，所以它进不来。这一条**明说**在预览的无法识别里（`策略组「manual」的 1 个成员没能导入（DIRECT），已略过`），不静默缩短成员列表——组悄悄少了成员，用户只会觉得"选了直连却还在走代理"。
+
+**这段验收踩到的坑（工具层面，不是产品缺陷）**：
+- `x-act.ps1` 的 `paste` 原来走 `cmd /c type file | clip`，cmd 用 OEM 代码页（936）读 UTF-8 文件，中文全变 `鑷女年娴` 这种乱码；乱码让 YAML 解析失败，应用于是回落成"逐行分享链接"，报「识别 0 个节点 / 24 行无法识别」。现在用 `[IO.File]::ReadAllText($file, UTF8)` + `Set-Clipboard`，并且粘贴前先 `Ctrl+A` + `Delete` 清空输入框（否则新旧两段文本拼在一起，同样解析不了）。
+- `Set-Clipboard` 偶尔抛「所请求的剪贴板操作失败」，但剪贴板里已经是上一次写对的 UTF-8 内容，粘贴仍然成功——`paste` 幂等重试即可，不要当失败处理。
+- 同名按钮有两个（工具栏「导入」与对话框「导入」），UIA 按名字取第一个会点到工具栏那个；`uia2.ps1` 加了 `invoke_last|导入` 才落到对话框里。

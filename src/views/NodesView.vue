@@ -46,7 +46,7 @@ const tagDraft = ref('')
 const tagRemove = ref(false)
 const tagBusy = ref(false)
 /** id -> milliseconds, or 'timeout' when the handshake never completed. */
-const latency = ref<Record<string, number | 'timeout'>>({})
+const latency = ref<Record<string, number | 'timeout' | 'quic'>>({})
 
 type SortKey = 'manual' | 'name' | 'latency' | 'protocol'
 const sortBy = ref<SortKey>('manual')
@@ -378,7 +378,20 @@ async function startNode(node: Node_Serialize) {
   }
 }
 
+/**
+ * A QUIC node has no TCP handshake to time. Sending the probe anyway would
+ * either time out (which reads as "slow node") or reach a UDP port with a TCP
+ * connect and come back with a number that measured nothing.
+ */
+function speaksQuic(node: Node_Serialize): boolean {
+  return node.protocol.kind === 'Hysteria2' || node.protocol.kind === 'Tuic'
+}
+
 async function measure(node: Node_Serialize) {
+  if (speaksQuic(node)) {
+    latency.value = { ...latency.value, [node.id]: 'quic' }
+    return
+  }
   try {
     const ms = await api.testNodeLatency(node.id)
     latency.value = { ...latency.value, [node.id]: ms }
@@ -418,6 +431,7 @@ async function testAll() {
 function latencyLabel(node: Node_Serialize): string {
   const value = latency.value[node.id]
   if (value === undefined) return t('nodes.latency.none')
+  if (value === 'quic') return t('nodes.latency.quic')
   return value === 'timeout' ? t('common.timeout') : t('nodes.latency.ms', { value })
 }
 
@@ -425,6 +439,7 @@ function latencyTone(node: Node_Serialize): string {
   const value = latency.value[node.id]
   if (value === undefined) return 'latency-unknown'
   if (value === 'timeout') return 'latency-bad'
+  if (value === 'quic') return 'latency-unknown'
   if (value < 150) return 'latency-good'
   if (value < 400) return 'latency-mid'
   return 'latency-bad'
@@ -436,6 +451,10 @@ function isRunning(node: Node_Serialize): boolean {
 
 function onImported(outcome: ImportOutcome_Serialize) {
   const parts = [t('nodes.imported', { imported: outcome.imported ?? 0 })]
+  if ((outcome.groups ?? 0) > 0)
+    parts.push(t('nodes.importedGroups', { count: outcome.groups ?? 0 }))
+  if ((outcome.rules ?? 0) > 0)
+    parts.push(t('nodes.importedRules', { count: outcome.rules ?? 0 }))
   if ((outcome.duplicates ?? 0) > 0)
     parts.push(t('nodes.importedDup', { count: outcome.duplicates ?? 0 }))
   if (outcome.skipped.length > 0)
