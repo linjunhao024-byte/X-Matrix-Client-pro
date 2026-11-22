@@ -1390,6 +1390,66 @@
     "Kernel logs"
   ],
   [
+    "logs.clear",
+    "清空",
+    "Clear"
+  ],
+  [
+    "logs.cleared",
+    "已清空",
+    "Cleared"
+  ],
+  [
+    "logs.copied",
+    "已复制",
+    "Copied"
+  ],
+  [
+    "logs.copy",
+    "复制",
+    "Copy"
+  ],
+  [
+    "logs.empty.body",
+    "内核一旦开始运行，它写的每一行都会出现在这里。",
+    "Once the kernel is running, every line it writes lands here."
+  ],
+  [
+    "logs.empty.title",
+    "还没有日志",
+    "No log yet"
+  ],
+  [
+    "logs.filter",
+    "过滤行…",
+    "Filter lines…"
+  ],
+  [
+    "logs.follow",
+    "跟随",
+    "Follow"
+  ],
+  [
+    "logs.following",
+    "实时",
+    "Live"
+  ],
+  [
+    "logs.noMatch.body",
+    "换个关键词，或者清空过滤框看全部。",
+    "Try another keyword, or clear the filter to see everything."
+  ],
+  [
+    "logs.noMatch.title",
+    "没有匹配的行",
+    "Nothing matches"
+  ],
+  [
+    "logs.visible",
+    "{shown} / {total} 行",
+    "{shown} / {total} lines"
+  ],
+  [
     "match.domain_full",
     "完整域名",
     "Exact domain"
@@ -1448,6 +1508,11 @@
     "nav.home",
     "首页",
     "Home"
+  ],
+  [
+    "nav.logs",
+    "日志",
+    "Logs"
   ],
   [
     "nav.nodes",
@@ -1833,6 +1898,16 @@
     "page.home.title",
     "首页",
     "Home"
+  ],
+  [
+    "page.logs.subtitle",
+    "内核自己写下的每一行，边跑边看。",
+    "What the kernel writes, as it writes it."
+  ],
+  [
+    "page.logs.title",
+    "日志",
+    "Logs"
   ],
   [
     "page.nodes.subtitle",

@@ -122,6 +122,29 @@ pub fn engine_log_tail(runtime: Runtime<'_>, kind: EngineKind, lines: u32) -> Ap
     runtime.log_tail(kind, lines as usize)
 }
 
+/// One page of a kernel log, for the log page's poll loop.
+///
+/// Cheap on purpose: the caller passes back the `size` it last saw, so a quiet
+/// kernel costs an empty string and a metadata call.
+#[tauri::command]
+#[specta::specta]
+pub fn engine_log_delta(
+    runtime: Runtime<'_>,
+    kind: EngineKind,
+    since: f64,
+) -> AppResult<crate::engine::LogDelta> {
+    // f64 on the boundary only: TypeScript has no u64, and specta refuses to
+    // invent one. A cursor is a byte count, well inside f64's exact range.
+    runtime.log_delta(kind, since.max(0.0) as u64)
+}
+
+/// Truncate a kernel's log.
+#[tauri::command]
+#[specta::specta]
+pub fn engine_log_clear(runtime: Runtime<'_>, kind: EngineKind) -> AppResult<()> {
+    runtime.log_clear(kind)
+}
+
 /// Open the engines folder in Explorer, so the user can drop a kernel in.
 #[tauri::command]
 #[specta::specta]

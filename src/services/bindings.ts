@@ -111,6 +111,15 @@ export const commands = {
 	/**  The tail of a kernel log. Empty string means "that kernel never ran". */
 	engineLogTail: (kind: EngineKind, lines: number) => typedError<string, AppError>(__TAURI_INVOKE("engine_log_tail", { kind, lines })),
 	/**
+	 *  One page of a kernel log, for the log page's poll loop.
+	 * 
+	 *  Cheap on purpose: the caller passes back the `size` it last saw, so a quiet
+	 *  kernel costs an empty string and a metadata call.
+	 */
+	engineLogDelta: (kind: EngineKind, since: number | null) => typedError<LogDelta, AppError>(__TAURI_INVOKE("engine_log_delta", { kind, since })),
+	/**  Truncate a kernel's log. */
+	engineLogClear: (kind: EngineKind) => typedError<null, AppError>(__TAURI_INVOKE("engine_log_clear", { kind })),
+	/**
 	 *  Real delay: one HTTP request through the running engine's mixed port.
 	 * 
 	 *  This is the only latency number that includes the tunnel, so it only exists
@@ -377,6 +386,19 @@ export type ImportPreview_Serialize = {
 };
 
 export type Language = "zh" | "en";
+
+/**  One page of a kernel log: the bytes after the caller's cursor. */
+export type LogDelta = {
+	text: string,
+	/**
+	 *  Total size in bytes — the cursor for the next call. A float because
+	 *  TypeScript has no u64 and specta refuses to invent one; byte counts
+	 *  stay exact well past any log a kernel produces.
+	 */
+	size: number | null,
+	/**  The file is shorter than the cursor, so the view must start over. */
+	reset: boolean,
+};
 
 /**
  *  Kernel log verbosity. Lives in the domain because it is persisted, and the

@@ -18,7 +18,7 @@ mod singbox;
 pub mod stats;
 mod xray;
 
-pub use runtime::{EngineBinary, EngineRuntime, EngineStatus};
+pub use runtime::{EngineBinary, EngineRuntime, EngineStatus, LogDelta};
 pub use singbox::SingBoxEngine;
 pub use xray::XrayEngine;
 

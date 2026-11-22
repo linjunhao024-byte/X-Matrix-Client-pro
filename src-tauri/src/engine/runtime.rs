@@ -185,6 +185,21 @@ impl Default for EngineStatus {
     }
 }
 
+/// One page of a kernel log: the bytes after the caller's cursor.
+#[derive(Debug, Clone, Serialize, Type)]
+pub struct LogDelta {
+    pub text: String,
+    /// Total size in bytes — the cursor for the next call. A float because
+    /// TypeScript has no u64 and specta refuses to invent one; byte counts
+    /// stay exact well past any log a kernel produces.
+    pub size: f64,
+    /// The file is shorter than the cursor, so the view must start over.
+    pub reset: bool,
+}
+
+/// How much of a log one page may carry.
+const MAX_LOG_PAGE: u64 = 256 * 1024;
+
 /// One kernel binary this build can drive, and whether it is installed.
 ///
 /// The UI needs this to explain *why* a start button will not work, instead of
@@ -426,6 +441,65 @@ impl EngineRuntime {
         let text: Vec<&str> = collected.into_iter().rev().collect();
         Ok(text.join("
 "))
+    }
+
+    /// The log file a kernel writes to, whether or not it exists yet.
+    pub fn log_path(&self, kind: EngineKind) -> PathBuf {
+        self.log_dir.join(format!("{}.log", kind.as_str()))
+    }
+
+    /// How many bytes a kernel's log holds; 0 when it has never run.
+    pub fn log_size(&self, kind: EngineKind) -> u64 {
+        std::fs::metadata(self.log_path(kind))
+            .map(|meta| meta.len())
+            .unwrap_or(0)
+    }
+
+    /// Everything appended to a kernel's log since `since`, newest last.
+    ///
+    /// The log page polls this instead of re-reading a growing file: `size`
+    /// doubles as the cursor for the next call. When the file is shorter than
+    /// `since` it was rotated or cleared, and `reset` tells the view to drop
+    /// what it has — otherwise the page would show yesterday's run forever.
+    pub fn log_delta(&self, kind: EngineKind, since: u64) -> AppResult<LogDelta> {
+        let path = self.log_path(kind);
+        if !path.exists() {
+            return Ok(LogDelta {
+                text: String::new(),
+                size: 0.0,
+                reset: since != 0,
+            });
+        }
+
+        let size = self.log_size(kind);
+        let reset = size < since;
+        let start = if reset { size.saturating_sub(MAX_LOG_PAGE) } else { since };
+        // Never read more than one page at a time: a kernel that spewed during
+        // a sleep/resume must not hand the webview a 40 MB string.
+        let start = start.max(size.saturating_sub(MAX_LOG_PAGE));
+        let mut text = String::new();
+        if size > start {
+            use std::io::{Read, Seek, SeekFrom};
+            let mut file = std::fs::File::open(&path)?;
+            file.seek(SeekFrom::Start(start))?;
+            file.take(size - start).read_to_string(&mut text)?;
+        }
+        Ok(LogDelta {
+            text,
+            size: size as f64,
+            reset,
+        })
+    }
+
+    /// Drop a kernel's log. Used by the log page's "clear" button; a running
+    /// kernel keeps the handle and starts writing at offset 0 again, which the
+    /// next [`Self::log_delta`] reports as a reset.
+    pub fn log_clear(&self, kind: EngineKind) -> AppResult<()> {
+        let path = self.log_path(kind);
+        if path.exists() {
+            std::fs::File::create(&path)?;
+        }
+        Ok(())
     }
 
     /// Where sing-box rule-set files are written for a run.
@@ -703,6 +777,52 @@ four"
         );
         // A kernel that never ran has no log: empty, not an error.
         assert_eq!(runtime.log_tail(EngineKind::SingBox, 10).unwrap(), "");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn log_delta_hands_back_only_what_was_appended() {
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("test-tmp")
+            .join(format!("log-delta-{}", std::process::id()));
+        let logs = dir.join("logs");
+        std::fs::create_dir_all(&logs).unwrap();
+        let path = logs.join("xray.log");
+        std::fs::write(&path, "first
+").unwrap();
+
+        let runtime = EngineRuntime::new(dir.join("engines"), dir.join("configs"), logs);
+
+        let first = runtime.log_delta(EngineKind::Xray, 0).unwrap();
+        assert_eq!(first.text, "first
+");
+        assert_eq!(first.size, 6.0);
+        assert!(!first.reset);
+
+        // Nothing new: same cursor, no text, no reset.
+        let idle = runtime.log_delta(EngineKind::Xray, first.size as u64).unwrap();
+        assert_eq!(idle.text, "");
+        assert_eq!(idle.size, 6.0);
+        assert!(!idle.reset);
+
+        // Appended lines arrive alone, so the view can just push them.
+        use std::io::Write;
+        let mut file = std::fs::OpenOptions::new().append(true).open(&path).unwrap();
+        file.write_all(b"second
+").unwrap();
+        let more = runtime.log_delta(EngineKind::Xray, first.size as u64).unwrap();
+        assert_eq!(more.text, "second
+");
+        assert_eq!(more.size, 13.0);
+
+        // Cleared while the view holds a cursor: it must be told to start over.
+        runtime.log_clear(EngineKind::Xray).unwrap();
+        let after_clear = runtime.log_delta(EngineKind::Xray, more.size as u64).unwrap();
+        assert!(after_clear.reset);
+        assert_eq!(after_clear.text, "");
+        assert_eq!(after_clear.size, 0.0);
+
         std::fs::remove_dir_all(&dir).ok();
     }
 

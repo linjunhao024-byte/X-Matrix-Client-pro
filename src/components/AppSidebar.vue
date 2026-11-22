@@ -23,6 +23,7 @@ const items: NavItem[] = [
   { name: 'ruleSets', labelKey: 'nav.ruleSets', icon: 'inbox' },
   { name: 'subscriptions', labelKey: 'nav.subscriptions', icon: 'cloud' },
   { name: 'connections', labelKey: 'nav.connections', icon: 'connections' },
+  { name: 'logs', labelKey: 'nav.logs', icon: 'logs' },
   { name: 'settings', labelKey: 'nav.settings', icon: 'settings' },
 ]
 

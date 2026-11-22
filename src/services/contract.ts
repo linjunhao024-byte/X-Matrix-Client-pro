@@ -22,6 +22,7 @@ import type {
   ImportOutcome_Serialize,
   ImportPreview_Serialize,
   Language,
+  LogDelta,
   Node_Deserialize,
   Node_Serialize,
   ProxyGroup_Deserialize,
@@ -138,6 +139,21 @@ export const api = {
   },
   engineLogTail: (kind: EngineKind, lines: number): Promise<string> =>
     unwrap(commands.engineLogTail(kind, lines)),
+
+  /**
+   * What the kernel appended since `since` bytes.
+   *
+   * `size` comes back as `number | null` in the generated contract (specta
+   * renders every f64 that way), so both fields are coalesced here rather than
+   * at each call site.
+   */
+  engineLogDelta: async (kind: EngineKind, since: number): Promise<LogDelta> => {
+    const delta = await unwrap(commands.engineLogDelta(kind, since))
+    return { text: delta.text, size: delta.size ?? 0, reset: delta.reset }
+  },
+  engineLogClear: async (kind: EngineKind): Promise<void> => {
+    await unwrap(commands.engineLogClear(kind))
+  },
   /** Real delay: one request through the running engine's mixed port. */
   proxyLatency: (): Promise<number> => unwrap(commands.proxyLatency()),
 

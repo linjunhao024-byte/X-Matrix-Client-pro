@@ -37,6 +37,8 @@ pub fn builder() -> Builder<tauri::Wry> {
         commands::engine::engine_version,
         commands::engine::engine_open_dir,
         commands::engine::engine_log_tail,
+        commands::engine::engine_log_delta,
+        commands::engine::engine_log_clear,
         commands::engine::proxy_latency,
         commands::engine::proxy_speed,
         commands::engine::close_connection,

@@ -8,6 +8,7 @@ export type IconName =
   | 'nodes'
   | 'routing'
   | 'connections'
+  | 'logs'
   | 'settings'
   | 'sun'
   | 'moon'
@@ -36,6 +37,8 @@ const paths: Record<IconName, string[]> = {
   nodes: ['M4 5.5h16v5H4z', 'M4 13.5h16v5H4z', 'M7.5 8h.01', 'M7.5 16h.01'],
   routing: ['M4 7h4l8 10h4', 'M4 17h4l2-2.5', 'M17 4l3 3-3 3', 'M17 14l3 3-3 3'],
   connections: ['M3 12h3.5l2.5-6 4 12 2.5-6H21'],
+  // Three ruled lines: a log page, not a document.
+  logs: ['M4 6h16', 'M4 12h10', 'M4 18h13'],
   settings: [
     'M4 8h7',
     'M15 8h5',

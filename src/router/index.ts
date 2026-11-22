@@ -54,6 +54,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'page.connections.title', subtitle: 'page.connections.subtitle' },
   },
   {
+    path: '/logs',
+    name: 'logs',
+    component: () => import('../views/LogsView.vue'),
+    meta: { title: 'page.logs.title', subtitle: 'page.logs.subtitle' },
+  },
+  {
     path: '/settings',
     name: 'settings',
     component: () => import('../views/SettingsView.vue'),
