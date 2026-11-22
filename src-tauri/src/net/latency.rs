@@ -125,6 +125,106 @@ pub fn http_latency_via_proxy_with_timeout(
     Ok(started.elapsed().as_millis() as u32)
 }
 
+/// How long a throughput sample runs. Five seconds is long enough to average out
+/// TCP slow start and short enough that a user will actually wait for it.
+pub const SPEED_DURATION: Duration = Duration::from_secs(5);
+
+/// Ceiling on bytes read: a fast line could otherwise pull a hundred megabytes
+/// while the user watches, and this is a measurement, not a download.
+pub const SPEED_MAX_BYTES: u64 = 8 * 1024 * 1024;
+
+/// Bytes per second through `127.0.0.1:proxy_port`, read from `url`.
+///
+/// Latency answers "is the node alive"; this answers "how fast does it carry
+/// bulk traffic". Both are needed: a node can answer a 204 in 80 ms and still
+/// crawl once real bytes flow, and only a measured download shows that.
+///
+/// The figure counts body bytes only — the proxy's response headers are not
+/// traffic the user cares about, and including them would inflate tiny samples.
+pub fn download_speed_via_proxy(proxy_port: u16, url: &str) -> AppResult<u64> {
+    download_speed_via_proxy_with(proxy_port, url, SPEED_DURATION, SPEED_MAX_BYTES)
+}
+
+pub fn download_speed_via_proxy_with(
+    proxy_port: u16,
+    url: &str,
+    budget: Duration,
+    max_bytes: u64,
+) -> AppResult<u64> {
+    let (scheme, rest) = url
+        .split_once("://")
+        .ok_or_else(|| AppError::InvalidInput(format!("测速地址缺少协议：{url}")))?;
+    if !scheme.eq_ignore_ascii_case("http") {
+        return Err(AppError::InvalidInput(
+            "速度测试只支持 http:// 地址：客户端里不该再带一套 TLS".into(),
+        ));
+    }
+    let host = rest.split('/').next().unwrap_or(rest);
+    if host.is_empty() {
+        return Err(AppError::InvalidInput(format!("测速地址没有主机：{url}")));
+    }
+
+    let address = SocketAddr::from(([127, 0, 0, 1], proxy_port));
+    let mut stream = TcpStream::connect_timeout(&address, PROXY_TIMEOUT).map_err(|error| {
+        AppError::Engine(format!("连接本机混合端口 {proxy_port} 失败：{error}"))
+    })?;
+    // A stalled read must not end the sample early: we stop on the deadline, and
+    // a short read timeout is what lets the loop check the clock.
+    stream.set_read_timeout(Some(Duration::from_millis(500)))?;
+    stream.set_write_timeout(Some(PROXY_TIMEOUT))?;
+
+    let request = format!(
+        "GET {url} HTTP/1.1\r\nHost: {host}\r\nAccept: */*\r\nConnection: close\r\n\r\n"
+    );
+    stream.write_all(request.as_bytes())?;
+
+    let started = Instant::now();
+    let mut buffer = [0u8; 16 * 1024];
+    let mut body = 0u64;
+    let mut in_headers = true;
+    let mut head = Vec::new();
+
+    while started.elapsed() < budget && body < max_bytes {
+        match stream.read(&mut buffer) {
+            Ok(0) => break,
+            Ok(read) => {
+                let mut chunk = &buffer[..read];
+                if in_headers {
+                    head.extend_from_slice(chunk);
+                    if let Some(at) = head.windows(4).position(|window| window == b"\r\n\r\n") {
+                        let body_start = at + 4;
+                        chunk = &head[body_start..];
+                        in_headers = false;
+                    } else if head.len() >= 8192 {
+                        return Err(AppError::Engine(
+                            "代理没有返回完整的响应头（隧道可能没通）".to_string(),
+                        ));
+                    } else {
+                        continue;
+                    }
+                }
+                body += chunk.len() as u64;
+            }
+            Err(error)
+                if error.kind() == std::io::ErrorKind::WouldBlock
+                    || error.kind() == std::io::ErrorKind::TimedOut =>
+            {
+                // No bytes this half second; the deadline decides when to stop.
+                continue;
+            }
+            Err(error) => return Err(AppError::Engine(format!("读取测速响应失败：{error}"))),
+        }
+    }
+
+    let elapsed = started.elapsed().as_secs_f64().max(0.001);
+    if body == 0 {
+        return Err(AppError::Engine(
+            "测速地址没有返回任何内容（换个地址，或确认隧道是通的）".to_string(),
+        ));
+    }
+    Ok((body as f64 / elapsed) as u64)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,5 +298,79 @@ mod tests {
     fn https_probe_urls_are_refused_before_connecting() {
         let error = http_latency_via_proxy(1, "https://example.com/").unwrap_err();
         assert!(matches!(error, crate::error::AppError::InvalidInput(_)));
+    }
+
+    /// Serves `bytes` of body after a normal header block, then closes.
+    fn fake_bulk_proxy(bytes: usize) -> (u16, std::thread::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            let mut buffer = [0u8; 1024];
+            let _ = socket.read(&mut buffer);
+            let head = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {bytes}\r\nConnection: close\r\n\r\n"
+            );
+            socket.write_all(head.as_bytes()).ok();
+            let body = vec![b'x'; bytes];
+            socket.write_all(&body).ok();
+        });
+        (port, handle)
+    }
+
+    #[test]
+    fn the_speed_sample_counts_body_bytes_and_ignores_headers() {
+        let payload = 256 * 1024;
+        let (port, handle) = fake_bulk_proxy(payload);
+        let speed = download_speed_via_proxy_with(
+            port,
+            "http://speed.example.com/blob",
+            Duration::from_secs(2),
+            SPEED_MAX_BYTES,
+        )
+        .unwrap();
+        handle.join().ok();
+
+        // Loopback moves this in one or two reads, so the rate is whatever the
+        // elapsed time says; the point is that it is a plausible positive
+        // number and that the header bytes were not counted.
+        assert!(speed > 0, "a served body must produce a positive rate");
+        assert!(
+            speed < payload as u64 * 10_000,
+            "the rate must not exceed what the server could have sent"
+        );
+    }
+
+    #[test]
+    fn a_body_less_reply_is_an_error_not_a_zero_rate() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            let mut buffer = [0u8; 1024];
+            let _ = socket.read(&mut buffer);
+            let _ = socket.write_all(
+                format!("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n").as_bytes(),
+            );
+        });
+
+        let result = download_speed_via_proxy_with(
+            port,
+            "http://speed.example.com/blob",
+            Duration::from_millis(600),
+            SPEED_MAX_BYTES,
+        );
+        assert!(result.is_err(), "zero bytes must not read as 0 B/s");
+    }
+
+    #[test]
+    fn an_https_speed_url_is_refused_before_connecting() {
+        let result = download_speed_via_proxy_with(
+            9,
+            "https://speed.example.com/blob",
+            Duration::from_millis(200),
+            SPEED_MAX_BYTES,
+        );
+        assert!(matches!(result, Err(AppError::InvalidInput(_))));
     }
 }

@@ -118,6 +118,9 @@ export const en: Record<string, string> = {
   "home.session.label": "This session",
   "home.session.reset": "Reset",
   "home.kernelVersion": "Kernel version: {version}",
+  "home.control.speed": "Speed test",
+  "home.speed.testing": "Measuring…",
+  "home.speed.result": "Download speed {rate}",
   // nodes
   "nodes.new": "New node",
   "nodes.import": "Import",

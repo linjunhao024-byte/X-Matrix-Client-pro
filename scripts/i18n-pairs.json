@@ -2778,5 +2778,20 @@
     "nodes.manualHint",
     "上移 / 下移调整顺序，顺序会保存下来",
     "Use the arrows to reorder; the order is saved"
+  ],
+  [
+    "home.control.speed",
+    "测速",
+    "Speed test"
+  ],
+  [
+    "home.speed.testing",
+    "测速中…",
+    "Measuring…"
+  ],
+  [
+    "home.speed.result",
+    "下载速度 {rate}",
+    "Download speed {rate}"
   ]
 ]

@@ -27,6 +27,9 @@ const logOpen = ref(false)
 const configOpen = ref(false)
 /** Real delay of the running tunnel, cleared whenever the engine changes. */
 const realDelay = ref<number | null>(null)
+/** Bytes per second through the tunnel, from the last speed sample. */
+const realSpeed = ref<number | null>(null)
+const speedPending = ref(false)
 const delayPending = ref(false)
 const delayError = ref<string | null>(null)
 
@@ -115,7 +118,29 @@ onMounted(async () => {
 
 function resetDelay(): void {
   realDelay.value = null
+  realSpeed.value = null
   delayError.value = null
+}
+
+/**
+ * Throughput: read a body through the tunnel for a few seconds and divide.
+ *
+ * Separate from the delay probe on purpose — a node can answer in 80 ms and
+ * still crawl on bulk transfer, and only a measured download shows that. Shares
+ * `delayError` because both failures mean the same thing to the user: the
+ * tunnel is not carrying traffic.
+ */
+async function testSpeed(): Promise<void> {
+  speedPending.value = true
+  delayError.value = null
+  try {
+    realSpeed.value = await api.proxySpeed()
+  } catch (error) {
+    realSpeed.value = null
+    delayError.value = describeError(error)
+  } finally {
+    speedPending.value = false
+  }
 }
 
 /**
@@ -269,10 +294,22 @@ async function stopEngine() {
             >
               {{ delayPending ? t('home.realDelay.testing') : t('home.control.realDelay') }}
             </button>
+            <button
+              v-if="engine.running"
+              class="btn btn-sm"
+              type="button"
+              :disabled="speedPending"
+              @click="testSpeed()"
+            >
+              {{ speedPending ? t('home.speed.testing') : t('home.control.speed') }}
+            </button>
           </div>
           <p v-if="delayError" class="field-hint">{{ delayError }}</p>
           <p v-else-if="realDelay !== null" class="field-hint">
             {{ t('home.realDelay.result', { ms: realDelay }) }}
+          </p>
+          <p v-if="realSpeed !== null && !delayError" class="field-hint">
+            {{ t('home.speed.result', { rate: formatRate(realSpeed) }) }}
           </p>
         </div>
       </div>

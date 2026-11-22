@@ -87,6 +87,34 @@ pub fn engine_version(runtime: Runtime<'_>, kind: EngineKind) -> AppResult<Strin
     runtime.version(kind)
 }
 
+/// Download throughput through the running tunnel, in bytes per second.
+///
+/// Same probe address as the real-delay button, so the two numbers describe the
+/// same path: one how long a round trip takes, the other how much it carries.
+#[tauri::command]
+#[specta::specta]
+pub async fn proxy_speed(state: State<'_, AppState>, runtime: Runtime<'_>) -> AppResult<f64> {
+    let port = {
+        let status = runtime.status();
+        if !status.running {
+            return Err(AppError::Engine(
+                "内核没在运行，测不到速度；先启动内核".to_string(),
+            ));
+        }
+        status.mixed_port
+    };
+    let url = {
+        let settings = state.settings.read();
+        if settings.test_url.trim().is_empty() {
+            latency::PROBE_URL.to_string()
+        } else {
+            settings.test_url.clone()
+        }
+    };
+    let bytes_per_second = run_blocking(move || latency::download_speed_via_proxy(port, &url)).await?;
+    Ok(bytes_per_second as f64)
+}
+
 /// The tail of a kernel log. Empty string means "that kernel never ran".
 #[tauri::command]
 #[specta::specta]

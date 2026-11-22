@@ -130,6 +130,9 @@ export const api = {
     unwrap(commands.engineLogTail(kind, lines)),
   /** Real delay: one request through the running engine's mixed port. */
   proxyLatency: (): Promise<number> => unwrap(commands.proxyLatency()),
+
+  /** Download throughput through the tunnel, in bytes per second. */
+  proxySpeed: (): Promise<number | null> => unwrap(commands.proxySpeed()),
   /** sing-box only: drop one live connection. */
   closeConnection: (id: string): Promise<void> => unwrap(commands.closeConnection(id)).then(() => undefined),
   /** Write the whole configuration to a file the user picks; null = cancelled. */

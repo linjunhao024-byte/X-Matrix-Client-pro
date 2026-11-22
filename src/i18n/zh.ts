@@ -118,6 +118,9 @@ export const zh: Record<string, string> = {
   "home.session.label": "本次会话",
   "home.session.reset": "清零",
   "home.kernelVersion": "内核版本：{version}",
+  "home.control.speed": "测速",
+  "home.speed.testing": "测速中…",
+  "home.speed.result": "下载速度 {rate}",
   // nodes
   "nodes.new": "新增节点",
   "nodes.import": "导入",

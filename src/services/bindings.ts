@@ -109,6 +109,13 @@ export const commands = {
 	 *  stays available for the pre-start case.
 	 */
 	proxyLatency: () => typedError<number, AppError>(__TAURI_INVOKE("proxy_latency")),
+	/**
+	 *  Download throughput through the running tunnel, in bytes per second.
+	 * 
+	 *  Same probe address as the real-delay button, so the two numbers describe the
+	 *  same path: one how long a round trip takes, the other how much it carries.
+	 */
+	proxySpeed: () => typedError<number | null, AppError>(__TAURI_INVOKE("proxy_speed")),
 	/**  Drop one live connection (sing-box only — Xray has no connection table). */
 	closeConnection: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("close_connection", { id })),
 	/**  Start `node_id` on `kind`. Stops whatever was running first. */
