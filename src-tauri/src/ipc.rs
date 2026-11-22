@@ -51,6 +51,7 @@ pub fn builder() -> Builder<tauri::Wry> {
         commands::group::select_group_member,
         commands::group::toggle_group,
         commands::routing::list_rules,
+        commands::routing::test_domain,
         commands::routing::upsert_rule,
         commands::routing::delete_rule,
         commands::routing::move_rule,

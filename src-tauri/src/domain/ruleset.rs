@@ -35,6 +35,82 @@ pub enum SetEntry {
     IpCidr { value: String },
 }
 
+impl SetEntry {
+    /// Does this entry cover `host`? Same `None`-free contract as the routing
+    /// matcher: a set entry either matches or it does not.
+    pub fn matches_domain(&self, host: &str) -> bool {
+        let host = host.trim().trim_end_matches('.').to_ascii_lowercase();
+        if host.is_empty() {
+            return false;
+        }
+        match self {
+            Self::DomainFull { value } => host == value.trim().to_ascii_lowercase(),
+            Self::DomainSuffix { value } => {
+                let suffix = value.trim().trim_start_matches('.').to_ascii_lowercase();
+                !suffix.is_empty()
+                    && (host == suffix || host.ends_with(&format!(".{suffix}")))
+            }
+            Self::DomainKeyword { value } => {
+                let needle = value.trim().to_ascii_lowercase();
+                !needle.is_empty() && host.contains(&needle)
+            }
+            Self::IpCidr { .. } => host
+                .parse::<std::net::IpAddr>()
+                .map(|address| {
+                    let Self::IpCidr { value } = self else {
+                        return false;
+                    };
+                    ip_matches(value, address).unwrap_or(false)
+                })
+                .unwrap_or(false),
+        }
+    }
+}
+
+/// Is `address` inside the CIDR `range`? Both v4 and v6, with a bare address
+/// accepted as a /32 (that is how lists write single hosts).
+pub fn ip_matches(range: &str, address: std::net::IpAddr) -> Result<bool, String> {
+    use std::net::IpAddr;
+
+    let (base, prefix) = match range.split_once('/') {
+        Some((base, prefix)) => {
+            let prefix: u8 = prefix
+                .trim()
+                .parse()
+                .map_err(|_| format!("前缀长度不是数字：{range}"))?;
+            (base.trim(), Some(prefix))
+        }
+        None => (range.trim(), None),
+    };
+    let base: IpAddr = base
+        .parse()
+        .map_err(|_| format!("不是合法的 IP 或网段：{range}"))?;
+    let (base_bits, address_bits, width): (Vec<u8>, Vec<u8>, u8) = match (base, address) {
+        (IpAddr::V4(base), IpAddr::V4(address)) => {
+            (base.octets().to_vec(), address.octets().to_vec(), 32)
+        }
+        (IpAddr::V6(base), IpAddr::V6(address)) => {
+            (base.octets().to_vec(), address.octets().to_vec(), 128)
+        }
+        // Mixed families never match; that is a real answer, not an error.
+        _ => return Ok(false),
+    };
+    let prefix = prefix.unwrap_or(width);
+    if prefix > width {
+        return Err(format!("前缀长度超过 {width}：{range}"));
+    }
+    let full_bytes = prefix as usize / 8;
+    let leftover_bits = prefix % 8;
+    if base_bits[..full_bytes] != address_bits[..full_bytes] {
+        return Ok(false);
+    }
+    if leftover_bits == 0 {
+        return Ok(true);
+    }
+    let mask = 0xffu8 << (8 - leftover_bits);
+    Ok(base_bits[full_bytes] & mask == address_bits[full_bytes] & mask)
+}
+
 /// How the set is kept up to date.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "kebab-case")]
@@ -302,5 +378,35 @@ mod tests {
         set.updated_at_ms = Some(1_000_000.0);
         assert!(!set.is_due(1_000_000.0 + 60_000.0 * 59.0));
         assert!(set.is_due(1_000_000.0 + 60_000.0 * 61.0));
+    }
+    #[test]
+    fn a_cidr_matches_inside_only() {
+        let inside: std::net::IpAddr = "192.168.1.10".parse().unwrap();
+        let outside: std::net::IpAddr = "192.168.2.10".parse().unwrap();
+        assert!(ip_matches("192.168.1.0/24", inside).unwrap());
+        assert!(!ip_matches("192.168.1.0/24", outside).unwrap());
+        // A bare address is a single host, which is how lists write one.
+        assert!(ip_matches("192.168.1.10", inside).unwrap());
+        assert!(!ip_matches("192.168.1.10", outside).unwrap());
+    }
+
+    #[test]
+    fn a_partial_byte_prefix_is_compared_bit_by_bit() {
+        let inside: std::net::IpAddr = "10.1.255.255".parse().unwrap();
+        let outside: std::net::IpAddr = "10.2.0.0".parse().unwrap();
+        assert!(ip_matches("10.1.0.0/16", inside).unwrap());
+        assert!(!ip_matches("10.1.0.0/16", outside).unwrap());
+        // /12 cuts mid-byte, so the mask has to be applied, not byte-compared.
+        let a: std::net::IpAddr = "10.16.0.1".parse().unwrap();
+        let b: std::net::IpAddr = "10.32.0.1".parse().unwrap();
+        assert!(ip_matches("10.16.0.0/12", a).unwrap());
+        assert!(!ip_matches("10.16.0.0/12", b).unwrap());
+    }
+
+    #[test]
+    fn a_bad_range_is_an_error_not_a_silent_match() {
+        let address: std::net::IpAddr = "10.0.0.1".parse().unwrap();
+        assert!(ip_matches("not-a-cidr", address).is_err());
+        assert!(ip_matches("10.0.0.0/99", address).is_err());
     }
 }

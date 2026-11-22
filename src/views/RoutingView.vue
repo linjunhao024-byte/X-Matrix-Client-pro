@@ -5,7 +5,7 @@ import EmptyState from '../components/EmptyState.vue'
 import ModalDialog from '../components/ModalDialog.vue'
 import RuleEditor from '../components/RuleEditor.vue'
 import { t } from '../i18n'
-import { describeError, type RoutingRule } from '../services/contract'
+import { api, describeError, type RuleAction, type RoutingRule, type RuleTest_Serialize } from '../services/contract'
 import { useGroupsStore } from '../stores/groups'
 import { useRoutingStore } from '../stores/routing'
 import { useRuleSetsStore } from '../stores/rulesets'
@@ -19,6 +19,41 @@ const editing = ref<RoutingRule | null>(null)
 const pendingDelete = ref<RoutingRule | null>(null)
 const actionError = ref<string | null>(null)
 const busy = ref(false)
+
+const testOpen = ref(false)
+const testDomainInput = ref('')
+const testResult = ref<RuleTest_Serialize | null>(null)
+const testError = ref<string | null>(null)
+const testing = ref(false)
+
+function openTest() {
+  testResult.value = null
+  testError.value = null
+  testOpen.value = true
+}
+
+/**
+ * Dry run the table against one hostname.
+ *
+ * The kernel evaluates top to bottom and stops at the first hit, so the answer
+ * that matters is the first match — showing every rule that would match would
+ * mislead. `skipped` counts geoip / port / process rules, which cannot be
+ * judged from a name; without that number "no rule matched" would be a lie.
+ */
+async function runTest() {
+  const domain = testDomainInput.value.trim()
+  if (!domain) return
+  testing.value = true
+  testError.value = null
+  try {
+    testResult.value = await api.testDomain(domain)
+  } catch (cause) {
+    testResult.value = null
+    testError.value = describeError(cause)
+  } finally {
+    testing.value = false
+  }
+}
 
 const isEmpty = computed(() => store.loaded && store.items.length === 0)
 const enabledCount = computed(() => store.items.filter((rule) => rule.enabled).length)
@@ -124,6 +159,12 @@ function actionLabel(rule: RoutingRule): string {
   return t('action.group.hint', { name: group?.name ?? action.group_id })
 }
 
+/// Same wording for the dry-run result, which has no rule object to pass.
+function actionText(action: RuleAction | null): string {
+  if (!action) return ''
+  return actionLabel({ action } as RoutingRule)
+}
+
 function actionClass(rule: RoutingRule): string {
   const kind = rule.action.kind
   if (kind === 'direct') return 'badge badge-success'
@@ -151,6 +192,10 @@ function actionClass(rule: RoutingRule): string {
         <button class="btn" type="button" :disabled="store.loading" @click="store.load(true)">
           <AppIcon name="refresh" :size="15" />
           {{ t('common.refresh') }}
+        </button>
+        <button class="btn" type="button" @click="openTest">
+          <AppIcon name="check" :size="15" />
+          {{ t('routing.test') }}
         </button>
         <button class="btn btn-primary" type="button" @click="openCreate">
           <AppIcon name="plus" :size="15" />
@@ -244,6 +289,47 @@ function actionClass(rule: RoutingRule): string {
 
     <RuleEditor :open="editorOpen" :rule="editing" @close="editorOpen = false" @submit="submit" />
 
+    <ModalDialog :open="testOpen" :title="t('routing.test.title')" :width="520" @close="testOpen = false">
+      <p class="muted">{{ t('routing.test.body') }}</p>
+
+      <div class="field">
+        <label class="field-label" for="test-domain">{{ t('routing.test.label') }}</label>
+        <div class="row">
+          <input
+            id="test-domain"
+            v-model="testDomainInput"
+            class="input input-mono"
+            type="text"
+            placeholder="www.example.com"
+            spellcheck="false"
+            @keyup.enter="runTest"
+          />
+          <button class="btn btn-primary" type="button" :disabled="testing || !testDomainInput.trim()" @click="runTest">
+            {{ testing ? t('routing.test.running') : t('routing.test.run') }}
+          </button>
+        </div>
+      </div>
+
+      <p v-if="testError" class="alert">{{ testError }}</p>
+
+      <div v-else-if="testResult" class="test-result">
+        <template v-if="testResult.rule">
+          <p class="test-verdict">
+            {{ t('routing.test.hit', { rule: testResult.rule }) }}
+          </p>
+          <p class="muted">{{ t('routing.test.action', { action: actionText(testResult.action) }) }}</p>
+        </template>
+        <p v-else class="test-verdict">{{ t('routing.test.miss') }}</p>
+        <p v-if="(testResult.skipped ?? 0) > 0" class="muted">
+          {{ t('routing.test.skipped', { count: testResult.skipped ?? 0 }) }}
+        </p>
+      </div>
+
+      <template #footer>
+        <button class="btn" type="button" @click="testOpen = false">{{ t('common.close') }}</button>
+      </template>
+    </ModalDialog>
+
     <ModalDialog
       :open="pendingDelete !== null"
       :title="t('routing.delete.title')"
@@ -266,6 +352,17 @@ function actionClass(rule: RoutingRule): string {
   /* A narrow window must scroll a wide table instead of clipping its action
      column out of reach. */
   overflow-x: auto;
+}
+
+.test-result {
+  padding: 10px 12px;
+  border-radius: var(--radius-card);
+  background: var(--surface-sunken);
+}
+
+.test-verdict {
+  margin: 0 0 4px;
+  font-weight: 600;
 }
 
 .col-order {

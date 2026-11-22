@@ -142,6 +142,7 @@ mod tests {
         assert_eq!(preview.nodes[0].name, "clash-one");
     }
 
+    #[test]
     fn a_sing_box_file_is_imported_as_a_document() {
         let text = r#"{"outbounds":[{"type":"trojan","tag":"t","server":"c.example.com","server_port":443,"password":"pw"}]}"#;
         let preview = parse_anything(text);

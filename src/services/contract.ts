@@ -28,6 +28,7 @@ import type {
   ProxyGroup_Serialize,
   ProxyMode,
   RefreshOutcome_Serialize,
+  RuleTest_Serialize,
   RoutingRule,
   RuleAction,
   RuleMatcher,
@@ -108,6 +109,9 @@ export const api = {
 
   listRules: (): Promise<RoutingRule[]> => unwrap(commands.listRules()),
   upsertRule: (rule: RoutingRule): Promise<RoutingRule[]> => unwrap(commands.upsertRule(rule)),
+
+  /** Which rule would catch this host, and what it would do. */
+  testDomain: (domain: string): Promise<RuleTest_Serialize> => unwrap(commands.testDomain(domain)),
   deleteRule: (id: string): Promise<RoutingRule[]> => unwrap(commands.deleteRule(id)),
   moveRule: (id: string, delta: number): Promise<RoutingRule[]> => unwrap(commands.moveRule(id, delta)),
   toggleRule: (id: string): Promise<RoutingRule[]> => unwrap(commands.toggleRule(id)),
@@ -183,6 +187,7 @@ export function describeError(error: unknown): string {
 }
 
 export type {
+  RuleTest_Serialize,
   AppError,
   AppInfo,
   AppPaths,

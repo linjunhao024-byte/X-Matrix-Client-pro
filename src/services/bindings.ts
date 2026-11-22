@@ -146,6 +146,13 @@ export const commands = {
 	selectGroupMember: (id: string, nodeId: string) => typedError<ProxyGroup_Serialize[], AppError>(__TAURI_INVOKE("select_group_member", { id, nodeId })),
 	toggleGroup: (id: string) => typedError<ProxyGroup_Serialize[], AppError>(__TAURI_INVOKE("toggle_group", { id })),
 	listRules: () => typedError<RoutingRule[], AppError>(__TAURI_INVOKE("list_rules")),
+	/**
+	 *  Which rule catches `domain`?
+	 * 
+	 *  Rules are evaluated in order and the first hit wins, exactly as the kernel
+	 *  does it, so this is a faithful dry run rather than a separate opinion.
+	 */
+	testDomain: (domain: string) => typedError<RuleTest_Serialize, AppError>(__TAURI_INVOKE("test_domain", { domain })),
 	upsertRule: (rule: RoutingRule) => typedError<RoutingRule[], AppError>(__TAURI_INVOKE("upsert_rule", { rule })),
 	deleteRule: (id: string) => typedError<RoutingRule[], AppError>(__TAURI_INVOKE("delete_rule", { id })),
 	/**
@@ -548,6 +555,37 @@ export type RuleSet_Serialize = {
 	 */
 	entry_count: number | null,
 	last_error: string | null,
+};
+
+/**  What the rule table would do with one hostname. */
+export type RuleTest = RuleTest_Serialize | RuleTest_Deserialize;
+
+/**  What the rule table would do with one hostname. */
+export type RuleTest_Deserialize = {
+	/**  Name of the rule that caught it, or `None` when nothing did. */
+	rule?: string | null,
+	/**  The action that rule takes; `None` means "fell through to the default". */
+	action?: RuleAction | null,
+	/**
+	 *  Rules that could not be judged from a hostname alone (geoip / port /
+	 *  process) and were skipped. Reporting them is the difference between
+	 *  "your rules do not cover this" and "I could not tell".
+	 */
+	skipped: number | null,
+};
+
+/**  What the rule table would do with one hostname. */
+export type RuleTest_Serialize = {
+	/**  Name of the rule that caught it, or `None` when nothing did. */
+	rule: string | null,
+	/**  The action that rule takes; `None` means "fell through to the default". */
+	action: RuleAction | null,
+	/**
+	 *  Rules that could not be judged from a hostname alone (geoip / port /
+	 *  process) and were skipped. Reporting them is the difference between
+	 *  "your rules do not cover this" and "I could not tell".
+	 */
+	skipped: number | null,
 };
 
 export type Security = Security_Serialize | Security_Deserialize;

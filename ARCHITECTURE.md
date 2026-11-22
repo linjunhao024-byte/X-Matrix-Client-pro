@@ -274,7 +274,7 @@ pub enum StatsChannel {
 
 | 层 | 状态 | 证据 |
 |---|---|---|
-| 契约层 | 完成 | `tauri-specta` 生成 `src/services/bindings.ts`，58 个命令；`npm run check:contract` 校验不过期 |
+| 契约层 | 完成 | `tauri-specta` 生成 `src/services/bindings.ts`，59 个命令；`npm run check:contract` 校验不过期 |
 | 引擎层 | Xray + sing-box 配置渲染、启停、就绪探测、统计读取、日志尾部 | `cargo test --lib`（全库 182 项）；渲染是纯函数，测试不需要任何内核二进制 |
 | 数据层 | 单文件 JSON 原子替换 + 坏文件留证 | `store.rs`，重启后节点/设置/规则都在 |
 | 导入 | vless / vmess / trojan / ss + 整包 base64 | `import.rs`，不支持的行进 `skipped` 而不是报错 |
@@ -284,6 +284,7 @@ pub enum StatsChannel {
 | 启动行为 | 「启动时隐藏窗口」「关闭窗口时最小化到托盘」两个设置：前者在 setup 末尾 `window.hide()`（先创建再隐藏，避免闪一下）；后者决定 × 是 hide 还是 `quit_cleanly`（还原系统代理 + 杀内核 + 退出）。没有托盘时 × 一律退出——否则窗口既看不见又关不掉 | `src-tauri/src/lib.rs`、`domain/settings.rs`（2 项测试） |
 | 系统集成 | 开机自启（写 HKCU Run）、启动时自动连接（`settings.auto_connect` + 记住上次的节点与内核）、托盘三动词（显示窗口 / 启停内核 / 退出，标签与 tooltip 跟随状态）、节点 TCP 测速、流量曲线、内核日志（级别可选 warn/info/debug）、配置预览 | `autostart.rs` / `lib.rs` 的 `auto_connect`、`toggle_kernel`、`refresh_tray` / `net/latency.rs` / `runtime.log_tail` |
 | 速度测试 | 完成 | `proxy_speed` 经隧道读 5 秒 / 上限 8 MiB 的响应体算吞吐（`net/latency.rs::download_speed_via_proxy`，只数正文不数响应头），首页「测速」按钮显示 `下载速度 xx MB/s` |
+| 规则试跑 | 完成 | `test_domain` 按内核的顺序从上到下匹配，只报第一条命中；geoip / 端口 / 进程三种规则无法只凭域名判断，如实计入 `skipped` 而不是猜 |
 | 文件导入导出 | 完成 | 导入会先按分享链接解析，一条都不认得时再按整份文档（Clash YAML / sing-box JSON）解析——粘贴一份配置不该静默得到零个节点； 节点链接可「保存为文件」（`save_text_file`），导入对话框可「从文件读取」（`open_text_file`，4 MB 上限）——订阅、Clash 配置、链接列表都只是文本，所以导入只有一条代码路径 |
 | 内核版本 | 完成 | 首页显示已装内核自报的版本（`engine_version` 跑 `version`，不读配置、不开端口）；关于页列出与 V2RayN / Clash Verge 的能力对照，TUN / PAC / 在线更新内核明确写「不支持」并给原因 |
 | 托盘 | 关窗隐藏、左键唤回、菜单退出（退出前先还原代理再停内核） | `lib.rs` 的 `build_tray` / `quit_cleanly` |

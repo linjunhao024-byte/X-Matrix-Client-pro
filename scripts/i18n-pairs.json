@@ -2813,5 +2813,55 @@
     "nodes.fromSubscription",
     "订阅：{name}",
     "Subscription: {name}"
+  ],
+  [
+    "routing.test",
+    "试一试",
+    "Test"
+  ],
+  [
+    "routing.test.title",
+    "这条域名会走哪条规则",
+    "Which rule catches this host"
+  ],
+  [
+    "routing.test.body",
+    "按当前规则表从上到下匹配，命中第一条就停——和内核的判断顺序一致。不启动内核也能用。",
+    "Rules are evaluated top to bottom and the first hit wins, exactly as the kernel does it. Works without starting a kernel."
+  ],
+  [
+    "routing.test.label",
+    "域名",
+    "Hostname"
+  ],
+  [
+    "routing.test.run",
+    "判断",
+    "Check"
+  ],
+  [
+    "routing.test.running",
+    "判断中…",
+    "Checking…"
+  ],
+  [
+    "routing.test.hit",
+    "命中规则「{rule}」",
+    "Matched rule \"{rule}\""
+  ],
+  [
+    "routing.test.action",
+    "去向：{action}",
+    "Goes to: {action}"
+  ],
+  [
+    "routing.test.miss",
+    "没有规则命中，走默认出口（代理）。",
+    "No rule matched, so it uses the default outbound (proxy)."
+  ],
+  [
+    "routing.test.skipped",
+    "有 {count} 条规则需要 IP 库、端口或进程名才能判断，已跳过。",
+    "{count} rules need an IP database, a port or a process name to judge, and were skipped."
   ]
 ]
