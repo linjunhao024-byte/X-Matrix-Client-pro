@@ -244,7 +244,7 @@ async function stopEngine() {
           </select>
         </label>
 
-        <div class="field">
+        <div class="field control-engine">
           <span class="field-label">{{ t('home.control.engine') }}</span>
           <div class="segmented">
             <button
@@ -582,6 +582,22 @@ async function stopEngine() {
 .control-node {
   flex: 1;
   min-width: 240px;
+}
+
+/*
+ * Fixed width so the segmented control does not slide sideways when the
+ * "locked while running" hint appears: a button that moves between the two
+ * states is a button people mis-click, and it broke my own click automation.
+ */
+.control-engine {
+  width: 236px;
+  flex: none;
+}
+
+.control-engine .field-hint {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .control-actions {
