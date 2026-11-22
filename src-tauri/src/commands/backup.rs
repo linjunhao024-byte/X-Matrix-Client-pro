@@ -181,6 +181,7 @@ pub async fn backup_load(
     };
 
     state.replace(backup.document)?;
+    crate::refresh_tray(&app);
     Ok(Some(summary))
 }
 

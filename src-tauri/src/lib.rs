@@ -14,10 +14,10 @@ mod state;
 mod autostart;
 mod store;
 mod sysproxy;
+mod tray;
 
 use std::sync::Arc;
 
-use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, WindowEvent};
 
@@ -191,6 +191,9 @@ fn auto_connect(app: AppHandle) {
             Ok(status) => {
                 eprintln!("x-matrix: 已自动连接 {}", status.node_name);
                 commands::engine::remember_session(&state, kind, &node_id);
+                // The tray was built before this thread ran, so its toggle row
+                // still says "start"; the kernel is now up.
+                refresh_tray(&app);
             }
             Err(error) => eprintln!("x-matrix: 自动连接失败：{error}"),
         }
@@ -255,40 +258,13 @@ fn tray_is_up(app: &AppHandle) -> bool {
         .unwrap_or(false)
 }
 
-/// Tray strings follow the saved language. Changing the language therefore
-/// needs a restart for the tray to follow — the menu is built once, and
-/// rebuilding it on every settings save would be a lot of machinery for a
-/// label nobody reads twice.
-fn tray_labels(language: crate::domain::settings::Language) -> [&'static str; 4] {
-    match language {
-        crate::domain::settings::Language::Zh => ["显示窗口", "启动内核", "停止内核", "退出 X-Matrix"],
-        crate::domain::settings::Language::En => ["Show window", "Start kernel", "Stop kernel", "Quit X-Matrix"],
-    }
-}
-
-/// The toggle menu item, kept so its label and the tooltip can follow the
-/// kernel state without rebuilding the menu.
-pub struct TrayUi {
-    toggle: tauri::menu::MenuItem<tauri::Wry>,
-    labels: [&'static str; 4],
-}
-
-/// The tray icon and its three verbs.
+/// The tray icon and its menu.
 ///
 /// The icon is kept in managed state on purpose: a `TrayIcon` that is dropped
 /// is removed from the notification area, so a local binding would make the
 /// tray disappear the moment setup returned.
 fn build_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    let labels = tray_labels(
-        app.try_state::<AppState>()
-            .map(|state| state.settings.read().language)
-            .unwrap_or(crate::domain::settings::Language::Zh),
-    );
-    let show = MenuItem::with_id(app, "show", labels[0], true, None::<&str>)?;
-    let toggle = MenuItem::with_id(app, "toggle", labels[1], true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", labels[3], true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&show, &toggle, &quit])?;
-
+    let menu = tray::build(app.handle())?;
     let icon = app
         .default_window_icon()
         .cloned()
@@ -303,7 +279,8 @@ fn build_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             "show" => reveal(app),
             "toggle" => toggle_kernel(app),
             "quit" => quit_cleanly(app),
-            _ => {}
+            // Everything else is a node or a proxy mode picked from a submenu.
+            other => tray::on_row(app, other),
         })
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click {
@@ -318,8 +295,7 @@ fn build_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .build(app)?;
 
     app.manage(tray);
-    app.manage(TrayUi { toggle, labels });
-    refresh_tray(app.handle());
+    set_tray_tooltip(app.handle());
     Ok(())
 }
 
@@ -378,23 +354,39 @@ fn toggle_kernel(app: &AppHandle) {
 
 /// Make the toggle label and the tooltip describe what is actually running.
 pub fn refresh_tray(app: &AppHandle) {
-    let Some(ui) = app.try_state::<TrayUi>() else {
+    let Some(tray) = app.tray_by_id("main") else {
+        return;
+    };
+
+    // Rebuild rather than patch: the check marks on the node rows and the
+    // start/stop wording all move together, and a half-updated menu is how you
+    // end up clicking "stop" while the kernel is already stopped.
+    match tray::build(app) {
+        Ok(menu) => {
+            let _ = tray.set_menu(Some(menu));
+        }
+        Err(error) => eprintln!("x-matrix: 托盘菜单重建失败：{error}"),
+    }
+
+    set_tray_tooltip(app);
+}
+
+/// The tooltip is the only part of the tray that is not rebuilt: it carries the
+/// live node name and port, which change without the menu changing.
+fn set_tray_tooltip(app: &AppHandle) {
+    let Some(tray) = app.tray_by_id("main") else {
         return;
     };
     let status = app
         .try_state::<Arc<EngineRuntime>>()
         .map(|runtime| runtime.status())
         .unwrap_or_default();
-    let label = if status.running { ui.labels[2] } else { ui.labels[1] };
-    let _ = ui.toggle.set_text(label);
-    if let Some(tray) = app.tray_by_id("main") {
-        let tooltip = if status.running {
-            format!("X-Matrix · {} · :{}", status.node_name, status.mixed_port)
-        } else {
-            "X-Matrix · 未连接".to_string()
-        };
-        let _ = tray.set_tooltip(Some(tooltip));
-    }
+    let tooltip = if status.running {
+        format!("X-Matrix · {} · :{}", status.node_name, status.mixed_port)
+    } else {
+        "X-Matrix · 未连接".to_string()
+    };
+    let _ = tray.set_tooltip(Some(tooltip));
 }
 
 /// Keep a restored window reachable.

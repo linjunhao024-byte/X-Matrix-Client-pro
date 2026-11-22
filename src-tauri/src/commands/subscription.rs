@@ -6,7 +6,7 @@
 
 use std::collections::HashSet;
 
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use crate::documents::parse_document;
 use crate::domain::subscription::SOURCE_TAG_PREFIX;
@@ -36,6 +36,7 @@ pub fn list_subscriptions(state: State<'_, AppState>) -> Vec<Subscription> {
 #[tauri::command]
 #[specta::specta]
 pub fn create_subscription(
+    app: AppHandle,
     state: State<'_, AppState>,
     name: String,
     url: String,
@@ -45,12 +46,14 @@ pub fn create_subscription(
     state.subscriptions.write().push(subscription);
     let snapshot = state.subscriptions.read().clone();
     state.persist()?;
+    crate::refresh_tray(&app);
     Ok(snapshot)
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn upsert_subscription(
+    app: AppHandle,
     state: State<'_, AppState>,
     subscription: Subscription,
 ) -> AppResult<Vec<Subscription>> {
@@ -64,13 +67,18 @@ pub fn upsert_subscription(
     }
     let snapshot = state.subscriptions.read().clone();
     state.persist()?;
+    crate::refresh_tray(&app);
     Ok(snapshot)
 }
 
 /// Removing a source also removes the nodes it brought in.
 #[tauri::command]
 #[specta::specta]
-pub fn delete_subscription(state: State<'_, AppState>, id: String) -> AppResult<Vec<Subscription>> {
+pub fn delete_subscription(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+) -> AppResult<Vec<Subscription>> {
     let tag = {
         let subscriptions = state.subscriptions.read();
         subscriptions
@@ -90,6 +98,7 @@ pub fn delete_subscription(state: State<'_, AppState>, id: String) -> AppResult<
     state.nodes.write().retain(|node| !node.tags.iter().any(|t| t == &tag));
     let snapshot = state.subscriptions.read().clone();
     state.persist()?;
+    crate::refresh_tray(&app);
     Ok(snapshot)
 }
 
@@ -97,6 +106,7 @@ pub fn delete_subscription(state: State<'_, AppState>, id: String) -> AppResult<
 #[tauri::command]
 #[specta::specta]
 pub async fn refresh_subscription(
+    app: AppHandle,
     state: State<'_, AppState>,
     id: String,
 ) -> AppResult<RefreshOutcome> {
@@ -117,12 +127,15 @@ pub async fn refresh_subscription(
     .await
     .map_err(|error| AppError::Internal(format!("后台任务失败：{error}")))??;
 
-    apply_document(
+    let outcome = apply_document(
         &state,
         &id,
         &fetched.body,
         fetched.subscription_userinfo.as_deref(),
-    )
+    )?;
+    // A refresh rewrites the node table, and the tray lists node names.
+    crate::refresh_tray(&app);
+    Ok(outcome)
 }
 
 /// Blocking refresh, for the background sweep (which owns no async runtime).
@@ -255,7 +268,7 @@ pub fn apply_document(
 /// "update all" button.
 #[tauri::command]
 #[specta::specta]
-pub async fn refresh_due(state: State<'_, AppState>) -> AppResult<Vec<RefreshOutcome>> {
+pub async fn refresh_due(app: AppHandle, state: State<'_, AppState>) -> AppResult<Vec<RefreshOutcome>> {
     let due: Vec<String> = {
         let now = now_ms();
         state
@@ -269,7 +282,7 @@ pub async fn refresh_due(state: State<'_, AppState>) -> AppResult<Vec<RefreshOut
 
     let mut outcomes = Vec::new();
     for id in due {
-        match refresh_subscription(state.clone(), id.clone()).await {
+        match refresh_subscription(app.clone(), state.clone(), id.clone()).await {
             Ok(outcome) => outcomes.push(outcome),
             Err(error) => {
                 // Record the failure on the source itself: a silently dead

@@ -1,4 +1,4 @@
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use crate::domain::{Node, NodeId};
 use crate::error::{AppError, AppResult};
@@ -12,7 +12,11 @@ pub fn list_nodes(state: State<'_, AppState>) -> AppResult<Vec<Node>> {
 
 #[tauri::command]
 #[specta::specta]
-pub fn upsert_node(state: State<'_, AppState>, mut node: Node) -> AppResult<Vec<Node>> {
+pub fn upsert_node(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    mut node: Node,
+) -> AppResult<Vec<Node>> {
     node.validate()?;
     node.check_user_tags()?;
     node.tags = node.normalized_tags();
@@ -26,6 +30,7 @@ pub fn upsert_node(state: State<'_, AppState>, mut node: Node) -> AppResult<Vec<
         nodes.clone()
     };
     state.persist()?;
+    crate::refresh_tray(&app);
     Ok(snapshot)
 }
 
@@ -36,12 +41,15 @@ pub fn upsert_node(state: State<'_, AppState>, mut node: Node) -> AppResult<Vec<
 #[tauri::command]
 #[specta::specta]
 pub fn tag_nodes(
+    app: AppHandle,
     state: State<'_, AppState>,
     ids: Vec<NodeId>,
     tag: String,
     remove: bool,
 ) -> AppResult<Vec<Node>> {
-    apply_tag(&state, &ids, &tag, remove)
+    let snapshot = apply_tag(&state, &ids, &tag, remove)?;
+    crate::refresh_tray(&app);
+    Ok(snapshot)
 }
 
 /// The command above is a thin wrapper: `State<'_, AppState>` cannot be built
@@ -116,13 +124,24 @@ pub fn apply_move(state: &AppState, id: &str, delta: i32) -> AppResult<Vec<Node>
 
 #[tauri::command]
 #[specta::specta]
-pub fn move_node(state: State<'_, AppState>, id: NodeId, delta: i32) -> AppResult<Vec<Node>> {
-    apply_move(&state, &id, delta)
+pub fn move_node(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: NodeId,
+    delta: i32,
+) -> AppResult<Vec<Node>> {
+    let snapshot = apply_move(&state, &id, delta)?;
+    crate::refresh_tray(&app);
+    Ok(snapshot)
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn delete_node(state: State<'_, AppState>, id: NodeId) -> AppResult<Vec<Node>> {
+pub fn delete_node(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: NodeId,
+) -> AppResult<Vec<Node>> {
     let snapshot = {
         let mut nodes = state.nodes.write();
         let before = nodes.len();
@@ -146,6 +165,7 @@ pub fn delete_node(state: State<'_, AppState>, id: NodeId) -> AppResult<Vec<Node
     }
 
     state.persist()?;
+    crate::refresh_tray(&app);
     Ok(snapshot)
 }
 
@@ -178,7 +198,11 @@ pub async fn test_node_latency(state: State<'_, AppState>, id: NodeId) -> AppRes
 /// like every other mutation here.
 #[tauri::command]
 #[specta::specta]
-pub fn delete_nodes(state: State<'_, AppState>, ids: Vec<NodeId>) -> AppResult<Vec<Node>> {
+pub fn delete_nodes(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    ids: Vec<NodeId>,
+) -> AppResult<Vec<Node>> {
     if ids.is_empty() {
         return Err(AppError::InvalidInput("没有选中任何节点".into()));
     }
@@ -206,6 +230,7 @@ pub fn delete_nodes(state: State<'_, AppState>, ids: Vec<NodeId>) -> AppResult<V
     }
 
     state.persist()?;
+    crate::refresh_tray(&app);
     Ok(snapshot)
 }
 

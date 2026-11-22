@@ -1,4 +1,4 @@
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use crate::autostart::{AutoStart, WindowsAutoStart};
 use crate::domain::Settings;
@@ -30,7 +30,11 @@ pub fn get_settings(state: State<'_, AppState>) -> AppResult<Settings> {
 
 #[tauri::command]
 #[specta::specta]
-pub fn save_settings(state: State<'_, AppState>, settings: Settings) -> AppResult<Settings> {
+pub fn save_settings(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    settings: Settings,
+) -> AppResult<Settings> {
     settings.validate().map_err(AppError::InvalidInput)?;
 
     // Launch-at-login is a side effect of the setting, not a separate switch:
@@ -41,5 +45,8 @@ pub fn save_settings(state: State<'_, AppState>, settings: Settings) -> AppResul
 
     *state.settings.write() = settings.clone();
     state.persist()?;
+    // The tray lists the node names and checks the current mode, so a saved
+    // setting is a reason to rebuild it.
+    crate::refresh_tray(&app);
     Ok(settings)
 }

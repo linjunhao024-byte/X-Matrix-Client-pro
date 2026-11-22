@@ -5,7 +5,7 @@
 
 use serde::Serialize;
 use specta::Type;
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use crate::documents;
 use crate::domain::Node;
@@ -77,7 +77,11 @@ pub fn import_preview(text: String) -> ImportPreview {
 /// Parse and merge into the node list, then persist.
 #[tauri::command]
 #[specta::specta]
-pub fn import_nodes(state: State<'_, AppState>, text: String) -> AppResult<ImportOutcome> {
+pub fn import_nodes(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    text: String,
+) -> AppResult<ImportOutcome> {
     let report = parse_anything(&text);
 
     let (snapshot, imported, duplicates) = {
@@ -103,6 +107,7 @@ pub fn import_nodes(state: State<'_, AppState>, text: String) -> AppResult<Impor
 
     if imported > 0 {
         state.persist()?;
+        crate::refresh_tray(&app);
     }
 
     Ok(ImportOutcome {

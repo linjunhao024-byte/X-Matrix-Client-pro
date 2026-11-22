@@ -255,3 +255,18 @@
 **这段验收踩到的两个坑（工具层面，不是产品缺陷）**：
 - 像素点击在这里不可信：PowerShell 进程是 DPI-unaware，UIA 报出来的 BoundingRectangle 是虚拟化过的；`x-act.ps1` 的 `focus` 原来用 `ShowWindow($h, 9)`（= SW_RESTORE，会把最大化的窗口**还原**），一 focus 整个布局就平移。现在 `focus` 改成 `ShowWindow($h, 3)`（SW_MAXIMIZE），并且按按钮一律走 UI Automation 的 `InvokePattern` / `SelectionItemPattern` / `TogglePattern`（`uia2.ps1`），不再按像素。
 - 远端 OCR 结果必须 `scp` 回来读：走 `type` + ssh 会把 UTF-8 中文打散成 `�?`，关键字 grep 会漏判（我就是这样先误判成"没有报错"）。
+
+## 13. 托盘菜单（2026-11-23，云电脑 cloudpc-test）
+
+托盘原来只有「显示 / 启停 / 退出」三项，`TrayState` 把文案在第一次构建时固化成字符串，所以内核从别处起来时菜单还写着「启动内核」。现在菜单在每次状态变化后整块重建：三个固定项 + 「节点」子菜单（最多 20 条，当前节点打勾，空时给一条禁用的「还没有节点」）+ 「代理模式」子菜单（规则 / 全局 / 直连，当前项打勾）。点一行就是一次 `engine_apply`：内核没跑就只改设置，跑着就先停再起，系统代理全程不动。
+
+| 项 | 判据 | 结果 |
+| --- | --- | --- |
+| 菜单随真实状态重建 | 启动日志 | **通过**。`x-matrix: 托盘菜单 3 个节点 · 模式 direct · 内核未运行` →（自动连接）→ `x-matrix: 托盘菜单 3 个节点 · 模式 direct · 内核运行中`，两行都由 `tray::build` 自己打出，重建没有失败日志 |
+| 自动连接后文案要跟上 | 同上第二行 | **通过（同时修掉一个缺陷）**。`auto_connect` 原来直接 `start_engine` 不重建菜单，自动连接后托盘仍写「启动内核」；现在成功分支补 `refresh_tray(&app)` |
+| 勾选状态与写入 | 单测 | **通过**。5 条：当前节点打勾、没有选中时不打勾、超过 20 条截断、模式只勾一个、`slug` 往返 |
+| 点菜单里的托盘 | 真机点击 | **未验**。见下 |
+
+**为什么托盘点击没验成**：图标落在通知区的溢出区。`traydump.ps1` 枚举桌面（110 个 UIA 元素）只看到 `Shell_TrayWnd`、`TrayNotifyWnd`、`ToolbarWindow32`（用户提示通知区域，1056,760 72x40）、`TrayClockWClass`、`TrayButton`、`TrayShowDesktopButtonWClass`——我们的图标不在其中任何可寻址元素里，`traymenu.ps1` 按 UIA 找到的 `X-Matrix` 是主窗口本身（`73,5 1135x757 class=Tauri Window`），右键后 `FindWindow('#32768')` 返回 0。这个会话里点不出托盘菜单，所以「点某一行会重启内核」只有代码路径与 `engine_apply` 的既有验收支撑（§11 已在真机验过运行中换节点/模式），没有本节的像素证据。
+
+**为了能验，加了一条日志**：`tray::build` 每次构建都打一行 `托盘菜单 N 个节点 · 模式 X · 内核是否运行`。托盘菜单无法用测试断言，"那一刻托盘以为自己在显示什么"是出问题时第一个要问的问题，而它只有日志能回答。
