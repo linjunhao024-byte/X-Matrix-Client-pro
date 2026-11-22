@@ -2808,5 +2808,10 @@
     "nodes.savedFile",
     "已保存到 {path}",
     "Saved to {path}"
+  ],
+  [
+    "nodes.fromSubscription",
+    "订阅：{name}",
+    "Subscription: {name}"
   ]
 ]

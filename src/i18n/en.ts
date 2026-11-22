@@ -178,6 +178,7 @@ export const en: Record<string, string> = {
   "nodes.manualHint": "Use the arrows to reorder; the order is saved",
   "nodes.saveToFile": "Save to file",
   "nodes.savedFile": "Saved to {path}",
+  "nodes.fromSubscription": "Subscription: {name}",
   // groups
   "groups.title": "Proxy groups",
   "groups.hint": "Rules can point at a group, and the group picks the node.",

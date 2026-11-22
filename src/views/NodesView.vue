@@ -17,8 +17,10 @@ import {
 import { useEngineStore } from '../stores/engine'
 import { useNodesStore } from '../stores/nodes'
 import { useSettingsStore } from '../stores/settings'
+import { useSubscriptionsStore } from '../stores/subscriptions'
 
 const store = useNodesStore()
+const subscriptions = useSubscriptionsStore()
 const engine = useEngineStore()
 const settings = useSettingsStore()
 
@@ -65,6 +67,21 @@ const kinds: { value: EngineKind; label: string }[] = [
 const isEmpty = computed(() => store.loaded && store.items.length === 0)
 
 /** Every tag in use, so the filter never offers a tag that matches nothing. */
+/**
+ * Tags are machine names; `sub:<id>` is the subscription's own tag.
+ *
+ * Showing `sub:sub-3f2a…` on a card tells the user nothing, so the id is
+ * swapped for the subscription's name when we still have that subscription.
+ * Unknown ids fall back to the raw tag instead of disappearing — a node whose
+ * subscription was deleted should still say where it came from.
+ */
+function tagLabel(tag: string): string {
+  if (!tag.startsWith('sub:')) return tag
+  const id = tag.slice('sub:'.length)
+  const name = subscriptions.items.find((item) => item.id === id)?.name
+  return name ? t('nodes.fromSubscription', { name }) : tag
+}
+
 const allTags = computed(() => {
   const seen = new Set<string>()
   for (const node of store.items) for (const tag of node.tags) seen.add(tag)
@@ -150,6 +167,9 @@ watch(
 onMounted(() => {
   void store.load()
   void settings.load()
+  // Only for the tag labels: a node's `sub:` tag means nothing until we can
+  // name the subscription it came from.
+  void subscriptions.load()
 })
 
 onUnmounted(stopAutoTest)
@@ -521,7 +541,7 @@ function securityLabel(node: Node_Serialize): string {
             :aria-label="t('nodes.tagFilter')"
           >
             <option value="">{{ t('nodes.tagFilterAll') }}</option>
-            <option v-for="tag in allTags" :key="tag" :value="tag">{{ tag }}</option>
+            <option v-for="tag in allTags" :key="tag" :value="tag">{{ tagLabel(tag) }}</option>
           </select>
           <input
             v-model="search"
@@ -649,7 +669,7 @@ function securityLabel(node: Node_Serialize): string {
           </div>
 
           <div v-if="node.tags.length > 0" class="node-tags">
-            <span v-for="tag in node.tags" :key="tag" class="tag-chip" :title="tag">{{ tag }}</span>
+            <span v-for="tag in node.tags" :key="tag" class="tag-chip" :title="tag">{{ tagLabel(tag) }}</span>
           </div>
 
           <footer class="node-foot">

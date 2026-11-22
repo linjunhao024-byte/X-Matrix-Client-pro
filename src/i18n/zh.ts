@@ -178,6 +178,7 @@ export const zh: Record<string, string> = {
   "nodes.manualHint": "上移 / 下移调整顺序，顺序会保存下来",
   "nodes.saveToFile": "保存为文件",
   "nodes.savedFile": "已保存到 {path}",
+  "nodes.fromSubscription": "订阅：{name}",
   // groups
   "groups.title": "策略组",
   "groups.hint": "规则可以指向策略组，组内再挑节点。",
