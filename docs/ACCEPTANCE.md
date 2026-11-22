@@ -210,3 +210,16 @@
 | 设置页全局快捷键面板 | 底部应有 `Ctrl+Shift+X` / `Ctrl+Shift+W` 说明 | **通过**。滚到底 OCR 到「全局快捷键」标题（y=1047）与两行 `<kbd>` |
 
 **一条未复现的异常**：验收中途在设置页点「保存」，绿条「已保存」出现后进程消失、`store.json` 未落盘、没有 `.window-state.json`（不是正常退出路径），Application 日志里没有 APPCRASH 记录；同操作随后两次都正常。判断为环境可疑（同期 explorer.exe 崩过一次）而非必现 bug，但要查得先给应用加 panic hook / 崩溃日志——记在待办里，不在本轮修。
+
+## 10. 全局快捷键 + 诊断包（2026-11-23，云电脑 cloudpc-test）
+
+快捷键这条路换了实现：插件版（`tauri-plugin-global-shortcut`）在真机上**注册成功但不派发** —— 用别的进程抢注同一条 chord 拿到 1409（ERROR_HOTKEY_ALREADY_REGISTERED），证明它确实占住了；可注入按键后处理函数一次都没跑。根因是插件那个隐藏窗所在的线程不抽消息。现版自己起一条只做 `GetMessageW` 的线程、自己建隐藏窗（class `XMatrixHotkeys`）、自己 `RegisterHotKey`，注册失败只打日志（FAIL-OPEN）。
+
+| 项 | 判据 | 结果 |
+| --- | --- | --- |
+| 快捷键已就绪 | 应用 stderr | **通过**。`x-matrix: 全局快捷键 Ctrl+Shift+X 已就绪` / `… Ctrl+Shift+W 已就绪`（`run-xm.bat` 把 `2>` 落到 `xm-err.txt`，GUI 进程的 `eprintln!` 有落处） |
+| 隐藏窗存在 | 枚举顶层窗口 | **通过**。`hwnd=17826918 vis=False cls=XMatrixHotkeys pid=4760 proc=X-Matrix`，与主窗同进程同会话（session 1） |
+| `Ctrl+Shift+X` 启停内核 | `keybd_event` 注入 Ctrl+Shift+X（不是 `SendKeys`：后台会话可能没有前台窗，`SendKeys` 无处可投） | **通过**。注入前 `xray=True`，5 秒后 `xray=False` —— 内核确实被停掉；再按一次同理可启 |
+| `Ctrl+Shift+W` 显隐窗口 | 同上注入 Ctrl+Shift+W | **通过**。`visible=True` → `visible=False`（窗口消失、进程仍在）→ 再按一次 `visible=True` |
+
+**诊断包**：关于页「导出诊断报告」→ 另存框 → 写出 **12,575 字节 / 239 行** markdown，`scp` 回来看内容：版本/时间（`2026-11-22 19:11:27 UTC`，与本地 03:11 +08 对得上）、内核表（`xray 33.2 MB Xray 26.11.9 (go1.27.3 windows/amd64)`、`sing-box 78.3 MB 1.14.4`）、四个目录、设置摊平、规模、引擎状态、系统代理、两段各 200 行日志、生成配置。**打码一开始有两个缺陷**：把分隔符和引号连值一起吃掉了，`"id": "abc"` 变成 `"id:***"`（非法 JSON），`"auth": "noauth"` 这类非机密字段也丢了值；现在只吃值、保留键与标点（`"id": "***"`、`password: ***`、`?token=***&x=1`），并有单测 `masking_keeps_the_punctuation_that_keeps_it_valid` 锁住；空节从悬空冒号改成 `—`（单测 `an_empty_row_reads_as_empty_not_as_a_failure`）。
