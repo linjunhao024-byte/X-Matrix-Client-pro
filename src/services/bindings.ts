@@ -523,6 +523,12 @@ export type RefreshOutcome_Deserialize = {
 	imported: number | null,
 	removed: number | null,
 	skipped: string[],
+	/**
+	 *  Something true about this refresh that is not about the body: which
+	 *  route it took, for instance. Kept apart from `skipped` because that list
+	 *  counts lines the parser could not read, and a route note is not a line.
+	 */
+	note?: string | null,
 };
 
 /**  What one refresh did, so the UI can say something specific. */
@@ -531,6 +537,12 @@ export type RefreshOutcome_Serialize = {
 	imported: number | null,
 	removed: number | null,
 	skipped: string[],
+	/**
+	 *  Something true about this refresh that is not about the body: which
+	 *  route it took, for instance. Kept apart from `skipped` because that list
+	 *  counts lines the parser could not read, and a route note is not a line.
+	 */
+	note: string | null,
 };
 
 /**  One rule, evaluated top to bottom. */
@@ -783,6 +795,17 @@ export type Settings_Deserialize = {
 	 */
 	subscription_user_agent?: string,
 	/**
+	 *  Fetch subscriptions through the running tunnel instead of directly.
+	 * 
+	 *  A provider's panel is often unreachable from the network you need the
+	 *  subscription for — the classic case is a subscription URL that only
+	 *  answers from outside your ISP's reach. Off by default: sending your
+	 *  subscription URL through the tunnel means a broken node also breaks the
+	 *  refresh, and a failed refresh should never be the reason the app looks
+	 *  dead.
+	 */
+	subscription_via_proxy?: boolean,
+	/**
 	 *  Comma separated resolver IPs. Empty means "let the kernel use the system
 	 *  resolver". Only literals are accepted: a hostname here would need the
 	 *  system resolver to resolve the resolver, which is how DNS loops start.
@@ -862,6 +885,17 @@ export type Settings_Serialize = {
 	 *  an empty body or a 403, so this is the one header worth exposing.
 	 */
 	subscription_user_agent: string,
+	/**
+	 *  Fetch subscriptions through the running tunnel instead of directly.
+	 * 
+	 *  A provider's panel is often unreachable from the network you need the
+	 *  subscription for — the classic case is a subscription URL that only
+	 *  answers from outside your ISP's reach. Off by default: sending your
+	 *  subscription URL through the tunnel means a broken node also breaks the
+	 *  refresh, and a failed refresh should never be the reason the app looks
+	 *  dead.
+	 */
+	subscription_via_proxy: boolean,
 	/**
 	 *  Comma separated resolver IPs. Empty means "let the kernel use the system
 	 *  resolver". Only literals are accepted: a hostname here would need the

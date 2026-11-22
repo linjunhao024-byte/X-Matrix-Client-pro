@@ -78,20 +78,22 @@ export const useSubscriptionsStore = defineStore('subscriptions', () => {
    * in and how many were dropped. Reporting only the first would make a
    * provider that lists duplicates look like it shrank.
    */
-  async function refreshAll(): Promise<{ imported: number; skipped: number }> {
+  async function refreshAll(): Promise<{ imported: number; skipped: number; note: string | null }> {
     loading.value = true
     error.value = null
     try {
       const outcomes = await api.refreshDue()
       items.value = await api.listSubscriptions()
       await useNodesStore().load(true)
-      return outcomes.reduce(
-        (total, outcome) => ({
-          imported: total.imported + (outcome.imported ?? 0),
-          skipped: total.skipped + (outcome.skipped?.length ?? 0),
+      const total = outcomes.reduce(
+        (sum, outcome) => ({
+          imported: sum.imported + (outcome.imported ?? 0),
+          skipped: sum.skipped + (outcome.skipped?.length ?? 0),
+          note: sum.note ?? outcome.note ?? null,
         }),
-        { imported: 0, skipped: 0 },
+        { imported: 0, skipped: 0, note: null as string | null },
       )
+      return total
     } catch (cause) {
       error.value = describeError(cause)
       throw cause

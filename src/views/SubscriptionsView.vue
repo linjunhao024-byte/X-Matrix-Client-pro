@@ -43,6 +43,12 @@ const form = reactive({
 const formError = ref<string | null>(null)
 const saving = ref(false)
 const note = ref<string | null>(null)
+/**
+ * Which route the last refresh took, when it was not the one the setting asked
+ * for. Kept apart from `note`: that one counts nodes, this one is a caveat about
+ * the fetch itself, and folding them together makes both unreadable.
+ */
+const routeNote = ref<string | null>(null)
 
 const isEmpty = computed(() => store.loaded && store.items.length === 0)
 
@@ -133,9 +139,11 @@ async function submit(): Promise<void> {
 
 async function refreshOne(subscription: Subscription_Serialize): Promise<void> {
   note.value = null
+  routeNote.value = null
   try {
     const outcome = await store.refresh(subscription.id)
     const skipped = outcome.skipped?.length ?? 0
+    routeNote.value = outcome.note ?? null
     note.value =
       t('sub.note.refreshed', {
         name: outcome.subscription.name,
@@ -149,10 +157,12 @@ async function refreshOne(subscription: Subscription_Serialize): Promise<void> {
 
 async function refreshAll(): Promise<void> {
   note.value = null
+  routeNote.value = null
   try {
-    const { imported, skipped } = await store.refreshAll()
+    const { imported, skipped, note: caveat } = await store.refreshAll()
     const head = imported > 0 ? t('sub.note.due', { count: imported }) : t('sub.note.noneDue')
     note.value = head + (skipped > 0 ? t('sub.note.skipped', { count: skipped }) : '')
+    routeNote.value = caveat
   } catch {
     /* store.error already carries the reason */
   }
@@ -195,6 +205,7 @@ onMounted(() => {
 
     <p v-if="store.error" class="alert">{{ store.error }}</p>
     <p v-if="note" class="notice">{{ note }}</p>
+    <p v-if="routeNote" class="alert alert-inline">{{ routeNote }}</p>
 
     <p v-if="store.loading && !store.loaded" class="muted small">
       {{ t('common.loading') }}

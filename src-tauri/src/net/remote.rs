@@ -43,6 +43,21 @@ pub fn fetch_with_timeout(url: &str, timeout: Duration) -> AppResult<Fetched> {
 /// anything else, so the settings carry an override. An empty override keeps our
 /// own UA: sending an empty header is worse than not sending one at all.
 pub fn fetch_as(url: &str, timeout: Duration, user_agent: Option<&str>) -> AppResult<Fetched> {
+    fetch_through(url, timeout, user_agent, None)
+}
+
+/// Same fetch, but routed through the local mixed inbound.
+///
+/// `proxy` is the loopback port of the running kernel. `None` means "go direct".
+/// The proxy is spelled as an HTTP proxy for both schemes: our own mixed
+/// inbound speaks HTTP CONNECT, and handing reqwest a `socks5://` URL would make
+/// it try SOCKS5 directly against a port that also speaks HTTP.
+pub fn fetch_through(
+    url: &str,
+    timeout: Duration,
+    user_agent: Option<&str>,
+    proxy: Option<u16>,
+) -> AppResult<Fetched> {
     if !(url.starts_with("http://") || url.starts_with("https://")) {
         return Err(AppError::InvalidInput(format!("订阅地址必须是 http(s)：{url}")));
     }
@@ -50,9 +65,17 @@ pub fn fetch_as(url: &str, timeout: Duration, user_agent: Option<&str>) -> AppRe
         Some(custom) if !custom.is_empty() => custom,
         _ => USER_AGENT,
     };
-    let client = reqwest::blocking::Client::builder()
+    let mut builder = reqwest::blocking::Client::builder()
         .timeout(timeout)
-        .user_agent(agent)
+        .user_agent(agent);
+    if let Some(port) = proxy {
+        let address = format!("http://127.0.0.1:{port}");
+        builder = builder.proxy(
+            reqwest::Proxy::all(&address)
+                .map_err(|error| AppError::Internal(format!("代理地址不可用：{error}")))?,
+        );
+    }
+    let client = builder
         .build()
         .map_err(|error| AppError::Internal(format!("无法创建 HTTP 客户端：{error}")))?;
 

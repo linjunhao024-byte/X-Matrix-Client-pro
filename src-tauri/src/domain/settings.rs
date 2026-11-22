@@ -48,6 +48,15 @@ pub struct Settings {
     /// Plenty of providers only serve a Clash UA and answer anything else with
     /// an empty body or a 403, so this is the one header worth exposing.
     pub subscription_user_agent: String,
+    /// Fetch subscriptions through the running tunnel instead of directly.
+    ///
+    /// A provider's panel is often unreachable from the network you need the
+    /// subscription for — the classic case is a subscription URL that only
+    /// answers from outside your ISP's reach. Off by default: sending your
+    /// subscription URL through the tunnel means a broken node also breaks the
+    /// refresh, and a failed refresh should never be the reason the app looks
+    /// dead.
+    pub subscription_via_proxy: bool,
     /// Comma separated resolver IPs. Empty means "let the kernel use the system
     /// resolver". Only literals are accepted: a hostname here would need the
     /// system resolver to resolve the resolver, which is how DNS loops start.
@@ -193,6 +202,7 @@ impl Default for Settings {
             proxy_bypass: crate::sysproxy::DEFAULT_BYPASS.to_string(),
             test_url: DEFAULT_TEST_URL.to_string(),
             subscription_user_agent: String::new(),
+            subscription_via_proxy: false,
             dns_servers: String::new(),
             start_minimized: false,
             close_to_tray: true,

@@ -6,12 +6,15 @@
 
 use std::collections::HashSet;
 
+use std::sync::Arc;
+
 use tauri::{AppHandle, State};
 
 use crate::documents::parse_document;
 use crate::domain::subscription::SOURCE_TAG_PREFIX;
 use crate::domain::{Node, Subscription};
 use crate::error::{AppError, AppResult};
+use crate::engine::EngineRuntime;
 use crate::net::remote;
 use crate::state::AppState;
 
@@ -24,6 +27,33 @@ pub struct RefreshOutcome {
     #[specta(type = f64)]
     pub removed: usize,
     pub skipped: Vec<String>,
+    /// Something true about this refresh that is not about the body: which
+    /// route it took, for instance. Kept apart from `skipped` because that list
+    /// counts lines the parser could not read, and a route note is not a line.
+    pub note: Option<String>,
+}
+
+/// Where a fetch should go, and what to tell the user about the route.
+///
+/// "Through the tunnel" is a setting, not a guess: a subscription whose panel is
+/// unreachable from here can only be refreshed through the tunnel, and a
+/// subscription that is reachable should not depend on a node being up. When the
+/// setting is on but nothing is running we still fetch directly and say so in
+/// `skipped`, because a refresh that silently takes a different route than the
+/// one the user asked for is exactly the kind of quiet surprise that makes a
+/// client untrustworthy.
+fn fetch_route(state: &AppState, engine_running: bool) -> (Option<u16>, Option<String>) {
+    let settings = state.settings.read();
+    if !settings.subscription_via_proxy {
+        return (None, None);
+    }
+    if engine_running {
+        return (Some(settings.mixed_port), None);
+    }
+    (
+        None,
+        Some("订阅设置为走代理，但内核没有运行，这一次是直连拉的".to_string()),
+    )
 }
 
 #[tauri::command]
@@ -108,6 +138,7 @@ pub fn delete_subscription(
 pub async fn refresh_subscription(
     app: AppHandle,
     state: State<'_, AppState>,
+    runtime: State<'_, Arc<EngineRuntime>>,
     id: String,
 ) -> AppResult<RefreshOutcome> {
     let subscription = state
@@ -120,26 +151,33 @@ pub async fn refresh_subscription(
 
     // The UA override travels with the request: some providers gate on it.
     let agent = state.settings.read().subscription_user_agent.clone();
+    let (proxy, note) = fetch_route(&state, runtime.status().running);
     let fetched = tauri::async_runtime::spawn_blocking(move || {
-        let fetched = remote::fetch_as(&subscription.url, remote::FETCH_TIMEOUT, Some(&agent))?;
+        let fetched =
+            remote::fetch_through(&subscription.url, remote::FETCH_TIMEOUT, Some(&agent), proxy)?;
         Ok::<_, AppError>(fetched)
     })
     .await
     .map_err(|error| AppError::Internal(format!("后台任务失败：{error}")))??;
 
-    let outcome = apply_document(
+    let mut outcome = apply_document(
         &state,
         &id,
         &fetched.body,
         fetched.subscription_userinfo.as_deref(),
     )?;
+    outcome.note = note;
     // A refresh rewrites the node table, and the tray lists node names.
     crate::refresh_tray(&app);
     Ok(outcome)
 }
 
 /// Blocking refresh, for the background sweep (which owns no async runtime).
-pub fn refresh_one_blocking(state: &AppState, id: &str) -> AppResult<RefreshOutcome> {
+pub fn refresh_one_blocking(
+    state: &AppState,
+    id: &str,
+    engine_running: bool,
+) -> AppResult<RefreshOutcome> {
     let subscription = state
         .subscriptions
         .read()
@@ -148,13 +186,16 @@ pub fn refresh_one_blocking(state: &AppState, id: &str) -> AppResult<RefreshOutc
         .cloned()
         .ok_or_else(|| AppError::NotFound(format!("订阅 {id} 不存在")))?;
     let agent = state.settings.read().subscription_user_agent.clone();
-    let fetched = remote::fetch_as(&subscription.url, remote::FETCH_TIMEOUT, Some(&agent))?;
-    apply_document(
+    let (proxy, note) = fetch_route(state, engine_running);
+    let fetched = remote::fetch_through(&subscription.url, remote::FETCH_TIMEOUT, Some(&agent), proxy)?;
+    let mut outcome = apply_document(
         state,
         id,
         &fetched.body,
         fetched.subscription_userinfo.as_deref(),
-    )
+    )?;
+    outcome.note = note;
+    Ok(outcome)
 }
 
 /// The pure half: a document in, the node table rewritten.
@@ -252,6 +293,7 @@ pub fn apply_document(
         subscription,
         imported: imported_nodes.len(),
         removed,
+        note: None,
         skipped: {
             let mut skipped = report.skipped;
             // Duplicates are not an error, but they are why the count is lower
@@ -268,7 +310,11 @@ pub fn apply_document(
 /// "update all" button.
 #[tauri::command]
 #[specta::specta]
-pub async fn refresh_due(app: AppHandle, state: State<'_, AppState>) -> AppResult<Vec<RefreshOutcome>> {
+pub async fn refresh_due(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    runtime: State<'_, Arc<EngineRuntime>>,
+) -> AppResult<Vec<RefreshOutcome>> {
     let due: Vec<String> = {
         let now = now_ms();
         state
@@ -282,7 +328,7 @@ pub async fn refresh_due(app: AppHandle, state: State<'_, AppState>) -> AppResul
 
     let mut outcomes = Vec::new();
     for id in due {
-        match refresh_subscription(app.clone(), state.clone(), id.clone()).await {
+        match refresh_subscription(app.clone(), state.clone(), runtime.clone(), id.clone()).await {
             Ok(outcome) => outcomes.push(outcome),
             Err(error) => {
                 // Record the failure on the source itself: a silently dead
@@ -436,6 +482,39 @@ proxies:
         let state = state_with(subscription);
         let error = apply_document(&state, "sub-missing", CLASH, None).expect_err("unknown id");
         assert!(matches!(error, AppError::NotFound(_)), "got {error:?}");
+    }
+
+    #[test]
+    fn a_fetch_goes_direct_unless_the_setting_asks_for_the_tunnel() {
+        let subscription = Subscription::new("机场".into(), "https://example.com/sub".into());
+        let state = state_with(subscription);
+
+        assert_eq!(fetch_route(&state, true), (None, None), "off means off");
+    }
+
+    #[test]
+    fn a_running_kernel_is_the_route_the_setting_asked_for() {
+        let subscription = Subscription::new("机场".into(), "https://example.com/sub".into());
+        let state = state_with(subscription);
+        {
+            let mut settings = state.settings.write();
+            settings.subscription_via_proxy = true;
+            settings.mixed_port = 7897;
+        }
+
+        assert_eq!(fetch_route(&state, true), (Some(7897), None));
+    }
+
+    #[test]
+    fn wanting_the_tunnel_and_having_no_kernel_says_so() {
+        let subscription = Subscription::new("机场".into(), "https://example.com/sub".into());
+        let state = state_with(subscription);
+        state.settings.write().subscription_via_proxy = true;
+
+        let (proxy, note) = fetch_route(&state, false);
+        assert_eq!(proxy, None, "a dead port is not a route");
+        let note = note.expect("the user is told which route was taken");
+        assert!(note.contains("直连"), "got {note}");
     }
 
     #[test]

@@ -219,8 +219,12 @@ fn start_subscription_sweep(app: AppHandle) {
             .filter(|subscription| subscription.is_due(now))
             .map(|subscription| subscription.id.clone())
             .collect();
+        let running = app
+            .try_state::<std::sync::Arc<EngineRuntime>>()
+            .map(|runtime| runtime.status().running)
+            .unwrap_or(false);
         for id in due {
-            match commands::subscription::refresh_one_blocking(&state, &id) {
+            match commands::subscription::refresh_one_blocking(&state, &id, running) {
                 Ok(outcome) => {
                     println!(
                         "x-matrix: 订阅「{}」已更新，{} 个节点",

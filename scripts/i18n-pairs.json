@@ -2740,6 +2740,16 @@
     "Some providers only serve a Clash UA and answer anything else with an empty body or a 403."
   ],
   [
+    "settings.subViaProxy",
+    "订阅走代理拉取",
+    "Fetch subscriptions through the tunnel"
+  ],
+  [
+    "settings.subViaProxyHint",
+    "机场面板只在隧道里能打开时打开它。默认关闭：节点坏了的时候，你还得能刷新订阅。",
+    "Turn this on when the provider's panel is only reachable through the tunnel. Off by default: when the nodes stop working you still need to refresh the subscription."
+  ],
+  [
     "settings.subAgentLabel",
     "拉取订阅时使用的 UA",
     "User-Agent used when fetching subscriptions"

@@ -316,6 +316,12 @@ async function save() {
           />
         </div>
         <p class="field-hint">{{ t('settings.subAgentHint') }}</p>
+        <div class="divider" />
+        <ToggleSwitch
+          v-model="draft.subscription_via_proxy"
+          :label="t('settings.subViaProxy')"
+          :description="t('settings.subViaProxyHint')"
+        />
       </section>
 
       <section class="surface-plain panel">

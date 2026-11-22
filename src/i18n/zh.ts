@@ -585,6 +585,8 @@ export const zh: Record<string, string> = {
   "settings.startMinimizedHint": "开机自启配合使用时有用：只在托盘里出现，不弹窗",
   "settings.subAgent": "订阅 User-Agent",
   "settings.subAgentHint": "有些机场只认 Clash 的 UA，别的 UA 会返回空内容或 403；填 clash-verge/v2rayN 之类即可。",
+  "settings.subViaProxy": "订阅走代理拉取",
+  "settings.subViaProxyHint": "机场面板只在隧道里能打开时打开它。默认关闭：节点坏了的时候，你还得能刷新订阅。",
   "settings.subAgentLabel": "拉取订阅时使用的 UA",
   "settings.subAgentPlaceholder": "留空则使用默认（X-Matrix/版本号）",
   "settings.system": "系统集成",

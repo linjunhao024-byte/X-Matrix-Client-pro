@@ -585,6 +585,8 @@ export const en: Record<string, string> = {
   "settings.startMinimizedHint": "Useful with launch at login: appear in the tray only",
   "settings.subAgent": "Subscription User-Agent",
   "settings.subAgentHint": "Some providers only serve a Clash UA and answer anything else with an empty body or a 403.",
+  "settings.subViaProxy": "Fetch subscriptions through the tunnel",
+  "settings.subViaProxyHint": "Turn this on when the provider's panel is only reachable through the tunnel. Off by default: when the nodes stop working you still need to refresh the subscription.",
   "settings.subAgentLabel": "User-Agent used when fetching subscriptions",
   "settings.subAgentPlaceholder": "Empty means the default (X-Matrix/version)",
   "settings.system": "System integration",
