@@ -183,3 +183,15 @@
 | **节点标签显示订阅名（真机）** | 通过。订阅 `TestSub` 刷新后节点卡片标签显示「订阅：TestSub」；`store.json` 里 tags 仍是 `sub:sub-18ea…` —— 映射只发生在展示层，存储不变（改名不会打断引用） |
 | **内核分段控件不横向位移（真机）** | 通过。像素测量：未运行 / 运行中两种状态下 sing-box 胶囊都是 x 1305–1413（中心 1359），Δx = 0 px |
 | **速度测试（真机）** | 通过。本地 4 MB 资源 + vless+ws 隧道，点「测速」显示「下载速度 126.0 MB/s」，同时 `curl -x 127.0.0.1:7890` 拿到 4,194,304 字节（0.034s） |
+
+## 8. 首页代理模式切换（2026-11-23，云电脑 cloudpc-test）
+
+分段控件「规则 / 全局 / 直连」是首页唯一会改配置又不显眼的东西：写错了不报错，只是所有流量悄悄走错方向。分两半验：
+
+| 项 | 判据 | 结果 |
+| --- | --- | --- |
+| 点击落到存储 | 依次点「全局」→「直连」→「规则」，每次之后读 `%APPDATA%\com.xmatrix.client\store.json` | 通过。最终 `settings.mode = "rule"`（最后一次点击），说明控件不是只改内存里的 `draft` |
+| 运行中锁定 | 启动内核后看三个胶囊 | 通过。`shot-c3-locked.png` 的 OCR 拿到「运行中不能切换代理模式」，三个按钮均为 disabled；停止后台账里才出现下一次点击（`act-c4` 先 `c4-stopped` 再点直连） |
+| 渲染成 catch-all | 「全局」下 `configs/xray.json` 的 `routing.rules` 应只有一条 `{"type":"field","network":"tcp,udp","outboundTag":"proxy"}` | **只做了代码级证明**：云电脑上最后一次真实启动是「规则」模式，`configs/xray.json` 里是用户规则表。补了两条单测把这条固定住：`engine::render::rule_tests::global_mode_is_one_catch_all_rule_to_the_proxy`（Xray 一条 catch-all → `proxy`，sing-box `{"outbound":"proxy"}`；「直连」同理指向 `direct`）与 `rule_mode_still_renders_the_users_table`（切模式不吃掉用户规则表） |
+
+**没做**：把「全局」在真机上抓一次生成配置的截图。原因与取舍：云电脑那套截图/点击脚本在计划任务会话里多次中途死掉（`b710fb38`、`aa2bd97c` 都无收尾消息），再跑一轮的收益低于它占用的时间；模式→渲染的映射是纯函数，单测比截图更稳。真机已有的那两条（存储落地、运行中锁定）是用户能看见的部分。

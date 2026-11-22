@@ -588,6 +588,44 @@ mod rule_tests {
         }
     }
 
+    /// Global and direct replace the user's table with one catch-all rule; a
+    /// regression here silently sends traffic the wrong way, so pin it.
+    #[test]
+    fn global_mode_is_one_catch_all_rule_to_the_proxy() {
+        let node = node();
+        let rules = sample();
+        let mut global = input(&node, &rules);
+        global.mode = ProxyMode::Global;
+        assert_eq!(
+            xray_routing_rules(&global),
+            vec![json!({ "type": "field", "network": "tcp,udp", "outboundTag": "proxy" })]
+        );
+        assert_eq!(singbox_routing_rules(&global), vec![json!({ "outbound": "proxy" })]);
+
+        let mut direct = input(&node, &rules);
+        direct.mode = ProxyMode::Direct;
+        assert_eq!(
+            xray_routing_rules(&direct)[0]["outboundTag"],
+            json!("direct")
+        );
+        assert_eq!(
+            singbox_routing_rules(&direct),
+            vec![json!({ "outbound": "direct" })]
+        );
+    }
+
+    /// Switching modes must not eat the user's table: rule mode still renders it.
+    #[test]
+    fn rule_mode_still_renders_the_users_table() {
+        let node = node();
+        let rules = sample();
+        let mut routed = input(&node, &rules);
+        routed.mode = ProxyMode::Rule;
+        let rendered = xray_routing_rules(&routed);
+        assert_eq!(rendered.len(), 2, "the disabled rule stays out");
+        assert_eq!(rendered[0]["outboundTag"], json!("direct"));
+    }
+
     fn sample() -> Vec<RoutingRule> {
         vec![
             rule(
