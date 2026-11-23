@@ -15,8 +15,8 @@
 
 | 项 | 值 |
 |---|---|
-| 代码 HEAD | `待填-§32`「fix(engine): a dying kernel hands the system proxy back before anyone is told」（= 最后一个**已验收**的功能） |
-| 未提交 | 无（待填-§32） |
+| 代码 HEAD | `5c9e466`「feat(rules): say when the kernel is still running the old rules」（= 最后一个**已验收**的功能） |
+| 未提交 | 无（§32 已提交：`5c9e466`） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库（HEAD 上这一条） |
 | IPC 命令 | **77**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
 | Rust 单测 | **320 passed**（`ARCHITECTURE.md:278` 已同步） |
