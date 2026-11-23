@@ -15,8 +15,8 @@
 
 | 项 | 值 |
 |---|---|
-| 代码 HEAD | `8e40cbc`「feat(home): an exit IP card that admits when it could not ask」（= 最后一个**已验收**的功能） |
-| 未提交 | 无（交接后已提交：`--quit`、N12、GEO 数据、测速落盘、内核退出通知） |
+| 代码 HEAD | `a952573`「fix(engine): a dying kernel hands the system proxy back before anyone is told」（= 最后一个**已验收**的功能） |
+| 未提交 | 无（QR 对话框与崩退交还代理均已提交：`0813ca0`、`a952573`） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库（HEAD 上这一条） |
 | IPC 命令 | **77**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
 | Rust 单测 | **320 passed**（`ARCHITECTURE.md:278` 已同步） |
