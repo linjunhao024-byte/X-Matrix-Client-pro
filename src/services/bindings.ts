@@ -93,6 +93,22 @@ export const commands = {
 	 *  the window would look like a freeze.
 	 */
 	exportDiagnostics: () => typedError<string | null, AppError>(__TAURI_INVOKE("export_diagnostics")),
+	/**
+	 *  Ask the release feed whether a newer build exists.
+	 * 
+	 *  Off the IPC thread (`spawn_blocking`) because the whole point of a timeout is
+	 *  that the window stays usable while the answer is late.
+	 */
+	checkUpdate: () => typedError<UpdateStatus, AppError>(__TAURI_INVOKE("check_update")),
+	/**
+	 *  Opens a page in the user's browser: currently only the release page the
+	 *  update check handed back.
+	 * 
+	 *  The scheme is checked here rather than trusted from the caller. The URL
+	 *  comes from a network response, and "open whatever string a server sent"
+	 *  is how a proxy app ends up launching something it should not.
+	 */
+	appOpenUrl: (url: string) => typedError<null, AppError>(__TAURI_INVOKE("app_open_url", { url })),
 	openTextFile: () => typedError<string | null, AppError>(__TAURI_INVOKE("open_text_file")),
 	/**
 	 *  The title bar is drawn by the OS, so CSS cannot theme it: a dark app with a
@@ -1120,6 +1136,17 @@ export type Transport = Transport_Serialize | Transport_Deserialize;
 export type Transport_Deserialize = { kind: "Tcp" } | { kind: "Ws"; path?: string; host?: string | null } | { kind: "Grpc"; service_name: string };
 
 export type Transport_Serialize = { kind: "Tcp" } | { kind: "Ws"; path: string; host: string | null } | { kind: "Grpc"; service_name: string };
+
+/**  What the About page shows after a check. */
+export type UpdateStatus = {
+	current: string,
+	latest: string,
+	has_update: boolean,
+	/**  The release page, opened by the user. Empty when the feed omitted it. */
+	url: string,
+	/**  The release notes, trimmed by the caller for display. */
+	notes: string,
+};
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

@@ -45,6 +45,7 @@ import type {
   RuleSet_Deserialize,
   RuleSet_Serialize,
   RuleSetSource,
+  UpdateStatus,
 } from './bindings'
 
 export class ContractError extends Error {
@@ -86,6 +87,12 @@ export const api = {
 
   /** Write the redacted support report; `null` means they cancelled. */
   exportDiagnostics: (): Promise<string | null> => unwrap(commands.exportDiagnostics()),
+
+  /** Ask the release feed; never touches the installed binary. */
+  checkUpdate: (): Promise<UpdateStatus> => unwrap(commands.checkUpdate()),
+
+  /** Hand a page (the release notes) to the system browser. */
+  appOpenUrl: (url: string): Promise<void> => unwrap(commands.appOpenUrl(url)).then(() => undefined),
 
   /** Read a text file the user picked; `null` means they cancelled. */
   openTextFile: (): Promise<string | null> => unwrap(commands.openTextFile()),
@@ -226,6 +233,7 @@ export function describeError(error: unknown): string {
 }
 
 export type {
+  UpdateStatus,
   RuleTest_Serialize,
   AppError,
   AppInfo,

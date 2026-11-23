@@ -3288,5 +3288,45 @@
     "home.history.tip",
     "{time} · ↓{down} · ↑{up}",
     "{time} · ↓{down} · ↑{up}"
+  ],
+  [
+    "about.update.title",
+    "检查更新",
+    "Check for updates"
+  ],
+  [
+    "about.update.hint",
+    "只去问一下发布页有没有新版本；不会自己下载或替换程序。",
+    "Only asks the release feed whether a newer build exists. Nothing is downloaded or replaced."
+  ],
+  [
+    "about.update.check",
+    "检查更新",
+    "Check now"
+  ],
+  [
+    "about.update.checking",
+    "正在检查…",
+    "Checking…"
+  ],
+  [
+    "about.update.available",
+    "有新版本 {version}",
+    "{version} is available"
+  ],
+  [
+    "about.update.current",
+    "已是最新版本（{version}）",
+    "Up to date ({version})"
+  ],
+  [
+    "about.update.open",
+    "打开发布页",
+    "Open release page"
+  ],
+  [
+    "about.update.failed",
+    "没能问到发布页：{reason}",
+    "Could not ask the release feed: {reason}"
   ]
 ]

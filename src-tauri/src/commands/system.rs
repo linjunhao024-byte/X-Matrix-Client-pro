@@ -82,6 +82,24 @@ pub fn app_open_log_dir(app: AppHandle, runtime: tauri::State<'_, std::sync::Arc
         .map_err(|error| AppError::Internal(format!("打不开日志目录：{error}")))
 }
 
+/// Opens a page in the user's browser: currently only the release page the
+/// update check handed back.
+///
+/// The scheme is checked here rather than trusted from the caller. The URL
+/// comes from a network response, and "open whatever string a server sent"
+/// is how a proxy app ends up launching something it should not.
+#[tauri::command]
+#[specta::specta]
+pub fn app_open_url(app: AppHandle, url: String) -> AppResult<()> {
+    let trimmed = url.trim();
+    if !trimmed.starts_with("https://") && !trimmed.starts_with("http://") {
+        return Err(AppError::InvalidInput(format!("只打开发布页这类 https 链接，不打开「{trimmed}」")));
+    }
+    app.opener()
+        .open_url(trimmed, None::<&str>)
+        .map_err(|error| AppError::Internal(format!("打不开链接：{error}")))
+}
+
 /// Save arbitrary text the UI produced (a CSV of connections, a list of share
 /// links) through the native dialog.
 ///
@@ -152,6 +170,19 @@ pub async fn export_diagnostics(
     })
     .await
     .map_err(|error| AppError::Internal(format!("诊断报告没有写完：{error}")))?
+}
+
+/// Ask the release feed whether a newer build exists.
+///
+/// Off the IPC thread (`spawn_blocking`) because the whole point of a timeout is
+/// that the window stays usable while the answer is late.
+#[tauri::command]
+#[specta::specta]
+pub async fn check_update() -> AppResult<crate::update::UpdateStatus> {
+    let current = env!("CARGO_PKG_VERSION");
+    tauri::async_runtime::spawn_blocking(move || crate::update::check(current))
+        .await
+        .map_err(|error| AppError::Internal(format!("更新检查没有返回：{error}")))?
 }
 
 /// Ask for a text file and return its contents.

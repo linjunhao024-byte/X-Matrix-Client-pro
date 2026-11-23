@@ -15,6 +15,7 @@ mod autostart;
 mod store;
 mod sysproxy;
 mod tray;
+mod update;
 
 use std::sync::Arc;
 
