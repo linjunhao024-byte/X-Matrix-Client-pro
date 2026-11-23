@@ -146,6 +146,14 @@ export const commands = {
 	nodeDelay: (id: string) => typedError<number, AppError>(__TAURI_INVOKE("node_delay", { id })),
 	/**  Drop one live connection (sing-box only — Xray has no connection table). */
 	closeConnection: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("close_connection", { id })),
+	/**
+	 *  Drop several connections at once; an empty list means all of them.
+	 * 
+	 *  Same two preconditions as `close_connection`, phrased for the plural case:
+	 *  "close everything" on Xray is not a missing feature of the button, it is a
+	 *  kernel that has no connection table to clear.
+	 */
+	closeConnections: (ids: string[]) => typedError<null, AppError>(__TAURI_INVOKE("close_connections", { ids })),
 	/**  Start `node_id` on `kind`. Stops whatever was running first. */
 	engineStart: (kind: EngineKind, nodeId: string) => typedError<EngineStatus_Serialize, AppError>(__TAURI_INVOKE("engine_start", { kind, nodeId })),
 	/**
@@ -290,6 +298,11 @@ export type ConnectionInfo = {
 	download: number | null,
 	/**  RFC3339 start time as reported by the kernel. */
 	start: string,
+	/**
+	 *  Full path of the program that opened the connection, when the kernel
+	 *  knows it (sing-box reports `processPath`). Empty when unknown.
+	 */
+	process: string,
 };
 
 /**

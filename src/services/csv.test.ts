@@ -12,6 +12,7 @@ function row(overrides: Partial<ConnectionInfo>): ConnectionInfo {
     upload: 10,
     download: 20,
     start: '2026-01-01T00:00:00Z',
+    process: '',
     ...overrides,
   }
 }

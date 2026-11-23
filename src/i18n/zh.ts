@@ -95,6 +95,7 @@ export const zh: Record<string, string> = {
   "common.testing": "测速中…",
   "common.timeout": "超时",
   "common.unknown": "未知",
+  "common.working": "处理中…",
   // config
   "config.err.noNode": "先选一个节点，否则没有可渲染的东西。",
   "config.title": "内核的最终配置",
@@ -135,6 +136,10 @@ export const zh: Record<string, string> = {
   "conn.view.chain": "按出口",
   "conn.view.host": "按目标",
   "conn.view.list": "列表",
+  "conn.closeAll": "全部断开",
+  "conn.closeAllHint": "断开当前所有连接；正在下载的会立刻中断",
+  "conn.closeAllTitle": "断开全部连接",
+  "conn.closeAllBody": "现在有 {count} 条连接，断开后正在进行的下载与上传会立刻中断。",
   // editor
   "editor.allowInsecure": "允许不安全证书",
   "editor.allowInsecureHint": "跳过证书校验。sing-box 支持；Xray 26 起已移除该选项，请改用下面的证书指纹。",

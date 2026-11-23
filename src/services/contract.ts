@@ -165,6 +165,9 @@ export const api = {
   nodeDelay: (id: string): Promise<number> => unwrap(commands.nodeDelay(id)),
   /** sing-box only: drop one live connection. */
   closeConnection: (id: string): Promise<void> => unwrap(commands.closeConnection(id)).then(() => undefined),
+  /** sing-box only: drop several connections; an empty list means all of them. */
+  closeConnections: (ids: string[]): Promise<void> =>
+    unwrap(commands.closeConnections(ids)).then(() => undefined),
   /** Write the whole configuration to a file the user picks; null = cancelled. */
   backupSave: (): Promise<string | null> => unwrap(commands.backupSave()),
   /** Replace the whole configuration from a picked file; null = cancelled. */

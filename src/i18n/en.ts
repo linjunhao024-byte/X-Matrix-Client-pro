@@ -95,6 +95,7 @@ export const en: Record<string, string> = {
   "common.testing": "Testing…",
   "common.timeout": "Timed out",
   "common.unknown": "Unknown",
+  "common.working": "Working…",
   // config
   "config.err.noNode": "Pick a node first, otherwise there is nothing to render.",
   "config.title": "The config the kernel actually gets",
@@ -135,6 +136,10 @@ export const en: Record<string, string> = {
   "conn.view.chain": "By outbound",
   "conn.view.host": "By host",
   "conn.view.list": "List",
+  "conn.closeAll": "Close all",
+  "conn.closeAllHint": "Drops every live connection; in-flight downloads stop at once",
+  "conn.closeAllTitle": "Close every connection",
+  "conn.closeAllBody": "{count} connections are live. Closing them stops every transfer in flight.",
   // editor
   "editor.allowInsecure": "Allow an untrusted certificate",
   "editor.allowInsecureHint": "Skip certificate verification. sing-box honours it; Xray 26 removed the option, so use the certificate fingerprint below instead.",

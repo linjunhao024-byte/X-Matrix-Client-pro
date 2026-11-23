@@ -3178,5 +3178,30 @@
     "groups.delay.noKernelHint",
     "内核没在运行，测不到真实延迟；先启动内核",
     "The kernel is not running, so there is nothing to measure; start it first"
+  ],
+  [
+    "conn.closeAll",
+    "全部断开",
+    "Close all"
+  ],
+  [
+    "conn.closeAllHint",
+    "断开当前所有连接；正在下载的会立刻中断",
+    "Drops every live connection; in-flight downloads stop at once"
+  ],
+  [
+    "conn.closeAllTitle",
+    "断开全部连接",
+    "Close every connection"
+  ],
+  [
+    "conn.closeAllBody",
+    "现在有 {count} 条连接，断开后正在进行的下载与上传会立刻中断。",
+    "{count} connections are live. Closing them stops every transfer in flight."
+  ],
+  [
+    "common.working",
+    "处理中…",
+    "Working…"
   ]
 ]

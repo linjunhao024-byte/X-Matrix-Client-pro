@@ -235,18 +235,32 @@ async function confirmDelete() {
             </td>
             <td>
               <div class="chips">
-                <button
-                  v-for="member in group.members"
-                  :key="member"
-                  type="button"
-                  class="chip"
-                  :class="{ 'chip-active': group.kind === 'select' && isChosen(group, member) }"
-                  :disabled="group.kind !== 'select'"
-                  :title="group.kind === 'select' ? t('groups.pick') : t('groups.autoHint')"
-                  @click="pick(group, member)"
-                >
-                  {{ nodeName(member) }}
-                </button>
+                <!-- A url-test group is never picked by hand, so its members are
+                     plain text: a disabled button says "not right now", which
+                     sends people looking for the switch that enables it. -->
+                <template v-if="group.kind !== 'select'">
+                  <span
+                    v-for="member in group.members"
+                    :key="member"
+                    class="chip chip-static"
+                    :title="t('groups.autoHint')"
+                  >
+                    {{ nodeName(member) }}
+                  </span>
+                </template>
+                <template v-else>
+                  <button
+                    v-for="member in group.members"
+                    :key="member"
+                    type="button"
+                    class="chip"
+                    :class="{ 'chip-active': isChosen(group, member) }"
+                    :title="t('groups.pick')"
+                    @click="pick(group, member)"
+                  >
+                    {{ nodeName(member) }}
+                  </button>
+                </template>
               </div>
             </td>
             <td>
@@ -369,6 +383,13 @@ async function confirmDelete() {
 
 .chip:disabled {
   cursor: default;
+}
+
+/* Read-only member of a url-test group: still a chip so the column lines up,
+   but nothing about it suggests it can be pressed. */
+.chip-static {
+  cursor: default;
+  border-style: dashed;
 }
 
 .chip:hover:not(:disabled) {

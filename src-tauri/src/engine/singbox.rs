@@ -78,6 +78,11 @@ impl Engine for SingBoxEngine {
         if !rule_sets.is_empty() {
             route.insert("rule_set".into(), json!(rule_sets));
         }
+        // Without this the kernel leaves `metadata.processPath` empty and the
+        // connections page can never name the program behind a connection —
+        // the one thing people want when something unexpected is talking to
+        // the network. Costs one syscall per new connection.
+        route.insert("find_process".into(), json!(true));
         // sing-box 1.12 deprecated resolving outbound domains through the
         // system resolver; 1.14 makes it fatal. Once a `dns` section exists the
         // kernel demands an explicit default, so name our first server.
@@ -645,6 +650,9 @@ mod tests {
         assert_eq!(cfg["dns"]["final"], json!("dns-0"));
         // sing-box 1.14 refuses to start without this once `dns` is present.
         assert_eq!(cfg["route"]["default_domain_resolver"], json!("dns-0"));
+        // The connections page names the owning program only when the kernel
+        // was asked to look it up.
+        assert_eq!(cfg["route"]["find_process"], json!(true));
     }
 
     #[test]

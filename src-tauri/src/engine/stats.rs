@@ -36,6 +36,9 @@ pub struct ConnectionInfo {
     pub download: u64,
     /// RFC3339 start time as reported by the kernel.
     pub start: String,
+    /// Full path of the program that opened the connection, when the kernel
+    /// knows it (sing-box reports `processPath`). Empty when unknown.
+    pub process: String,
 }
 
 /// Cumulative traffic counters, plus (when available) the live connection list.
@@ -182,6 +185,13 @@ pub fn read_clash(port: u16) -> AppResult<TrafficSample> {
                 .and_then(Value::as_str)
                 .unwrap_or("")
                 .to_string(),
+            // `processPath` is what sing-box fills in; `process` is the name the
+            // Clash API documents, so accept whichever the build sends.
+            process: meta
+                .and_then(|m| m.get("processPath").or_else(|| m.get("process")))
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string(),
         });
     }
 
@@ -262,6 +272,23 @@ pub fn close_connection(port: u16, id: &str) -> AppResult<()> {
         return Err(AppError::InvalidInput("连接 id 为空".into()));
     }
     http::delete_with_timeout(port, &format!("/connections/{id}"), http::DEFAULT_TIMEOUT)?;
+    Ok(())
+}
+
+/// sing-box: drop several connections, or all of them.
+///
+/// An empty `ids` means "everything". That is a separate endpoint rather than a
+/// loop over ids because the kernel is authoritative about what exists right
+/// now: a connection that opened between our last poll and this call would
+/// survive an id-by-id sweep, which is not what "close all" promises.
+pub fn close_connections(port: u16, ids: &[String]) -> AppResult<()> {
+    if ids.is_empty() {
+        http::delete_with_timeout(port, "/connections", http::DEFAULT_TIMEOUT)?;
+        return Ok(());
+    }
+    for id in ids {
+        close_connection(port, id)?;
+    }
     Ok(())
 }
 
@@ -427,5 +454,49 @@ mod tests {
             clash_delay(port, "node:a", "http://www.gstatic.com/generate_204", 1000).unwrap(),
             u32::MAX
         );
+    }
+
+    #[test]
+    fn the_owning_process_survives_the_hop_from_the_kernel() {
+        let port = serve_once(
+            r#"{"connections":[{"id":"c1","upload":1,"download":2,
+                 "metadata":{"host":"example.com","network":"tcp",
+                             "processPath":"C:\\Program Files\\Firefox\\firefox.exe"}},
+                {"id":"c2","upload":1,"download":2,
+                 "metadata":{"host":"other.com","network":"tcp","process":"curl"}},
+                {"id":"c3","upload":1,"download":2,"metadata":{"host":"third.com"}}]}"#,
+        );
+        let s = read_clash(port).unwrap();
+        assert_eq!(
+            s.connections[0].process,
+            r"C:\Program Files\Firefox\firefox.exe"
+        );
+        // Older/newer builds may only send the bare name; accept either.
+        assert_eq!(s.connections[1].process, "curl");
+        // A connection the kernel opened itself has no owner.
+        assert_eq!(s.connections[2].process, "");
+    }
+
+    #[test]
+    fn closing_everything_is_one_delete_to_the_kernel() {
+        let (port, handle) = serve_capture(r#"{"ok":true}"#);
+        close_connections(port, &[]).unwrap();
+        let request = handle.join().unwrap();
+        // Not a loop over ids: a single call, so a connection that opened
+        // between our last poll and this click cannot slip through.
+        assert!(
+            request.starts_with("DELETE /connections "),
+            "unexpected request line: {request}"
+        );
+    }
+
+    #[test]
+    fn closing_a_selection_walks_the_ids() {
+        let port = serve_once(r#"{"ok":true}"#);
+        // Two ids against a single-response stub: the first succeeds, the second
+        // hits a closed listener and must surface as an error rather than be
+        // swallowed.
+        let result = close_connections(port, &["a".to_string(), "b".to_string()]);
+        assert!(result.is_err());
     }
 }

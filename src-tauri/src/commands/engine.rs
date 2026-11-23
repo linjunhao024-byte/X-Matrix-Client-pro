@@ -455,6 +455,26 @@ pub fn close_connection(runtime: Runtime<'_>, id: String) -> AppResult<()> {
     stats::close_connection(status.api_port, &id)
 }
 
+/// Drop several connections at once; an empty list means all of them.
+///
+/// Same two preconditions as `close_connection`, phrased for the plural case:
+/// "close everything" on Xray is not a missing feature of the button, it is a
+/// kernel that has no connection table to clear.
+#[tauri::command]
+#[specta::specta]
+pub fn close_connections(runtime: Runtime<'_>, ids: Vec<String>) -> AppResult<()> {
+    let status = runtime.status();
+    if !status.running {
+        return Err(AppError::Engine("内核没在运行，没有连接可断开".to_string()));
+    }
+    if status.kind != Some(EngineKind::SingBox) {
+        return Err(AppError::Engine(
+            "Xray 不提供连接列表，断不开连接".to_string(),
+        ));
+    }
+    stats::close_connections(status.api_port, &ids)
+}
+
 /// How long the kernel takes to reach the probe through one outbound.
 ///
 /// This goes through the Clash API instead of the mixed port, which is what

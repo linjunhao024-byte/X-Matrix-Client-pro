@@ -9,6 +9,7 @@
 import { computed, ref } from 'vue'
 import AppIcon from '../components/AppIcon.vue'
 import EmptyState from '../components/EmptyState.vue'
+import ModalDialog from '../components/ModalDialog.vue'
 import { t } from '../i18n'
 import { api, describeError } from '../services/contract'
 import { formatBytes, formatClock, formatRate } from '../services/format'
@@ -19,6 +20,39 @@ import { useEngineStore } from '../stores/engine'
 const engine = useEngineStore()
 const closing = ref<string | null>(null)
 const closeError = ref<string | null>(null)
+/** True while "close all" is in flight; kept apart from `closing` because the
+    single-row buttons stay usable while every row is being dropped. */
+const closingAll = ref(false)
+const closeAllOpen = ref(false)
+
+/**
+ * Drop every connection the kernel has right now.
+ *
+ * Deliberately one call with an empty id list: the kernel answers with its own
+ * idea of the current table, so a connection opened between our last poll and
+ * this click is closed too. A confirm step is required because this tears down
+ * in-flight downloads, not just idle sockets.
+ */
+async function closeAll(): Promise<void> {
+  closingAll.value = true
+  closeError.value = null
+  try {
+    await api.closeConnections([])
+    closeAllOpen.value = false
+  } catch (error) {
+    closeError.value = describeError(error)
+    closeAllOpen.value = false
+  } finally {
+    closingAll.value = false
+  }
+}
+
+/** Basename of the owning program, for the second line under a host. */
+function processName(path: string): string {
+  if (!path) return ''
+  const parts = path.split(/[\\/]/)
+  return parts[parts.length - 1] || path
+}
 
 /**
  * Drop one connection.
@@ -201,6 +235,15 @@ function chainLabel(chains: string[]): string {
       <button class="btn btn-sm" type="button" :disabled="exporting || rows.length === 0" @click="exportCsv">
         {{ exporting ? t('common.loading') : t('conn.export') }}
       </button>
+      <button
+        class="btn btn-sm btn-danger"
+        type="button"
+        :disabled="closingAll || engine.connections.length === 0"
+        :title="t('conn.closeAllHint')"
+        @click="closeAllOpen = true"
+      >
+        {{ closingAll ? t('common.working') : t('conn.closeAll') }}
+      </button>
     </div>
 
     <p v-if="exportError" class="alert">{{ exportError }}</p>
@@ -270,7 +313,12 @@ function chainLabel(chains: string[]): string {
         </thead>
         <tbody>
           <tr v-for="row in rows" :key="row.id">
-            <td class="cell-mono ellipsis">{{ row.host || '—' }}</td>
+            <td class="cell-mono ellipsis">
+              {{ row.host || '—' }}
+              <span v-if="row.process" class="conn-process muted" :title="row.process">
+                {{ processName(row.process) }}
+              </span>
+            </td>
             <td>{{ row.network || '—' }}</td>
             <td>{{ row.rule || '—' }}</td>
             <td class="cell-mono ellipsis">{{ chainLabel(row.chains) }}</td>
@@ -299,6 +347,25 @@ function chainLabel(chains: string[]): string {
         })
       }}
     </p>
+
+    <ModalDialog
+      :open="closeAllOpen"
+      :title="t('conn.closeAllTitle')"
+      :width="440"
+      @close="closeAllOpen = false"
+    >
+      <p class="muted">
+        {{ t('conn.closeAllBody', { count: engine.connections.length }) }}
+      </p>
+      <template #footer>
+        <button class="btn" type="button" @click="closeAllOpen = false">
+          {{ t('common.cancel') }}
+        </button>
+        <button class="btn btn-danger" type="button" :disabled="closingAll" @click="closeAll">
+          {{ closingAll ? t('common.working') : t('common.confirm') }}
+        </button>
+      </template>
+    </ModalDialog>
   </div>
 </template>
 
@@ -358,6 +425,17 @@ function chainLabel(chains: string[]): string {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The owning program rides under the host as a second line: a ninth column at
+   1180px would push the action column off the card, and "firefox.exe" is a
+   qualifier for the host, not a fact of equal weight. */
+.conn-process {
+  display: block;
+  font-size: 11px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .small {

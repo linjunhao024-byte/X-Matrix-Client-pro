@@ -337,3 +337,25 @@
 1. **测试服务器换过 uuid，隧道一直没通。** `srv-access.log` 满屏 `rejected proxy/vless/encoding: invalid request user id: 11111111-1111-1111-1111-111111111111`，而 `srv-lite2.json` 里是 `…-2222-3333-4444-…`。客户端节点没跟着改，于是"内核给了个数"看起来像成功——直到换成一致的 id，`154 ms` 才对得上。教训：验收隧道时，先看服务端有没有 `accepted`。
 2. **sing-box 1.14 忽略 Clash API 的 `url` 形参。** 拿 `…/delay?url=http://127.0.0.1:1/nothing`（必死地址）去问，仍回 `{"delay":109}`；`group:…` 回 95、`proxy` 回 99。它用的是出站自带的探测地址（urltest 默认 `generate_204`）。`stats.rs::clash_delay` 照发 `url`（别的内核认），但注释写明**不许在这上面建"用户的测试地址会被采用"的功能假设**。
 3. **探测源对 `HEAD` 返回 body，连接被关。** sing-box 的 URLTest 发的是 `HEAD`；原来那个 `HttpListener`（http.sys）对 HEAD 也写 body，`http.sys` 于是断连，内核只看到 `Head "…": EOF`。换成裸 TCP 应答器（任何方法都回 `200` + 空体）才通。这一条值得记住：**"探测失败"先怀疑探测端，再怀疑被测链路**。
+
+## 17. 连接页：一键断开全部，以及每条连接是哪个程序（2026-11-23，云电脑 cloudpc-test）
+
+连接列表原来只能一条一条断开，而且只能看到目标域名——"这 6 个连接是同一个下载器开的"和"有人在我机器上偷偷上传"在页面上长得一模一样。现在工具栏多一个「全部断开」，每条连接的域名下面多一行**发起它的程序**。
+
+验法：云电脑上 app 跑着 sing-box（`127.0.0.1:7890` 混合入站、`9090` Clash API），用 `curl.exe -x http://127.0.0.1:7890` 起三个对 `speed.cloudflare.com` 的长下载，制造真实连接；连接页用 UIA dump 读 `DataItem` 与 `Button`，Clash API 用 `curl http://127.0.0.1:9090/connections` 直接对照。
+
+| 项 | 判据 | 结果 |
+| --- | --- | --- |
+| 进程归属真的显示出来 | 三条 curl 下载在跑时看连接页 | **通过**。行内 `DataItem 'speed.cloudflare.com curl.exe' @349,402`：域名下面就是 `curl.exe`，完整路径在 `title` 里。对照 Clash API：`metadata.processPath = 'C:\Windows\System32\curl.exe'` |
+| 「全部断开」在位且说明白 | 连接页工具栏 | **通过**。`Button '全部断开' @1085,229 69x28 help=断开当前所有连接；正在下载的会立刻中断` |
+| 点了要先问一句 | 点「全部断开」 | **通过**。弹出 `Text '断开全部连接'`、`Text '现在有 4 条连接。断开后正在进行的下载与上传会立刻中断。'`、`Button '取消'`、`Button '确认'` |
+| 确认后真的全断 | 点「确认」 | **通过**。`/connections` 由 4 条变 `{"connections":[]}`（`downloadTotal` 仍记着 10,587,410 字节，累计量不清零）；页面同时变空态：`Button '全部断开' … DISABLED`、`Text '引擎在运行，但当前没有活跃连接'`、`Text '…只是这一秒没有流量转发。随便打开一个网站，连接就会出现在这里。'` |
+
+**三个刻意的设计**：
+- **不新增第九列**。1180 px 窗口下表格可视宽只有 866 px，再插一列会把操作列挤出卡片；程序名作为域名下方的次要行，宽度不变。
+- **空列表走 `DELETE /connections`，不逐个 id 扫**。内核才是"现在有哪些连接"的唯一权威；拿两次轮询之间读到的 id 列表去逐个删，会漏掉这期间新开的连接，而"全部断开"漏掉一条就失去了意义。
+- **程序名只显示 basename，完整路径进 `title`**。`C:\Program Files\…\firefox.exe` 会把一行撑到两行，而识别程序靠的是 `firefox.exe`。
+
+**两个坑**：
+1. **`metadata.processPath` 默认是空的。** sing-box 只有在 `route.find_process = true` 时才去查发起连接的程序；我们之前的配置没开，所以这一栏永远是空字符串。现已写进渲染（`src-tauri/src/engine/singbox.rs`，注释说明代价是每条新连接一次系统调用），并有断言守着。
+2. **别用 `grep` 二进制来判断代码有没有编进去。** 改完代码后 `grep -c find_process target/release/x-matrix.exe` 一直是 0，`strings` 也找不到，我一度怀疑构建没生效——实际上 rustc 把这种短字符串用 `movabs` 立即数拆成两条指令塞进代码段（`H\xb9find_pro` + `cess`），文件里根本不存在连续的字节序列。**判断构建是否生效只能跑起来看行为**（这次是直接问 Clash API 的 `processPath`）。
