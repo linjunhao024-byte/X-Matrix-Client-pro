@@ -150,6 +150,7 @@ export const commands = {
 	 *  config format expects.
 	 */
 	engineVersion: (kind: EngineKind) => typedError<string, AppError>(__TAURI_INVOKE("engine_version", { kind })),
+	pickEngineBinary: (kind: EngineKind) => typedError<string | null, AppError>(__TAURI_INVOKE("pick_engine_binary", { kind })),
 	/**  Open the engines folder in Explorer, so the user can drop a kernel in. */
 	engineOpenDir: () => typedError<null, AppError>(__TAURI_INVOKE("engine_open_dir")),
 	/**  The tail of a kernel log. Empty string means "that kernel never ran". */
@@ -1019,6 +1020,21 @@ export type Settings_Deserialize = {
 	 */
 	last_engine?: string | null,
 	/**
+	 *  Explicit Xray executable; empty means "the one in the engines folder".
+	 * 
+	 *  An override exists for portable installs (the kernel sits next to the
+	 *  app, not under `%APPDATA%`) and for people who already trust a specific
+	 *  build: they should not have to copy it into our data directory, where a
+	 *  later install could replace the binary they chose.
+	 */
+	xray_binary?: string,
+	/**
+	 *  Explicit sing-box executable; empty is the same as
+	 *  [`Settings::xray_binary`]. Resolved per kernel, because a user may keep
+	 *  the upstream Xray and a self-built sing-box side by side.
+	 */
+	singbox_binary?: string,
+	/**
 	 *  How chatty the kernel log should be. `Warn` keeps the file readable;
 	 *  `Debug` is what you switch to when a node will not connect.
 	 */
@@ -1125,6 +1141,21 @@ export type Settings_Serialize = {
 	 *  domain must not depend on the engine module.
 	 */
 	last_engine: string | null,
+	/**
+	 *  Explicit Xray executable; empty means "the one in the engines folder".
+	 * 
+	 *  An override exists for portable installs (the kernel sits next to the
+	 *  app, not under `%APPDATA%`) and for people who already trust a specific
+	 *  build: they should not have to copy it into our data directory, where a
+	 *  later install could replace the binary they chose.
+	 */
+	xray_binary: string,
+	/**
+	 *  Explicit sing-box executable; empty is the same as
+	 *  [`Settings::xray_binary`]. Resolved per kernel, because a user may keep
+	 *  the upstream Xray and a self-built sing-box side by side.
+	 */
+	singbox_binary: string,
 	/**
 	 *  How chatty the kernel log should be. `Warn` keeps the file readable;
 	 *  `Debug` is what you switch to when a node will not connect.

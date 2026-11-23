@@ -56,7 +56,10 @@ impl LoadedRuleSet {
 }
 
 /// Which kernel renders and runs the configuration.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+// `Hash` is not for rendering: the runtime keys its per-kernel binary overrides
+// by this value, so one map serves both kernels. Kept as a plain comment so it
+// does not travel into the generated TypeScript contract.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
 #[serde(rename_all = "kebab-case")]
 pub enum EngineKind {
     Xray,

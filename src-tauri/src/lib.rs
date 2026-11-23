@@ -86,11 +86,14 @@ pub fn run() {
             app.manage(std::sync::Arc::new(crate::engine::TrafficLog::new(
                 base.join("traffic.jsonl"),
             )));
-            app.manage(Arc::new(EngineRuntime::new(
-                engines_dir,
-                config_dir,
-                log_dir,
-            )));
+            let runtime = Arc::new(EngineRuntime::new(engines_dir, config_dir, log_dir));
+            // The store may point a kernel somewhere else (a portable install
+            // or a build the user already trusts). Resolve it before the
+            // runtime can be reached by auto-connect below, or the first start
+            // of the session would silently use the engines directory.
+            let saved = app.state::<AppState>().settings.read().clone();
+            crate::commands::settings::apply_engine_binaries(&runtime, &saved);
+            app.manage(runtime);
 
             // If a snapshot survived the last run, that run died while holding
             // the system proxy. Put the user's settings back before doing

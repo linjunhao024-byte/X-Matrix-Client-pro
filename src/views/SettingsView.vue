@@ -2,7 +2,14 @@
 import { computed, onMounted, ref } from 'vue'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
 import { availableLocales, locale, setLocale, t } from '../i18n'
-import { api, describeError, type ProxyMode, type Settings_Serialize } from '../services/contract'
+import {
+  api,
+  describeError,
+  type EngineBinary,
+  type EngineKind,
+  type ProxyMode,
+  type Settings_Serialize,
+} from '../services/contract'
 import { useSettingsStore } from '../stores/settings'
 import { useSystemProxyStore } from '../stores/sysproxy'
 
@@ -108,11 +115,111 @@ async function refreshAutostart() {
   }
 }
 
+/**
+ * The two kernels, in the order a user meets them.
+ *
+ * `Xray` and `sing-box` are product names, so they are not translated — the
+ * same rule the language list follows.
+ */
+const kernels: { kind: EngineKind; label: string }[] = [
+  { kind: 'xray', label: 'Xray' },
+  { kind: 'sing-box', label: 'sing-box' },
+]
+
+/** Which settings field carries the override for each kernel. */
+const overrideField: Record<EngineKind, 'xray_binary' | 'singbox_binary'> = {
+  xray: 'xray_binary',
+  'sing-box': 'singbox_binary',
+}
+
+/** What the runtime would actually start, per kernel, as last saved. */
+const kernelBinaries = ref<EngineBinary[]>([])
+/** Kind currently talking to the backend — a dialog or a `version` run. */
+const kernelBusy = ref<EngineKind | null>(null)
+/** One line per kernel: the reported version, or why there is none. */
+const kernelNotes = ref<Partial<Record<EngineKind, string>>>({})
+
+const kernelRows = computed(() =>
+  kernels.map((kernel) => ({
+    ...kernel,
+    binary: kernelBinaries.value.find((item) => item.kind === kernel.kind),
+    override: (draft.value?.[overrideField[kernel.kind]] ?? '').trim(),
+  })),
+)
+
+async function refreshKernelBinaries(): Promise<void> {
+  try {
+    kernelBinaries.value = await api.engineBinaries()
+  } catch (cause) {
+    kernelNotes.value.xray = describeError(cause)
+  }
+}
+
+/**
+ * Persist one override (or clear it) through the settings store.
+ *
+ * Saving is what applies the path to the running runtime, so the row must not
+ * only change the draft: the next 启动 has to use the chosen file without an
+ * app restart. Both the picker and 恢复默认 go through here.
+ */
+async function saveKernelOverride(kind: EngineKind, path: string): Promise<void> {
+  if (!draft.value) return
+  kernelBusy.value = kind
+  try {
+    await store.save({ ...draft.value, [overrideField[kind]]: path })
+    draft.value = { ...(store.settings as Settings_Serialize) }
+    // The old note described the previous file; it would now be a lie.
+    delete kernelNotes.value[kind]
+    await refreshKernelBinaries()
+  } catch (cause) {
+    kernelNotes.value[kind] = describeError(cause)
+  } finally {
+    kernelBusy.value = null
+  }
+}
+
+async function chooseKernel(kind: EngineKind): Promise<void> {
+  if (!draft.value) return
+  kernelBusy.value = kind
+  let chosen: string | null = null
+  try {
+    chosen = await api.pickEngineBinary(kind)
+  } catch (cause) {
+    kernelNotes.value[kind] = describeError(cause)
+  } finally {
+    kernelBusy.value = null
+  }
+  // Cancelling the dialog is a decision, not a failure: keep everything as is.
+  if (chosen) await saveKernelOverride(kind, chosen)
+}
+
+async function resetKernel(kind: EngineKind): Promise<void> {
+  await saveKernelOverride(kind, '')
+}
+
+/**
+ * Ask the kernel to report itself.
+ *
+ * A missing file comes back as an error naming the path — that is the honest
+ * answer, and it is shown in the same line instead of a version.
+ */
+async function probeKernelVersion(kind: EngineKind): Promise<void> {
+  kernelBusy.value = kind
+  try {
+    kernelNotes.value[kind] = await api.engineVersion(kind)
+  } catch (cause) {
+    kernelNotes.value[kind] = describeError(cause)
+  } finally {
+    kernelBusy.value = null
+  }
+}
+
 onMounted(async () => {
   await store.load()
   if (store.settings) draft.value = { ...store.settings }
   await proxy.refresh()
   await refreshAutostart()
+  await refreshKernelBinaries()
 })
 
 async function save() {
@@ -263,6 +370,51 @@ async function save() {
           :label="t('settings.closeToTray')"
           :description="t('settings.closeToTrayHint')"
         />
+      </section>
+
+      <section class="surface-plain panel">
+        <h2 class="section-title">{{ t('settings.kernel.title') }}</h2>
+        <p class="field-hint">{{ t('settings.kernel.hint') }}</p>
+        <div v-for="row in kernelRows" :key="row.kind" class="kernel-row">
+          <div class="kernel-head">
+            <span class="field-label">{{ row.label }}</span>
+            <span class="badge" :class="row.binary?.present ? 'badge-success' : 'badge-warning'">
+              {{ row.binary?.present ? t('settings.kernel.present') : t('settings.kernel.missing') }}
+            </span>
+            <span class="badge badge-accent">
+              {{ row.override ? t('settings.kernel.custom') : t('settings.kernel.default') }}
+            </span>
+          </div>
+          <code class="kernel-path">{{ row.binary?.path ?? '—' }}</code>
+          <div class="row">
+            <button
+              class="btn btn-sm"
+              type="button"
+              :disabled="kernelBusy !== null"
+              @click="chooseKernel(row.kind)"
+            >
+              {{ t('settings.kernel.choose') }}
+            </button>
+            <button
+              class="btn btn-sm"
+              type="button"
+              :disabled="kernelBusy !== null || !row.override"
+              @click="resetKernel(row.kind)"
+            >
+              {{ t('settings.kernel.reset') }}
+            </button>
+            <button
+              class="btn btn-sm"
+              type="button"
+              :disabled="kernelBusy !== null"
+              @click="probeKernelVersion(row.kind)"
+            >
+              {{ t('settings.kernel.version') }}
+            </button>
+          </div>
+          <p v-if="kernelNotes[row.kind]" class="field-hint">{{ kernelNotes[row.kind] }}</p>
+        </div>
+        <p class="field-hint">{{ t('settings.kernel.note') }}</p>
       </section>
 
       <section class="surface-plain panel">
@@ -488,5 +640,26 @@ kbd {
   gap: 12px;
   flex-wrap: wrap;
   font-size: 13px;
+}
+
+.kernel-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kernel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.kernel-path {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  /* A full path is long and has no spaces to break at on Windows. */
+  overflow-wrap: anywhere;
 }
 </style>

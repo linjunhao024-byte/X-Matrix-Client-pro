@@ -3045,6 +3045,56 @@
     "Closing the window does not quit: it hides to the tray. Use \"Quit X-Matrix\" in the tray menu to exit — the system proxy is restored first, then the kernel stops."
   ],
   [
+    "settings.kernel.title",
+    "内核二进制",
+    "Kernel binaries"
+  ],
+  [
+    "settings.kernel.hint",
+    "默认使用应用目录里的内核；这里可以换成便携安装，或你已经信任的那个版本。留空即恢复默认。",
+    "By default the kernel comes from the app's engines folder. Point it at a portable install or a build you already trust; empty means the default."
+  ],
+  [
+    "settings.kernel.choose",
+    "选择…",
+    "Choose…"
+  ],
+  [
+    "settings.kernel.reset",
+    "恢复默认",
+    "Use default"
+  ],
+  [
+    "settings.kernel.version",
+    "版本",
+    "Version"
+  ],
+  [
+    "settings.kernel.present",
+    "文件已就位",
+    "File found"
+  ],
+  [
+    "settings.kernel.missing",
+    "文件不存在",
+    "File not found"
+  ],
+  [
+    "settings.kernel.custom",
+    "自定义路径",
+    "Custom path"
+  ],
+  [
+    "settings.kernel.default",
+    "默认路径",
+    "Default path"
+  ],
+  [
+    "settings.kernel.note",
+    "改过的路径从下次启动开始生效；正在运行的内核不会被中途换掉。",
+    "A new path takes effect on the next start; a running kernel is never swapped underneath you."
+  ],
+  [
     "sidebar.collapse",
     "收起侧栏",
     "Collapse sidebar"

@@ -29,6 +29,19 @@ pub struct Settings {
     /// Persisted as the kernel's own spelling (`xray` / `sing-box`) because the
     /// domain must not depend on the engine module.
     pub last_engine: Option<String>,
+    /// Explicit Xray executable; empty means "the one in the engines folder".
+    ///
+    /// An override exists for portable installs (the kernel sits next to the
+    /// app, not under `%APPDATA%`) and for people who already trust a specific
+    /// build: they should not have to copy it into our data directory, where a
+    /// later install could replace the binary they chose.
+    #[serde(default)]
+    pub xray_binary: String,
+    /// Explicit sing-box executable; empty is the same as
+    /// [`Settings::xray_binary`]. Resolved per kernel, because a user may keep
+    /// the upstream Xray and a self-built sing-box side by side.
+    #[serde(default)]
+    pub singbox_binary: String,
     /// How chatty the kernel log should be. `Warn` keeps the file readable;
     /// `Debug` is what you switch to when a node will not connect.
     pub log_level: LogLevel,
@@ -217,6 +230,8 @@ impl Default for Settings {
             auto_connect: false,
             last_node_id: None,
             last_engine: None,
+            xray_binary: String::new(),
+            singbox_binary: String::new(),
             log_level: LogLevel::Warn,
             auto_test_minutes: 0,
             test_timeout_ms: DEFAULT_TEST_TIMEOUT_MS,
@@ -389,5 +404,22 @@ mod tests {
     fn rejects_port_collision() {
         let s = Settings { api_port: 7890, ..Default::default() };
         assert!(s.validate().is_err());
+    }
+
+    #[test]
+    fn an_older_store_without_the_kernel_overrides_still_loads() {
+        // A store.json written before N11 has neither field. Both must fall
+        // back to "use the engines folder" instead of making the file
+        // unreadable, which would look like the app forgot every setting.
+        let old = r#"{"mixed_port":7890,"api_port":9090,"allow_lan":false,
+            "mode":"rule","system_proxy":false,"auto_start":false,"language":"zh",
+            "auto_connect":false,"log_level":"warn","auto_test_minutes":0,
+            "test_timeout_ms":3000,"test_concurrency":2,"proxy_bypass":"",
+            "test_url":"http://www.gstatic.com/generate_204",
+            "subscription_user_agent":"","subscription_via_proxy":false,
+            "dns_servers":"","start_minimized":false,"close_to_tray":true}"#;
+        let loaded: Settings = serde_json::from_str(old).expect("old store must still load");
+        assert!(loaded.xray_binary.is_empty());
+        assert!(loaded.singbox_binary.is_empty());
     }
 }

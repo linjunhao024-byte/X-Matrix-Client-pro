@@ -169,6 +169,10 @@ export const api = {
   engineKinds: (): Promise<EngineKind[]> => commands.engineKinds(),
   engineBinaries: (): Promise<EngineBinary[]> => commands.engineBinaries(),
 
+  /** Native picker for one kernel; `null` when the user cancels. */
+  pickEngineBinary: (kind: EngineKind): Promise<string | null> =>
+    unwrap(commands.pickEngineBinary(kind)),
+
   /** Runs `version` on an installed kernel: no config, no ports, no traffic. */
   engineVersion: (kind: EngineKind): Promise<string> => unwrap(commands.engineVersion(kind)),
   engineOpenDir: async (): Promise<void> => {

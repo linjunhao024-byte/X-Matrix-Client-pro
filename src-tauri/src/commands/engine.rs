@@ -8,6 +8,7 @@
 use std::sync::Arc;
 
 use tauri::{AppHandle, State};
+use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
 use crate::domain::{Node, ProbeKind};
@@ -96,6 +97,42 @@ pub fn engine_version(runtime: Runtime<'_>, kind: EngineKind) -> AppResult<Strin
     // through `run_blocking` would move the `Runtime` borrow into a `'static`
     // closure it cannot escape.
     runtime.version(kind)
+}
+
+// Opens the native file picker for one kernel and returns the chosen path.
+//
+// Written as `//` on purpose: specta copies `///` doc comments into the
+// generated bindings, and `check:contract` then reports the hand-off text as a
+// drift. The signature is the contract; the explanation lives here.
+//
+// `None` means the user cancelled, which is not a failure — the settings page
+// keeps whatever path was already there. A dialog that cannot even be shown
+// panics inside the blocking call, and `spawn_blocking` turns that into a
+// `JoinError` we can hand back as a readable message instead of losing the app.
+#[tauri::command]
+#[specta::specta]
+pub async fn pick_engine_binary(app: AppHandle, kind: EngineKind) -> AppResult<Option<String>> {
+    let chosen = tauri::async_runtime::spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .add_filter("可执行文件", &["exe"])
+            .blocking_pick_file()
+    })
+    .await
+    .map_err(|error| {
+        AppError::NotFound(format!(
+            "打不开 {} 内核的选择文件对话框：{error}",
+            kind.as_str()
+        ))
+    })?;
+
+    let Some(path) = chosen else {
+        return Ok(None);
+    };
+    let path = path.into_path().map_err(|error| {
+        AppError::InvalidInput(format!("所选路径不可用：{error}"))
+    })?;
+    Ok(Some(path.display().to_string()))
 }
 
 /// Download throughput through the running tunnel, in bytes per second.

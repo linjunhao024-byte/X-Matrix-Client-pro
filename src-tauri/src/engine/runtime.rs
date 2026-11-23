@@ -15,6 +15,7 @@
 //! * a kernel that fails to become ready is killed immediately, never left
 //!   behind.
 
+use std::collections::HashMap;
 use std::io::Write;
 use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
@@ -22,7 +23,7 @@ use std::process::{Command, Stdio};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use serde::Serialize;
 use specta::Type;
 
@@ -59,7 +60,30 @@ pub trait ReadinessProbe: Send + Sync {
 }
 
 /// Real implementation: `std::process::Command` with no console window.
-pub struct SystemSpawner;
+pub struct SystemSpawner {
+    /// Where the geo data files live. A kernel the user pointed at may sit in a
+    /// directory of its own, but the data files stay with the engines; Xray
+    /// only looks in one place, so prefer the kernel's directory when it has
+    /// the files and fall back to this one otherwise.
+    asset_dir: PathBuf,
+}
+
+/// The directory to hand to Xray as `XRAY_LOCATION_ASSET`: the kernel's own
+/// folder when it carries the data files, otherwise the engines directory.
+pub(crate) fn asset_dir_for(exe: &Path, engines_dir: &Path) -> PathBuf {
+    match exe.parent() {
+        Some(dir) if dir.join("geosite.dat").exists() || dir.join("geoip.dat").exists() => {
+            dir.to_path_buf()
+        }
+        _ => engines_dir.to_path_buf(),
+    }
+}
+
+impl SystemSpawner {
+    fn new(asset_dir: PathBuf) -> Self {
+        Self { asset_dir }
+    }
+}
 
 impl Spawner for SystemSpawner {
     fn spawn(
@@ -87,12 +111,12 @@ impl Spawner for SystemSpawner {
 
         // Xray looks for geoip.dat / geosite.dat next to itself only when it is
         // told to; without this it searches the directory the GUI happened to
-        // be started from, which is not a place a user can reason about. The
-        // engines directory is where the binaries live, so point it there and
-        // the status page describes the same files the kernel will load.
-        if let Some(dir) = exe.parent() {
-            command.env("XRAY_LOCATION_ASSET", dir);
-        }
+        // be started from, which is not a place a user can reason about. A
+        // user-chosen kernel usually sits alone in its own folder while the
+        // data files stay in the engines directory — pointing Xray at the exe
+        // there made every `geosite:` / `geoip:` rule fail to load, so the
+        // kernel's own folder only wins when it actually carries the files.
+        command.env("XRAY_LOCATION_ASSET", asset_dir_for(exe, &self.asset_dir));
 
         #[cfg(windows)]
         {
@@ -242,6 +266,11 @@ pub struct EngineRuntime {
     engines_dir: PathBuf,
     config_dir: PathBuf,
     log_dir: PathBuf,
+    /// Per-kernel executables the user pointed us at (see
+    /// [`EngineRuntime::binary_path`]). Empty for a kernel means "the engines
+    /// directory", which keeps the default path out of a map that exists for
+    /// the exceptions.
+    overrides: RwLock<HashMap<EngineKind, PathBuf>>,
     running: Mutex<Option<Running>>,
     last_exit_code: Mutex<Option<i32>>,
     /// Exit code of a kernel that died on its own, waiting to be announced.
@@ -256,7 +285,7 @@ pub struct EngineRuntime {
 impl EngineRuntime {
     pub fn new(engines_dir: PathBuf, config_dir: PathBuf, log_dir: PathBuf) -> Self {
         Self::with_dependencies(
-            Box::new(SystemSpawner),
+            Box::new(SystemSpawner::new(engines_dir.clone())),
             Box::new(TcpProbe),
             engines_dir,
             config_dir,
@@ -277,6 +306,7 @@ impl EngineRuntime {
             engines_dir,
             config_dir,
             log_dir,
+            overrides: RwLock::new(HashMap::new()),
             running: Mutex::new(None),
             last_exit_code: Mutex::new(None),
             unexpected_exit: Mutex::new(None),
@@ -338,7 +368,7 @@ impl EngineRuntime {
                 .map_err(|e| AppError::Internal(e.to_string()))?,
         )?;
 
-        let exe = self.engines_dir.join(engine.binary_name());
+        let exe = self.binary_path(kind);
         let args = engine.args(&config_path.to_string_lossy());
         let log_path = self.log_dir.join(format!("{}.log", kind.as_str()));
 
@@ -561,6 +591,37 @@ impl EngineRuntime {
         &self.engines_dir
     }
 
+    /// The executable this runtime would start for `kind`.
+    ///
+    /// One resolver for spawn, [`Self::version`] and [`Self::binaries`]: if the
+    /// three disagreed, the settings page could report a version from one file
+    /// while the start button spawned another — the classic "the version says
+    /// 26.x but it behaves like 24.x" bug. An explicit override wins; an empty
+    /// one falls back to the engines directory.
+    pub fn binary_path(&self, kind: EngineKind) -> PathBuf {
+        if let Some(path) = self.overrides.read().get(&kind) {
+            return path.clone();
+        }
+        self.engines_dir.join(kind.engine().binary_name())
+    }
+
+    /// Point one kernel at an explicit executable, or clear the override.
+    ///
+    /// `None` means "back to the engines directory", which is what an empty
+    /// setting maps to. Only the named kernel changes: a user can run the
+    /// upstream Xray and a self-built sing-box at the same time.
+    pub fn set_binary(&self, kind: EngineKind, path: Option<PathBuf>) {
+        let mut overrides = self.overrides.write();
+        match path {
+            Some(path) => {
+                overrides.insert(kind, path);
+            }
+            None => {
+                overrides.remove(&kind);
+            }
+        }
+    }
+
     /// Where rendered kernel configs are written.
     pub fn config_dir(&self) -> &std::path::Path {
         &self.config_dir
@@ -572,12 +633,17 @@ impl EngineRuntime {
     }
 
     /// Every kernel binary we can drive, and whether it is on disk.
+    ///
+    /// `path` is the *effective* file — an override is reported as it is, so the
+    /// settings page shows the same path the next start will use. `name` stays
+    /// the engine's own binary name: it says which kernel this row is about,
+    /// not what the user renamed the file to.
     pub fn binaries(&self) -> Vec<EngineBinary> {
         EngineKind::all()
             .iter()
             .map(|kind| {
                 let name = kind.engine().binary_name().to_string();
-                let path = self.engines_dir.join(&name);
+                let path = self.binary_path(*kind);
                 EngineBinary {
                     kind: *kind,
                     present: path.is_file(),
@@ -594,11 +660,15 @@ impl EngineRuntime {
     /// print their build line first, so the first line is the answer and the
     /// rest (a go runtime banner, a list of tags) is noise for this UI.
     pub fn version(&self, kind: EngineKind) -> AppResult<String> {
-        let path = self.engines_dir.join(kind.engine().binary_name());
+        let path = self.binary_path(kind);
         if !path.is_file() {
+            // Name the path, not just the folder: with an override the user is
+            // looking somewhere else entirely, so "内核目录里没有 xray.exe" would
+            // send them to the wrong place.
             return Err(AppError::NotFound(format!(
-                "内核目录里没有 {}",
-                kind.engine().binary_name()
+                "找不到 {} 内核文件：{}",
+                kind.as_str(),
+                path.display()
             )));
         }
         let output = Command::new(&path)
@@ -611,13 +681,13 @@ impl EngineRuntime {
         if !output.status.success() {
             return Err(AppError::Engine(format!(
                 "{} version 退出码 {}",
-                kind.engine().binary_name(),
+                path.display(),
                 output.status.code().unwrap_or(-1)
             )));
         }
         let stdout = String::from_utf8_lossy(&output.stdout);
         first_line(&stdout).ok_or_else(|| {
-            AppError::Engine(format!("{} version 没有任何输出", kind.engine().binary_name()))
+            AppError::Engine(format!("{} version 没有任何输出", path.display()))
         })
     }
 
@@ -718,6 +788,33 @@ mod tests {
 
     use super::*;
     use crate::domain::node::{Protocol, Security, Transport};
+
+    /// A kernel the user picked elsewhere carries its own data files, so they
+    /// win; a bare binary in a folder of its own must still borrow the engines
+    /// directory, or every `geosite:` rule fails to load.
+    #[test]
+    fn the_kernel_folder_wins_only_when_it_has_the_data_files() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("asset-dir-tests");
+        let _ = std::fs::remove_dir_all(&root);
+        let engines = root.join("engines");
+        let portable = root.join("portable");
+        let bare = root.join("bare");
+        std::fs::create_dir_all(&engines).unwrap();
+        std::fs::create_dir_all(&portable).unwrap();
+        std::fs::create_dir_all(&bare).unwrap();
+        std::fs::write(portable.join("geosite.dat"), b"x").unwrap();
+
+        assert_eq!(
+            asset_dir_for(&portable.join("xray.exe"), &engines),
+            portable
+        );
+        assert_eq!(asset_dir_for(&bare.join("xray.exe"), &engines), engines);
+        assert_eq!(asset_dir_for(Path::new("xray.exe"), &engines), engines);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     struct FakeHandle {
         pid: u32,
@@ -950,6 +1047,112 @@ four"
         assert_eq!(spawned.len(), 1);
         assert_eq!(spawned[0].0, h.dir.join("engines").join("xray.exe"));
         assert!(spawned[0].1.contains(&config_path.to_string_lossy().into_owned()));
+
+        std::fs::remove_dir_all(&h.dir).ok();
+    }
+
+    #[test]
+    fn the_default_binary_lives_in_the_engines_directory() {
+        let h = harness(true, false);
+        assert_eq!(
+            h.runtime.binary_path(EngineKind::Xray),
+            h.dir.join("engines").join("xray.exe")
+        );
+        assert_eq!(
+            h.runtime.binary_path(EngineKind::SingBox),
+            h.dir.join("engines").join("sing-box.exe")
+        );
+
+        // No override, no binary on disk: the report says so instead of
+        // pointing at a file that would fail at spawn time.
+        let xray = h
+            .runtime
+            .binaries()
+            .into_iter()
+            .find(|binary| binary.kind == EngineKind::Xray)
+            .expect("xray is always reported");
+        assert_eq!(xray.path, h.dir.join("engines").join("xray.exe").display().to_string());
+        assert!(!xray.present);
+        assert_eq!(xray.name, "xray.exe");
+
+        std::fs::remove_dir_all(&h.dir).ok();
+    }
+
+    #[test]
+    fn an_explicit_binary_wins_and_is_what_gets_spawned() {
+        let h = harness(true, false);
+        let custom = h.dir.join("portable").join("Xray-26.11.exe");
+        std::fs::create_dir_all(custom.parent().unwrap()).unwrap();
+        std::fs::write(&custom, b"").unwrap();
+
+        h.runtime.set_binary(EngineKind::Xray, Some(custom.clone()));
+
+        assert_eq!(h.runtime.binary_path(EngineKind::Xray), custom);
+        // Overrides are per kernel: sing-box still resolves through engines/.
+        assert_eq!(
+            h.runtime.binary_path(EngineKind::SingBox),
+            h.dir.join("engines").join("sing-box.exe")
+        );
+
+        // The same resolution feeds the spawn ...
+        h.runtime
+            .start(
+                EngineKind::Xray,
+                &node(),
+                Endpoints::new(7890, 9090).unwrap(),
+                RunOptions::new(),
+            )
+            .unwrap();
+        assert_eq!(h.spawned.lock()[0].0, custom);
+
+        // ... and the row the settings page displays.
+        let xray = h
+            .runtime
+            .binaries()
+            .into_iter()
+            .find(|binary| binary.kind == EngineKind::Xray)
+            .expect("xray is always reported");
+        assert_eq!(xray.path, custom.display().to_string());
+        assert!(xray.present);
+        assert_eq!(xray.name, "xray.exe");
+
+        std::fs::remove_dir_all(&h.dir).ok();
+    }
+
+    #[test]
+    fn clearing_the_override_restores_the_default() {
+        let h = harness(true, false);
+        let custom = h.dir.join("portable").join("xray.exe");
+        h.runtime.set_binary(EngineKind::Xray, Some(custom.clone()));
+        assert_eq!(h.runtime.binary_path(EngineKind::Xray), custom);
+
+        h.runtime.set_binary(EngineKind::Xray, None);
+        assert_eq!(
+            h.runtime.binary_path(EngineKind::Xray),
+            h.dir.join("engines").join("xray.exe")
+        );
+        assert!(h
+            .runtime
+            .binaries()
+            .iter()
+            .all(|binary| !binary.path.contains("portable")));
+
+        std::fs::remove_dir_all(&h.dir).ok();
+    }
+
+    #[test]
+    fn a_missing_override_names_the_path_it_looked_at() {
+        let h = harness(false, false);
+        let missing = h.dir.join("nowhere").join("custom-xray.exe");
+        h.runtime.set_binary(EngineKind::Xray, Some(missing.clone()));
+
+        let err = h.runtime.version(EngineKind::Xray).unwrap_err();
+        let AppError::NotFound(message) = err else {
+            panic!("a missing binary must be NotFound, got a different error");
+        };
+        // The user chose this file, so the message has to point at it — not at
+        // the engines folder they are no longer using.
+        assert!(message.contains(&missing.display().to_string()), "message was: {message}");
 
         std::fs::remove_dir_all(&h.dir).ok();
     }
