@@ -15,26 +15,26 @@
 
 | 项 | 值 |
 |---|---|
-| 代码 HEAD | `5a44af3`「feat(routing): domain regex and geosite lists…」（= 最后一个**已验收**的功能） |
-| 未提交 | 无（交接后已提交：`--quit`、N12、GEO 数据、测速落盘） |
+| 代码 HEAD | `2398503`「feat(engine): announce a kernel that dies on its own」（= 最后一个**已验收**的功能） |
+| 未提交 | 无（交接后已提交：`--quit`、N12、GEO 数据、测速落盘、内核退出通知） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库（HEAD 上这一条） |
 | IPC 命令 | **77**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
-| Rust 单测 | **291 passed**（`ARCHITECTURE.md:278` 已同步） |
+| Rust 单测 | **293 passed**（`ARCHITECTURE.md:278` 已同步） |
 | 前端检查 | `npm run check` 全绿：vue-tsc / architecture / contract / vitest **65**（8 文件） |
 | i18n | **678** 键（`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
-| 桌面产物 | `X-Matrix.exe` **9,823,232 B @10:32**、`X-Matrix_0.1.0_x64-setup.exe` **3,181,050 B @10:32** —— 都是 **N9 版**，不含 N12 |
-| 验收文档 | `docs/ACCEPTANCE.md` §0–§24（§7 历史空缺，编号不连续但内容完整） |
+| 桌面产物 | 见 §1 表格（每次构建后刷新；当前 release 构建含 N12 + GEO + 测速落盘 + 退出通知） |
+| 验收文档 | `docs/ACCEPTANCE.md` §0–§25（§7 历史空缺，编号不连续但内容完整） |
 | 云电脑 | 干净：`ProxyEnable=0x0`、无 X-Matrix/sing-box/xray 进程、无 `xm*` 计划任务 |
 
 **下一步的确定顺序**（做完一条打一个勾，别跳）：
 
-- [x] 1. `npm run tauri build`（2026-11-23 23:27 完成，`x-matrix.exe` 9,854,976 B）
-- [ ] 2. `cp` 刷桌面两件 + `cmp` 校验
-- [x] 3. 云电脑真机点「关于 → 检查更新」：未发版时 404 文案正确，发布 `v0.1.0` 后显示「已是最新版本（0.1.0）」
-- [x] 4. 写 `docs/ACCEPTANCE.md` §21（正常退出）与 §22（检查更新）
-- [ ] 5. 提交 N12（提交信息建议 `feat(update): ask the release feed, never touch the binary`）
-- [x] 6. `src-tauri/src/update.rs:23` 的 `FEED_URL` 已指向真实仓库 `linjunhao024-byte/X-Matrix-Client-pro`
-- [x] 7. 已同步 `README.md:81` 的 71→73、`ARCHITECTURE.md:277` 的 260→270
+- [x] 1. `npm run tauri build`：`--quit`、N12、GEO、测速落盘、退出通知各一轮
+- [ ] 2. `cp` 刷桌面两件 + `cmp` 校验（**唯一常被忘的一步**）
+- [x] 3. 云电脑真机验收：§21 退出、§22 检查更新、§23 geo、§24 测速、§25 退出通知
+- [x] 4. `docs/ACCEPTANCE.md` 写到 §25
+- [x] 5. 提交（`fix(tray)` / `feat(update)` / `feat(geo,nodes)` / `feat(engine)` 各一条）
+- [x] 6. `FEED_URL` 已指向真实仓库 `linjunhao024-byte/X-Matrix-Client-pro`，`v0.1.0` 已发布并带 `X-Matrix.exe` 资产
+- [x] 7. 计数已同步：77 命令 / 293 单测 / 65 vitest / 678 i18n 键
 - [ ] 8. `bash /d/tmp/shots/cleanup.sh` 收尾云电脑
 
 ---
@@ -53,8 +53,8 @@
 | 桌面产物 | `/c/Users/83611/Desktop/X-Matrix.exe`、`/c/Users/83611/Desktop/X-Matrix_0.1.0_x64-setup.exe` |
 | 当前桌面产物版本 | exe **9,823,232 B @10:32**、NSIS **3,181,050 B @10:32**（= N9 那一次构建，**不含 N12**） |
 
-**计数基线（改动后记得同步文档）**：命令 **77**、`cargo test --lib` **291**、vitest **65**（8 个文件）、i18n **678** 键。
-> `README.md:81` 与 `ARCHITECTURE.md:277` 已同步为 77 条命令 / 291 项测试。
+**计数基线（改动后记得同步文档）**：命令 **77**、`cargo test --lib` **293**、vitest **65**（8 个文件）、i18n **678** 键。
+> `README.md:81` 与 `ARCHITECTURE.md:277` 已同步为 77 条命令 / 293 项测试。
 
 命令数核算法：
 
@@ -107,7 +107,7 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 
 ## 4. 已完成的功能与验收索引
 
-`docs/ACCEPTANCE.md` 是**唯一可信的进度表**（20 节，每节都有「验法 + 判据 + 设计理由 + 坑」）：
+`docs/ACCEPTANCE.md` 是**唯一可信的进度表**（25 节，每节都有「验法 + 判据 + 设计理由 + 坑」）：
 
 | 节 | 内容 |
 |---|---|
@@ -132,6 +132,11 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 | §18 | 测速预算：并发 1 → 6793 ms vs 并发 6 → 1639 ms，「选最快」 |
 | §19 | 流量历史：每分钟一条，重启还在，1h/24h 对照 |
 | §20 | 域名正则 / 域名分类匹配器，两个内核的渲染证据 |
+| §21 | 正常退出：`--quit` 与托盘图标真的被删除（30 次启停不漏图标） |
+| §22 | 应用内更新检查：未发版 404 与 `v0.1.0` 已是最新两种状态 |
+| §23 | geo 数据文件：三地址回退下载、卡片显示大小与时间 |
+| §24 | 测速记录：落盘、重启还在、区分 tcp/real、拒绝不覆盖 |
+| §25 | 内核意外退出：外部杀掉 → 通知 + 首页退出码；主动停止 → 安静 |
 
 已提交的提交序列（新→旧，14 条主体）：
 `5a44af3` 域名正则+geosite · `569a7ce` 流量历史 · `44b857b` 测速预算+选最快 · `42f85bd` 一键断开+进程名 · `f817726` 真实延迟 · `f3fc750` 订阅走代理 · `d892b9e` Clash 导入带组和规则 · `6851775` 托盘子菜单 · `f9a0406` H4 验收文档 · `14ddb20` hysteria2/tuic · `fdd0b8d` 运行中热切换 · `eb3f453` 日志页 · `79ccadd` 设计修复（粘右操作列、错误用红、焦点陷阱等）· `535124b` 快捷键与诊断包验收。
@@ -140,36 +145,21 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 
 ---
 
-## 5. 未提交的工作：N12「应用内更新检查」（做到一半）
+## 5. 最近完成的两件事（已提交、已真机验收）
 
-**状态：已完成并真机验收（2026-11-24，见 `docs/ACCEPTANCE.md` §22）：仓库发布 `v0.1.0` 后「检查更新」显示「已是最新版本（0.1.0）」，未发版时显示「发布页还没有发布记录（HTTP 404）」。`cargo test --lib` 272 通过。**
+**N12 应用内更新检查**（`docs/ACCEPTANCE.md` §22）：仓库发布 `v0.1.0` 后「关于 → 检查更新」显示「已是最新版本（0.1.0）」，未发版时显示「发布页还没有发布记录（HTTP 404）」。
 
-改动的文件（`git status` 当前输出）：
+- `src-tauri/src/update.rs`：`FEED_URL = https://api.github.com/repos/linjunhao024-byte/X-Matrix-Client-Pro/releases/latest`、`FEED_TIMEOUT=10s`；`UpdateStatus{current,latest,has_update,url,notes}`；`parse_version` 去 `v` 前缀、缺位补 0、`1.3.0-beta.1` 记 1.3.0；**任一侧解析失败一律「不算有新版本」**；非 JSON / 空 tag 给人话错误；`explain_status` 把 404 翻成「发布页还没有发布记录」。
+- `check_update` 走 `spawn_blocking`（不在 IPC 线程开 socket）；`app_open_url` **只放行 `http(s)`**。
+- 关于页 `updateFailed` 与页面级 `error` 分开：「问不到发布页」是 muted 小字，不刷红。
+- 文案归属：`fetch_answer(..., noun)` 让同一套请求逻辑能说「订阅」或「发布页」，别让它替别人道歉。
 
-```
- M scripts/i18n-pairs.json      +8 键（about.update.*）→ 666
- M src-tauri/src/commands/system.rs   新增 check_update / app_open_url
- M src-tauri/src/ipc.rs         注册两条命令（→73）
- M src-tauri/src/lib.rs         mod update;
- M src/i18n/en.ts, zh.ts        重新生成
- M src/services/bindings.ts     重新生成
- M src/services/contract.ts     checkUpdate / appOpenUrl 包装 + 类型导出
- M src/views/AboutView.vue      「检查更新」卡片
-?? src-tauri/src/update.rs      新文件（约 200 行）
-```
+**内核意外退出通知**（`docs/ACCEPTANCE.md` §25）：
 
-设计要点（别退回去）：
-
-- `update.rs`：`FEED_URL` + `FEED_TIMEOUT=10s`；`UpdateStatus{current,latest,has_update,url,notes}`；`parse_version` 去 `v` 前缀、缺位补 0、`1.3.0-beta.1` 记 1.3.0；**任一侧版本号解析失败一律「不算有新版本」**（说不准不能变成催促）；非 JSON / 空 tag 都给人话错误。
-- `check_update` 命令走 `spawn_blocking`，**不在 IPC 线程上开 socket**（10 秒超时时窗口必须还能动）。
-- `app_open_url` **只放行 `http(s)`**：URL 来自网络响应，直接丢给 shell 打开是这类应用最容易被利用的口子。
-- 关于页：`updateFailed` 与页面级 `error` **分开**——「问不到发布页」不是应用坏了，用 muted 小字，不刷红。
-
-**必须做的两件事**：
-
-1. **`FEED_URL` 还是占位地址** `https://api.github.com/repos/x-matrix-client/x-matrix/releases/latest`，仓库当前**没有 git remote**。发布前必须换成真实仓库。
-2. 收尾流程：`npm run tauri build` → `cp` 刷桌面两件并 `cmp` → 云电脑部署验证（见 §6）→ 写 `docs/ACCEPTANCE.md` **§21** → 提交 → `cleanup.sh`。
-   验证时注意：云电脑上 GitHub 可能不可达，**如实记录失败文案**（应该是「没能问到发布页：…」），不要伪造成「已是最新」。
+- `EngineRuntime` 增 `unexpected_exit: Mutex<Option<i32>>` + `take_unexpected_exit()`（取走即清）；`Running.expected` 在 `stop()` 里、`kill()` **之前**置位，所以主动停止与 `--quit` 永不通知。
+- `lib.rs` 的 `watch_engine_exits` 每秒调一次 `status()`，拿到非预期退出就 `app.emit("engine://exited", code)` + `notify_engine_exit`（`tauri-plugin-notification`，中英双语，失败只打一行 stderr）；`--quit` 路径根本走不到这个线程。
+- 前端 `src/services/events.ts`（`listen` 只允许出现在 `src/services/`，架构检查会拦）+ `src/stores/engine.ts` 的 `watchExits()` 单飞刷新。
+- 成功与失败都打日志：「已发送」那一行是测试机通知被系统关掉时唯一可验证的证据。
 
 ---
 
@@ -177,13 +167,13 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 
 | 候选 | 落点 | 代价 | 备注 |
 |---|---|---|---|
-| **N12 收尾**（见 §5） | `update.rs`、`AboutView.vue` | 小 | 只差构建 + 真机一格 |
 | **N3 节点二维码** | 新命令 `node_share_qr(node_id) -> String`（SVG），复用导出链接逻辑与现有节点对话框 | 中 | 需要 `qrcode` crate；**本机 cargo 缓存里没有**，离线会失败——先试 `cargo add qrcode --offline` 探一下 |
-| **N6 内核意外退出通知** | 挂在 `src-tauri/src/engine/runtime.rs` 的退出监视上；Windows toast | 中 | 需要 `tauri-plugin-notification`（未装）；注意 fail-open，别因为通知失败影响启停 |
 | **N10 订阅重命名 / 过滤** | `domain/subscription.rs` 加 `rename_prefix` + `include`/`exclude` 正则，刷新时应用；`ImportPreview` 式预览计数 | 中 | 纯解析，可本机测 |
 | **N11 内核二进制选择** | 设置页指定 Xray / sing-box 的路径，存 `Settings`，用 `version` 命令校验 | 中 | 与 `engine/runtime.rs` 的 `binaries()` 有耦合，要先读 |
 | **N13 更多语言** | `scripts/i18n-pairs.json` 加 zh-TW / ja；`Language` 枚举 + 托盘 `Labels` + `describeError` 的文案都要跟上 | 大 | parity 测试会强制键集完整，666 键 ×2 语言 |
 | **H5(b) 无内核时的逐节点真实延迟** | 临时起一个最小内核做探测 | 大 | 风险高（要多一条内核生命周期），当初明确「先不做」 |
+| **N5 出口 IP** | 首页/关于页一行「当前出口 IP」，走已代理的 http 请求 | 小 | 直连模式下显示的是本机出口，文案要写清 |
+| **N7 订阅下次刷新倒计时** | `domain/subscription.rs` 的 `is_due` 已有，订阅页每行补「还有 N 分钟」 | 小 | 纯前端，别动刷新逻辑 |
 | 设计审计残余 | `D:\tmp\design-audit-2.md` | — | 二审 15 条已全部处理完；这份文件可以当历史读 |
 
 明确**不做**的（`D:\tmp\parity-gaps.md` §2.3，S1–S11）：TUN 模式、PAC 脚本、内核自动更新与下载、开机直接接管系统代理等。
@@ -228,7 +218,8 @@ scp -i /c/Users/83611/.ssh/id_ed25519_cpc 本地文件 Administrator@100.106.121
 9. 停程序一律用 `X-Matrix.exe --quit`（会话 1 里的计划任务，脚本 `D:\tmp\shots\quit-run.ps1`）。`taskkill /F` 不会走 `quit_cleanly()`，**`ProxyEnable` 会留在 1**，还会留下死托盘图标：收尾必须手动 `reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings" /v ProxyEnable /t REG_DWORD /d 0 /f`（是 **HKCU** 不是 HKLM）。
 10. 托盘图标常落进通知区溢出区，**UIA 找不到、右键点不到**：涉及托盘的验收只能靠 `eprintln!` 日志（`托盘菜单 N 个节点 · 模式 X · 内核运行中`）。
 11. `Local-WS` 节点依赖本地测试服务器（`xmsrv` 计划任务跑 `srv-lite2.json`，两入站 uuid 必须与节点一致）；被 `cleanup.sh` 删过之后要重建，否则「隧道在跑但全是 502」。
-12. 追加带反斜杠/中文的文档段落：先用 `write` 落一个临时 `.md`，再用 python 按字节拼接（heredoc 会把 `\t`/`\n` 吃成 TAB 与断行）。
+12. **测试机默认关掉通知**：`ToastEnabled=0` 时插件仍返回 `Ok` 但屏幕上没有横幅，肉眼验收会误判。要么先 `reg add HKCU\Software\Microsoft\Windows\CurrentVersion\PushNotifications /v ToastEnabled /t REG_DWORD /d 1 /f`，要么以 stderr 那行「内核退出通知已发送」为判据。Windows Server 2022 即使开了也不弹横幅（只进通知中心），**枚举窗口找不到 toast 是正常的**。
+13. 追加带反斜杠/中文的文档段落：先用 `write` 落一个临时 `.md`，再用 python 按字节拼接（heredoc 会把 `\t`/`\n` 吃成 TAB 与断行）。
 
 ---
 
@@ -247,11 +238,11 @@ scp -i /c/Users/83611/.ssh/id_ed25519_cpc 本地文件 Administrator@100.106.121
 
 ## 9. 开工检查表（新窗口照着做）
 
-1. `cd /d/GitHub-Warehouse/X-Matrix-Client-Pro && git status` —— 确认只有 N12 那批改动，没有别人在写。
+1. `cd /d/GitHub-Warehouse/X-Matrix-Client-Pro && git status` —— 工作区应当干净；有改动先弄清是谁的。
 2. 读本文件的 §5 与 `docs/ACCEPTANCE.md` 的最后两节，对齐上下文。
-3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 291 passed）。
+3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 293 passed）。
 4. `cd .. && npm run check`（应为全绿）。
-5. 决定这一步要做哪一项（建议先把 N12 收尾：构建 + 真机 + 文档 + 提交），**一项一提交**，提交信息用英文 `feat(...)/fix(...)/docs: ...`。
+5. 从 §6 表里挑一项（按性价比排序），**一项一提交**，提交信息用英文 `feat(...)/fix(...)/docs: ...`。
 6. 真机验证前先跑 `bash /d/tmp/shots/deploy-tray.sh <exe>`；远端被 `cleanup.sh` 清过的话，先 `scp x-act.ps1 uia2.ps1 ocr.ps1` 上去。
 7. 验完写 `docs/ACCEPTANCE.md` 新的一节（**验法 / 判据 / 设计理由 / 坑** 四件套），并同步 `README.md:81`、`ARCHITECTURE.md:277` 的命令数与测试数。
 8. 收尾 `bash /d/tmp/shots/cleanup.sh`，再手查 `ProxyEnable` 与 `schtasks /query | findstr xm` 确实是空的。
@@ -260,4 +251,4 @@ scp -i /c/Users/83611/.ssh/id_ed25519_cpc 本地文件 Administrator@100.106.121
 
 ## 10. 一句话交接
 
-**能用的东西已经都在了，剩下的都是边角。**接着做的人只需要：先把 §5 的 N12 收尾（含把 `FEED_URL` 换成真实仓库），再按 §6 表挑一项，每项都按「实现 → 单测 → `npm run check` → 构建 → 云电脑真机 → 写 ACCEPTANCE → 提交 → 清理」这套流程走完。
+**能用的东西已经都在了，剩下的都是边角。**接着做的人只需要：从 §6 表挑一项，按「实现 → 单测 → `npm run check` → 构建 → 云电脑真机 → 写 ACCEPTANCE → 提交 → 清理」这套流程走完，并且始终记得 §7 里那些验收环境的坑。
