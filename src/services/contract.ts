@@ -18,6 +18,7 @@ import type {
   EngineBinary,
   EngineKind,
   EngineStatus_Serialize,
+  ExitIp,
   GroupKind,
   ImportOutcome_Serialize,
   ImportPreview_Serialize,
@@ -93,6 +94,12 @@ export const api = {
 
   /** Ask the release feed; never touches the installed binary. */
   checkUpdate: (): Promise<UpdateStatus> => unwrap(commands.checkUpdate()),
+
+  /**
+   * Which address the outside world sees, and whether the request went through
+   * the running tunnel. `via` is decided in Rust, next to the kernel state.
+   */
+  exitIp: (): Promise<ExitIp> => unwrap(commands.exitIp()),
 
   /** Hand a page (the release notes) to the system browser. */
   appOpenUrl: (url: string): Promise<void> => unwrap(commands.appOpenUrl(url)).then(() => undefined),
@@ -261,6 +268,7 @@ export type {
   EngineBinary,
   EngineKind,
   EngineStatus_Serialize,
+  ExitIp,
   GroupKind,
   ImportOutcome_Serialize,
   ImportPreview_Serialize,

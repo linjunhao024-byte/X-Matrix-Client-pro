@@ -110,6 +110,17 @@ export const commands = {
 	 */
 	checkUpdate: () => typedError<UpdateStatus, AppError>(__TAURI_INVOKE("check_update")),
 	/**
+	 *  Ask a public echo service which address it saw.
+	 * 
+	 *  Off the IPC thread (`spawn_blocking`) for the same reason `check_update` is:
+	 *  the window has to keep painting while the timeout runs out.
+	 * 
+	 *  The route is decided before the request. A running kernel means the mixed
+	 *  inbound is up and the answer has to come through it; otherwise the same
+	 *  request leaves the machine on its own, and `via` says which happened.
+	 */
+	exitIp: () => typedError<ExitIp, AppError>(__TAURI_INVOKE("exit_ip")),
+	/**
 	 *  Opens a page in the user's browser: currently only the release page the
 	 *  update check handed back.
 	 * 
@@ -410,6 +421,20 @@ export type EngineStatus_Serialize = {
 	 *  instead of silently flipping to "not running".
 	 */
 	last_exit_code: number | null,
+};
+
+/**
+ *  The address the outside world sees, and how the request reached it.
+ * 
+ *  `via` is the honest half of the answer: an address read while the tunnel is
+ *  down belongs to this machine, and showing it without saying so would look
+ *  like traffic went through a proxy when it did not.
+ */
+export type ExitIp = {
+	/**  The address exactly as the echo service answered it. */
+	ip: string,
+	/**  `"proxy"` (through the local mixed inbound) or `"direct"`. */
+	via: string,
 };
 
 export type GeoAssetStatus = GeoAssetStatus_Serialize | GeoAssetStatus_Deserialize;

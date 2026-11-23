@@ -9,7 +9,7 @@
 
 1. 主体功能已追平 V2RayN / Clash 的日常面：双内核（Xray / sing-box）渲染与启停、系统代理接管与还原、订阅/整包导入、Clash 配置连同 **策略组与规则** 一起导入、运行中热切换节点与代理模式、托盘子菜单、日志页、hysteria2 / tuic、真实延迟（分组与节点）、流量历史落盘、一键断开全部 + 进程归属、测速预算与「选最快」、域名正则 / 域名分类匹配器、诊断包导出、全局快捷键。
 2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§24）。
-3. 交接时那处未提交的工作（N12 应用内更新检查）已经构建、真机验收并提交；此后又合入三件事：`--quit` 正常退出并删除托盘图标（§21）、GEO 数据文件卡片与镜像回退下载（§23）、测速记录落盘（§24）。工作区现在是干净的。
+3. 交接时那处未提交的工作（N12 应用内更新检查）已经构建、真机验收并提交；此后又合入四件事：`--quit` 正常退出并删除托盘图标（§21）、GEO 数据文件卡片与镜像回退下载（§23）、测速记录落盘（§24）。工作区现在是干净的。
 
 ### 0.1 进度快照（交接这一刻的硬数字）
 
@@ -19,22 +19,22 @@
 | 未提交 | 无（交接后已提交：`--quit`、N12、GEO 数据、测速落盘、内核退出通知） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库（HEAD 上这一条） |
 | IPC 命令 | **77**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
-| Rust 单测 | **293 passed**（`ARCHITECTURE.md:278` 已同步） |
+| Rust 单测 | **299 passed**（`ARCHITECTURE.md:278` 已同步） |
 | 前端检查 | `npm run check` 全绿：vue-tsc / architecture / contract / vitest **65**（8 文件） |
-| i18n | **678** 键（`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
+| i18n | **686** 键（`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
 | 桌面产物 | 见 §1 表格（每次构建后刷新；当前 release 构建含 N12 + GEO + 测速落盘 + 退出通知） |
-| 验收文档 | `docs/ACCEPTANCE.md` §0–§25（§7 历史空缺，编号不连续但内容完整） |
+| 验收文档 | `docs/ACCEPTANCE.md` §0–§26（§7 历史空缺，编号不连续但内容完整） |
 | 云电脑 | 干净：`ProxyEnable=0x0`、无 X-Matrix/sing-box/xray 进程、无 `xm*` 计划任务 |
 
 **下一步的确定顺序**（做完一条打一个勾，别跳）：
 
 - [x] 1. `npm run tauri build`：`--quit`、N12、GEO、测速落盘、退出通知各一轮
 - [ ] 2. `cp` 刷桌面两件 + `cmp` 校验（**唯一常被忘的一步**）
-- [x] 3. 云电脑真机验收：§21 退出、§22 检查更新、§23 geo、§24 测速、§25 退出通知
-- [x] 4. `docs/ACCEPTANCE.md` 写到 §25
+- [x] 3. 云电脑真机验收：§21 退出、§22 检查更新、§23 geo、§24 测速、§25 退出通知、§26 出口 IP
+- [x] 4. `docs/ACCEPTANCE.md` 写到 §26
 - [x] 5. 提交（`fix(tray)` / `feat(update)` / `feat(geo,nodes)` / `feat(engine)` 各一条）
 - [x] 6. `FEED_URL` 已指向真实仓库 `linjunhao024-byte/X-Matrix-Client-pro`，`v0.1.0` 已发布并带 `X-Matrix.exe` 资产
-- [x] 7. 计数已同步：77 命令 / 293 单测 / 65 vitest / 678 i18n 键
+- [x] 7. 计数已同步：77 命令 / 299 单测 / 65 vitest / 686 i18n 键
 - [ ] 8. `bash /d/tmp/shots/cleanup.sh` 收尾云电脑
 
 ---
@@ -53,8 +53,8 @@
 | 桌面产物 | `/c/Users/83611/Desktop/X-Matrix.exe`、`/c/Users/83611/Desktop/X-Matrix_0.1.0_x64-setup.exe` |
 | 当前桌面产物版本 | exe **9,823,232 B @10:32**、NSIS **3,181,050 B @10:32**（= N9 那一次构建，**不含 N12**） |
 
-**计数基线（改动后记得同步文档）**：命令 **77**、`cargo test --lib` **293**、vitest **65**（8 个文件）、i18n **678** 键。
-> `README.md:81` 与 `ARCHITECTURE.md:277` 已同步为 77 条命令 / 293 项测试。
+**计数基线（改动后记得同步文档）**：命令 **77**、`cargo test --lib` **299**、vitest **65**（8 个文件）、i18n **686** 键。
+> `README.md:81` 与 `ARCHITECTURE.md:277` 已同步为 77 条命令 / 299 项测试。
 
 命令数核算法：
 
@@ -137,6 +137,7 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 | §23 | geo 数据文件：三地址回退下载、卡片显示大小与时间 |
 | §24 | 测速记录：落盘、重启还在、区分 tcp/real、拒绝不覆盖 |
 | §25 | 内核意外退出：外部杀掉 → 通知 + 首页退出码；主动停止 → 安静 |
+| §26 | 出口 IP：直连给地址、经代理真走内核、失败不留旧答案 |
 
 已提交的提交序列（新→旧，14 条主体）：
 `5a44af3` 域名正则+geosite · `569a7ce` 流量历史 · `44b857b` 测速预算+选最快 · `42f85bd` 一键断开+进程名 · `f817726` 真实延迟 · `f3fc750` 订阅走代理 · `d892b9e` Clash 导入带组和规则 · `6851775` 托盘子菜单 · `f9a0406` H4 验收文档 · `14ddb20` hysteria2/tuic · `fdd0b8d` 运行中热切换 · `eb3f453` 日志页 · `79ccadd` 设计修复（粘右操作列、错误用红、焦点陷阱等）· `535124b` 快捷键与诊断包验收。
@@ -154,6 +155,11 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 - 关于页 `updateFailed` 与页面级 `error` 分开：「问不到发布页」是 muted 小字，不刷红。
 - 文案归属：`fetch_answer(..., noun)` 让同一套请求逻辑能说「订阅」或「发布页」，别让它替别人道歉。
 
+**出口 IP**（`docs/ACCEPTANCE.md` §26）：
+- 命令 `exit_ip`（`src-tauri/src/commands/system.rs`）先按 `runtime.status().running` 决定路线（`via=proxy` 走 `127.0.0.1:mixed_port`，否则 `direct`），再在 `spawn_blocking` 里依次问 `ipv4.icanhazip.com` → `ifconfig.me/ip` → `ipinfo.io/ip`，首个 2xx 且能解析成 IP 的回答即返回。
+- 失败行固定形如 `出口 IP 都问不到：{host} {reason}；…`；全部失败才报错，单个主机失败不影响下一次尝试。
+- 前端 `src/views/HomeView.vue` 卡片：地址 + `经代理`/`直连（未经代理）` 徽章 + 更新时间；**失败即清空 `exit`/`exitAt`**，只留错误行——旧地址配新错误会冒充一条没验证过的路线。
+
 **内核意外退出通知**（`docs/ACCEPTANCE.md` §25）：
 
 - `EngineRuntime` 增 `unexpected_exit: Mutex<Option<i32>>` + `take_unexpected_exit()`（取走即清）；`Running.expected` 在 `stop()` 里、`kill()` **之前**置位，所以主动停止与 `--quit` 永不通知。
@@ -170,9 +176,9 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 | **N3 节点二维码** | 新命令 `node_share_qr(node_id) -> String`（SVG），复用导出链接逻辑与现有节点对话框 | 中 | 需要 `qrcode` crate；**本机 cargo 缓存里没有**，离线会失败——先试 `cargo add qrcode --offline` 探一下 |
 | **N10 订阅重命名 / 过滤** | `domain/subscription.rs` 加 `rename_prefix` + `include`/`exclude` 正则，刷新时应用；`ImportPreview` 式预览计数 | 中 | 纯解析，可本机测 |
 | **N11 内核二进制选择** | 设置页指定 Xray / sing-box 的路径，存 `Settings`，用 `version` 命令校验 | 中 | 与 `engine/runtime.rs` 的 `binaries()` 有耦合，要先读 |
-| **N13 更多语言** | `scripts/i18n-pairs.json` 加 zh-TW / ja；`Language` 枚举 + 托盘 `Labels` + `describeError` 的文案都要跟上 | 大 | parity 测试会强制键集完整，666 键 ×2 语言 |
+| **N13 更多语言** | `scripts/i18n-pairs.json` 加 zh-TW / ja；`Language` 枚举 + 托盘 `Labels` + `describeError` 的文案都要跟上 | 大 | parity 测试会强制键集完整，686 键 ×2 语言 |
 | **H5(b) 无内核时的逐节点真实延迟** | 临时起一个最小内核做探测 | 大 | 风险高（要多一条内核生命周期），当初明确「先不做」 |
-| **N5 出口 IP** | 首页/关于页一行「当前出口 IP」，走已代理的 http 请求 | 小 | 直连模式下显示的是本机出口，文案要写清 |
+| ~~N5 出口 IP~~ | 已完成：首页卡片 + 三主机退让 + 失败清空旧值（§26） | — | 见下方「已完成」说明 |
 | **N7 订阅下次刷新倒计时** | `domain/subscription.rs` 的 `is_due` 已有，订阅页每行补「还有 N 分钟」 | 小 | 纯前端，别动刷新逻辑 |
 | 设计审计残余 | `D:\tmp\design-audit-2.md` | — | 二审 15 条已全部处理完；这份文件可以当历史读 |
 
@@ -240,7 +246,7 @@ scp -i /c/Users/83611/.ssh/id_ed25519_cpc 本地文件 Administrator@100.106.121
 
 1. `cd /d/GitHub-Warehouse/X-Matrix-Client-Pro && git status` —— 工作区应当干净；有改动先弄清是谁的。
 2. 读本文件的 §5 与 `docs/ACCEPTANCE.md` 的最后两节，对齐上下文。
-3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 293 passed）。
+3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 299 passed）。
 4. `cd .. && npm run check`（应为全绿）。
 5. 从 §6 表里挑一项（按性价比排序），**一项一提交**，提交信息用英文 `feat(...)/fix(...)/docs: ...`。
 6. 真机验证前先跑 `bash /d/tmp/shots/deploy-tray.sh <exe>`；远端被 `cleanup.sh` 清过的话，先 `scp x-act.ps1 uia2.ps1 ocr.ps1` 上去。

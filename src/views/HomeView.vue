@@ -15,8 +15,8 @@ const TrafficChart = defineAsyncComponent(() => import('../components/TrafficCha
 const LogDialog = defineAsyncComponent(() => import('../components/LogDialog.vue'))
 const ConfigDialog = defineAsyncComponent(() => import('../components/ConfigDialog.vue'))
 import { t } from '../i18n'
-import { api, describeError, type AppInfo, type EngineKind, type ProxyMode } from '../services/contract'
-import { formatBytes, formatRate } from '../services/format'
+import { api, describeError, type AppInfo, type EngineKind, type ExitIp, type ProxyMode } from '../services/contract'
+import { formatBytes, formatRate, formatWhen } from '../services/format'
 import { quotaAlerts } from '../services/quota'
 import { useEngineStore } from '../stores/engine'
 import { useNodesStore } from '../stores/nodes'
@@ -278,6 +278,9 @@ onMounted(async () => {
   void settings.load()
   void subscriptions.load()
   await engine.refreshBinaries()
+  // Asked on arrival so the card has a value without a click; the route is
+  // decided in Rust from the live kernel state, not from what this page shows.
+  void refreshExitIp()
   if (!selectedNodeId.value && nodes.items.length > 0) {
     selectedNodeId.value = nodes.items[0].id
   }
@@ -327,6 +330,38 @@ async function testRealDelay(): Promise<void> {
     delayError.value = describeError(error)
   } finally {
     delayPending.value = false
+  }
+}
+
+/**
+ * The address the outside world sees.
+ *
+ * Kept together with the moment it was read: an address probed before the
+ * tunnel came up belongs to this machine, and a stale one shown without a time
+ * would be read as "this is my IP right now". A failed attempt clears both: an
+ * address and a "direct" badge left beside a fresh error would claim a route
+ * this attempt never saw.
+ */
+const exit = ref<ExitIp | null>(null)
+const exitAt = ref<number | null>(null)
+const exitPending = ref(false)
+const exitError = ref<string | null>(null)
+
+async function refreshExitIp(): Promise<void> {
+  if (exitPending.value) return
+  exitPending.value = true
+  exitError.value = null
+  try {
+    exit.value = await api.exitIp()
+    exitAt.value = Date.now()
+  } catch (problem) {
+    // Nothing was proved by this attempt, so nothing is left to show but the
+    // error: a remembered address would sit next to it wearing a route badge.
+    exit.value = null
+    exitAt.value = 0
+    exitError.value = describeError(problem)
+  } finally {
+    exitPending.value = false
   }
 }
 
@@ -534,6 +569,38 @@ async function stopEngine() {
       <p v-else-if="engine.status?.last_exit_code !== null && engine.status?.last_exit_code !== undefined" class="alert">
         {{ t('home.lastExit', { code: engine.status.last_exit_code ?? '—' }) }}
       </p>
+
+      <!-- Which address the outside world sees. Deliberately outside the
+           `facts` block above: it is just as useful before the tunnel is up,
+           and then the badge says plainly that the answer is this machine. -->
+      <div class="exit-ip">
+        <div class="row">
+          <span class="field-label">{{ t('home.exitIp.title') }}</span>
+          <span class="spacer" />
+          <button
+            class="btn btn-sm"
+            type="button"
+            :disabled="exitPending"
+            @click="refreshExitIp()"
+          >
+            <AppIcon name="refresh" :size="14" />
+            {{ exitPending ? t('home.exitIp.checking') : t('home.exitIp.refresh') }}
+          </button>
+        </div>
+        <div class="row exit-ip-line" aria-live="polite">
+          <template v-if="exit">
+            <span class="mono exit-ip-value">{{ exit.ip }}</span>
+            <span class="badge" :class="exit.via === 'proxy' ? 'badge-accent' : ''">
+              {{ exit.via === 'proxy' ? t('home.exitIp.proxy') : t('home.exitIp.direct') }}
+            </span>
+            <span class="muted small">{{ t('home.exitIp.updated', { when: formatWhen(exitAt) }) }}</span>
+          </template>
+          <span v-else class="muted small">{{ t('home.exitIp.never') }}</span>
+        </div>
+        <p v-if="exitError" class="exit-ip-failed">
+          {{ t('home.exitIp.failed', { reason: exitError }) }}
+        </p>
+      </div>
 
       <ConfigDialog
         :open="configOpen"
@@ -912,6 +979,35 @@ async function stopEngine() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Same separator as `.facts`: the two read as rows of the same panel. */
+.exit-ip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.exit-ip-line {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.exit-ip-value {
+  font-size: 13px;
+}
+
+/* "Could not ask" is not a broken tunnel: muted, not red — the same tone the
+   About page uses for an unreachable release feed. */
+.exit-ip-failed {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
 }
 
 .steps {

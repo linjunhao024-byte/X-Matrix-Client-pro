@@ -1145,6 +1145,46 @@
     "Kernel control"
   ],
   [
+    "home.exitIp.checking",
+    "查询中…",
+    "Checking…"
+  ],
+  [
+    "home.exitIp.direct",
+    "直连（未经代理）",
+    "Direct (no proxy)"
+  ],
+  [
+    "home.exitIp.failed",
+    "查不到出口 IP：{reason}",
+    "Could not read the exit IP: {reason}"
+  ],
+  [
+    "home.exitIp.never",
+    "还没查过",
+    "Not checked yet"
+  ],
+  [
+    "home.exitIp.proxy",
+    "经代理",
+    "Via proxy"
+  ],
+  [
+    "home.exitIp.refresh",
+    "刷新",
+    "Refresh"
+  ],
+  [
+    "home.exitIp.title",
+    "出口 IP",
+    "Exit IP"
+  ],
+  [
+    "home.exitIp.updated",
+    "{when}更新",
+    "Updated {when}"
+  ],
+  [
     "home.fact.api",
     "控制端口",
     "Control port"

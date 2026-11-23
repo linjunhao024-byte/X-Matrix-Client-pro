@@ -33,6 +33,7 @@ pub fn builder() -> Builder<tauri::Wry> {
         commands::system::save_text_file,
         commands::system::export_diagnostics,
         commands::system::check_update,
+        commands::system::exit_ip,
         commands::system::app_open_url,
         commands::system::open_text_file,
         commands::system::ui_set_window_theme,
