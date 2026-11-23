@@ -1550,6 +1550,16 @@
     "Exact domain"
   ],
   [
+    "match.domain_regex",
+    "域名正则",
+    "Domain regex"
+  ],
+  [
+    "match.geosite",
+    "域名分类",
+    "Geosite list"
+  ],
+  [
     "match.domain_keyword",
     "域名关键字",
     "Domain keyword"

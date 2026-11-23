@@ -26,6 +26,12 @@ pub enum RuleMatcher {
     DomainKeyword { value: String },
     /// Exactly this domain.
     DomainFull { value: String },
+    /// A regular expression tested against the domain, e.g. `^ads?\d+\.`.
+    /// Clash spells it `DOMAIN-REGEX`; both kernels understand it, but they
+    /// use different syntax dials, so the pattern is passed through verbatim.
+    DomainRegex { value: String },
+    /// A named list from the geosite database, e.g. `cn` or `category-ads-all`.
+    GeoSite { value: String },
     /// An IP range, e.g. `192.168.0.0/16` or `10.0.0.1`.
     IpCidr { value: String },
     /// A geo database code, e.g. `cn`, `private`.
@@ -46,6 +52,8 @@ impl RuleMatcher {
             Self::DomainSuffix { value }
             | Self::DomainKeyword { value }
             | Self::DomainFull { value }
+            | Self::DomainRegex { value }
+            | Self::GeoSite { value }
             | Self::IpCidr { value }
             | Self::GeoIp { value }
             | Self::ProcessName { value }
@@ -95,7 +103,23 @@ impl RuleMatcher {
                 let entries = set_entries?;
                 Some(entries.iter().any(|entry| entry.matches_domain(&host)))
             }
-            Self::GeoIp { .. } | Self::Port { .. } | Self::ProcessName { .. } => None,
+            Self::DomainRegex { value } => {
+                // An unparseable pattern is a stored-data problem, so it
+                // answers "cannot tell" instead of "no": the kernel would
+                // refuse the config as a whole, and claiming this rule simply
+                // does not apply would point the user at the wrong row.
+                let pattern = value.trim();
+                if pattern.is_empty() {
+                    return Some(false);
+                }
+                match regex::Regex::new(pattern) {
+                    Ok(compiled) => Some(compiled.is_match(&host)),
+                    Err(_) => None,
+                }
+            }
+            Self::GeoSite { .. } | Self::GeoIp { .. } | Self::Port { .. } | Self::ProcessName { .. } => {
+                None
+            }
         }
     }
 
@@ -118,6 +142,8 @@ impl RuleMatcher {
             Self::DomainSuffix { .. } => "域名后缀",
             Self::DomainKeyword { .. } => "域名关键词",
             Self::DomainFull { .. } => "完整域名",
+            Self::DomainRegex { .. } => "域名正则",
+            Self::GeoSite { .. } => "域名分类",
             Self::IpCidr { .. } => "IP 段",
             Self::GeoIp { .. } => "地区",
             Self::Port { .. } => "端口",
@@ -157,6 +183,38 @@ impl RuleMatcher {
                     return Err(AppError::InvalidInput(
                         "地区代码只能包含字母、数字和连字符".to_string(),
                     ));
+                }
+                Ok(())
+            }
+            Self::GeoSite { value } => {
+                let trimmed = value.trim();
+                if trimmed.is_empty() {
+                    return Err(AppError::InvalidInput("域名分类不能为空".to_string()));
+                }
+                // Same alphabet as geoip codes: `cn`, `category-ads-all`.
+                if !trimmed
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '-')
+                {
+                    return Err(AppError::InvalidInput(
+                        "域名分类只能包含字母、数字和连字符".to_string(),
+                    ));
+                }
+                Ok(())
+            }
+            Self::DomainRegex { value } => {
+                let trimmed = value.trim();
+                if trimmed.is_empty() {
+                    return Err(AppError::InvalidInput("域名正则不能为空".to_string()));
+                }
+                // Compile here so a typo is caught while the user is still
+                // looking at the field: an invalid pattern makes the kernel
+                // refuse the entire config, and the error it prints points at
+                // a line number nobody counted.
+                if let Err(error) = regex::Regex::new(trimmed) {
+                    return Err(AppError::InvalidInput(format!(
+                        "域名正则不是合法的正则：{error}"
+                    )));
                 }
                 Ok(())
             }
@@ -372,5 +430,39 @@ mod tests {
         assert_eq!(matcher.matches_domain("10.1.2.3", None), Some(true));
         assert_eq!(matcher.matches_domain("11.1.2.3", None), Some(false));
         assert_eq!(matcher.matches_domain("example.com", None), Some(false));
+    }
+
+    #[test]
+    fn a_regex_matcher_runs_the_pattern_the_kernel_will_run() {
+        let matcher = RuleMatcher::DomainRegex {
+            value: r"^ads?\d+\.".into(),
+        };
+        assert_eq!(matcher.matches_domain("ad12.example.com", None), Some(true));
+        assert_eq!(matcher.matches_domain("example.com", None), Some(false));
+    }
+
+    #[test]
+    fn a_broken_regex_admits_it_does_not_know_instead_of_guessing() {
+        // The kernel refuses the whole config over one bad pattern, so
+        // answering "no match" here would send the user looking at the wrong
+        // rule. `validate` is what actually reports the problem.
+        let matcher = RuleMatcher::DomainRegex {
+            value: "^(unclosed".into(),
+        };
+        assert_eq!(matcher.matches_domain("example.com", None), None);
+        let error = rule(matcher).validate().unwrap_err();
+        assert!(error.to_string().contains("域名正则"));
+    }
+
+    #[test]
+    fn a_geosite_matcher_waits_for_the_kernel_and_validates_like_a_geo_code() {
+        let matcher = RuleMatcher::GeoSite {
+            value: "category-ads-all".into(),
+        };
+        assert_eq!(matcher.matches_domain("example.com", None), None);
+        assert!(rule(matcher).validate().is_ok());
+        assert!(rule(RuleMatcher::GeoSite { value: "  ".into() })
+            .validate()
+            .is_err());
     }
 }

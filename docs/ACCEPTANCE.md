@@ -410,3 +410,27 @@
 **两个坑**：
 1. **`minute` 必须是 `unix_seconds.div_euclid(60)`，不能用本地时间。** 本地的一分钟不一定等于 60 秒（夏令时），用户跨时区时历史还会错位。
 2. **UIA 的矩形不能直接当像素点。** 本轮 `click 1110 988` 点在「24 小时」按钮的 UIA 矩形中心上，界面毫无反应；换成 `invoke|24 小时`（`InvokePattern`）立刻生效。WebView2 的矩形是逻辑坐标，注入的鼠标事件是物理像素，两者在缩放会话里不等价——**能 `invoke` 就不要点坐标**。
+
+## 20. 更多匹配器：域名正则与域名分类
+
+验法：云电脑上用 `D:/tmp/shots/paste-n9.txt`（一个 ss 节点 `N9-One`、一个 `select` 组 `n9group`、三条规则 `DOMAIN-REGEX,^ads?\d+\.,REJECT` / `GEOSITE,category-ads-all,REJECT` / `DOMAIN-SUFFIX,example.com,n9group`）走完整导入流程（`run-uia.sh` 的 `invoke|节点` → `invoke|导入` → act 的 `paste n9` → `invoke|解析预览` → `invoke_last|导入`），再打开路由页 `dump`，最后切换两个内核分别启动，直接读渲染出来的 `configs\xray.json` 与 `configs\sing-box.json`。
+
+| 项 | 判据 | 结果 |
+| --- | --- | --- |
+| 导入时三种匹配器都留下来 | 远端 `store.json` 的 `rules` | **通过**。清空后重新导入得 `rules=3`：`domain_regex = ^ads?\d+\. -> block`、`geo_site = category-ads-all -> block`、`domain_suffix = example.com -> group` |
+| 路由页把两类新匹配器都画出来 | 路由页 UIA `dump` | **通过**。三行的「匹配」列分别是「域名正则」「域名分类」「域名后缀」，内容列 `^ads?\d+\.` / `category-ads-all` / `example.com`，第三行动作是「走策略组「n9group」」 |
+| Xray 内核真的收到了 | `configs\xray.json` 的 `routing.rules` | **通过**。`{"domain":["regexp:^ads?\\d+\\."],"outboundTag":"block"}`、`{"domain":["geosite:category-ads-all"],"outboundTag":"block"}` —— 两种都进同一个 `domain` 数组，靠 `regexp:` / `geosite:` 前缀区分 |
+| sing-box 内核真的收到了 | `configs\sing-box.json` 的 `route.rules` | **通过**。`{"action":"reject","domain_regex":["^ads?\\d+\\."]}`、`{"action":"reject","geosite":["category-ads-all"]}` —— 一种匹配器一个键，不塞进 `domain` |
+
+**为什么先做这两条**：`DOMAIN-REGEX` 与 `GEOSITE` 是真实 Clash 订阅里最常见、也是我们此前唯一会整条丢弃的两类。丢掉它们不会报错，只会让「广告拦截」这类规则静默失效——用户以为导进来了，其实一条都没生效。
+
+**三个刻意的设计**：
+- **坏正则在保存时就报错，不等内核。** `RuleMatcher::validate` 里直接 `regex::Regex::new`，失败返回「域名正则不是合法的正则：…」。内核拿到坏正则会拒绝**整份配置**，报的还是 JSON 里第几行——那时用户已经在用另一台机器排查了。
+- **`matches_domain` 对坏正则答「说不准」，不答「不匹配」。** 返回 `None` 而不是 `Some(false)`：路由页的即时判定只是提示，把"配置有错"伪装成"这条规则不适用"会把用户指向错误的行。
+- **`GEOSITE` 的值落库时折成小写。** Clash 用户习惯随手写 `Category-Ads-All`，而两个内核的 geosite 名单都区分大小写；导入时 `to_ascii_lowercase()` 一次，比让内核在启动时悄悄跳过这条规则好。
+
+**两个坑**：
+1. **UIA 里的分段控件不是按钮。** 内核切换 `Xray` / `sing-box` 走的是 `TogglePattern`（`uia2.ps1` 输出里写作 `via toggle`），按 `Button` 找会得到 `0 (of 0 matches)`。`invoke` 那段代码本来就按 pattern 逐个试，所以脚本里统一用 `invoke|名字` 就够，不要按控件类型筛。
+2. **读远端配置截片段要夹长度。** `$t.Substring($i, 900)` 在文件短于 900 字节时会抛 `ArgumentOutOfRangeException: length`；写 `[Math]::Min(760, $t.Length - $s)`。另外 `IndexOf('routing')` 只对 Xray 有效，sing-box 那边键叫 `route`。
+
+**旁证：规则表非空时整批跳过。** 第一次导入时远端 `rules` 已有 4 条旧规则，结果 `nodes` 与 `groups` 都进了，`rules` 一条没动——这是 H7 定下的"不覆盖用户已排好的顺序"，本轮验收时为了看到新规则，先把 `store.json` 的顶层 `rules` 清成 `[]` 再重启导入。

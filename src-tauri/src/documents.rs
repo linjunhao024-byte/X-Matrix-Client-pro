@@ -394,6 +394,8 @@ fn clash_rule(text: &str, report: &mut ParseReport) {
         "DOMAIN-SUFFIX" => RuleMatcher::DomainSuffix { value: argument.to_string() },
         "DOMAIN-KEYWORD" => RuleMatcher::DomainKeyword { value: argument.to_string() },
         "DOMAIN" | "DOMAIN-FULL" => RuleMatcher::DomainFull { value: argument.to_string() },
+        "DOMAIN-REGEX" => RuleMatcher::DomainRegex { value: argument.to_string() },
+        "GEOSITE" => RuleMatcher::GeoSite { value: argument.to_ascii_lowercase() },
         "IP-CIDR" => RuleMatcher::IpCidr { value: argument.to_string() },
         "GEOIP" => RuleMatcher::GeoIp { value: argument.to_ascii_lowercase() },
         "DST-PORT" => match argument.parse::<u16>() {
@@ -645,6 +647,39 @@ rules:
         assert!(matches!(report.rules[1].matcher, RuleMatcher::GeoIp { .. }));
         assert!(report.skipped.iter().any(|line| line.contains("兜底")));
         assert!(report.skipped.iter().any(|line| line.contains("RULE-SET")));
+    }
+
+    #[test]
+    fn the_matchers_that_only_clash_names_are_kept_too() {
+        // DOMAIN-REGEX and GEOSITE are the two most common "unsupported" lines
+        // in real subscriptions; both kernels do support them, so a config
+        // carrying them must not lose those rules on import.
+        let text = r#"proxies:
+  - name: one
+    type: ss
+    server: a.example.com
+    port: 8388
+    cipher: aes-128-gcm
+    password: secret
+rules:
+  - DOMAIN-REGEX,^ads?\d+\.,REJECT
+  - GEOSITE,Category-Ads-All,DIRECT
+"#;
+        let report = parse_document(text);
+        assert_eq!(report.rules.len(), 2, "rules: {:?}", report.rules);
+        assert!(
+            matches!(&report.rules[0].matcher, RuleMatcher::DomainRegex { value } if value == r"^ads?\d+\."),
+            "a regex must survive verbatim: {:?}",
+            report.rules[0].matcher
+        );
+        assert_eq!(report.rules[0].target, "REJECT");
+        // geosite names are case sensitive in the kernel, and Clash users
+        // capitalise them freely, so they are folded to lower case.
+        assert!(
+            matches!(&report.rules[1].matcher, RuleMatcher::GeoSite { value } if value == "category-ads-all"),
+            "a geosite name must be folded: {:?}",
+            report.rules[1].matcher
+        );
     }
 
     #[test]

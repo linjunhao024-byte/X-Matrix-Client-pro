@@ -338,6 +338,8 @@ export const en: Record<string, string> = {
   "logs.visible": "{shown} / {total} lines",
   // match
   "match.domain_full": "Exact domain",
+  "match.domain_regex": "Domain regex",
+  "match.geosite": "Geosite list",
   "match.domain_keyword": "Domain keyword",
   "match.domain_suffix": "Domain suffix",
   "match.geo_ip": "Country",

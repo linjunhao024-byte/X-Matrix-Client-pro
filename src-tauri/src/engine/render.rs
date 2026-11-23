@@ -246,6 +246,14 @@ pub fn xray_route_rules(input: &RenderInput<'_>) -> Vec<Value> {
             RuleMatcher::DomainFull { value } => {
                 entry.insert("domain".into(), json!([format!("full:{value}")]));
             }
+            // Xray reads the prefix inside the domain matcher, so a regex rule
+            // and a geosite rule are the same field as the suffix rules above.
+            RuleMatcher::DomainRegex { value } => {
+                entry.insert("domain".into(), json!([format!("regexp:{value}")]));
+            }
+            RuleMatcher::GeoSite { value } => {
+                entry.insert("domain".into(), json!([format!("geosite:{value}")]));
+            }
             RuleMatcher::IpCidr { value } => {
                 entry.insert("ip".into(), json!([value]));
             }
@@ -412,6 +420,14 @@ pub fn singbox_route_rules(input: &RenderInput<'_>) -> Vec<Value> {
                 }
                 RuleMatcher::DomainFull { value } => {
                     entry.insert("domain".into(), json!([value]));
+                }
+                // sing-box has one key per matcher kind, so these two get
+                // their own fields rather than a prefix inside `domain`.
+                RuleMatcher::DomainRegex { value } => {
+                    entry.insert("domain_regex".into(), json!([value]));
+                }
+                RuleMatcher::GeoSite { value } => {
+                    entry.insert("geosite".into(), json!([value]));
                 }
                 RuleMatcher::IpCidr { value } => {
                     entry.insert("ip_cidr".into(), json!([value]));
@@ -624,6 +640,44 @@ mod rule_tests {
         let rendered = xray_routing_rules(&routed);
         assert_eq!(rendered.len(), 2, "the disabled rule stays out");
         assert_eq!(rendered[0]["outboundTag"], json!("direct"));
+    }
+
+    /// The two matchers Clash subscriptions reach for most, and which we used
+    /// to drop on import: a domain regex and a named geosite list. The kernels
+    /// spell them differently, and a silent miss here means a rule that never
+    /// fires while traffic goes wherever the next rule says.
+    #[test]
+    fn regex_and_geosite_rules_reach_both_kernels() {
+        let node = node();
+        let rules = vec![
+            rule(
+                "regex",
+                RuleMatcher::DomainRegex {
+                    value: "^ads?\\d+\\.".into(),
+                },
+                RuleAction::Block,
+                true,
+            ),
+            rule(
+                "geosite",
+                RuleMatcher::GeoSite {
+                    value: "category-ads-all".into(),
+                },
+                RuleAction::Direct,
+                true,
+            ),
+        ];
+        let routed = input(&node, &rules);
+
+        let xray = xray_routing_rules(&routed);
+        assert_eq!(xray[0]["domain"], json!(["regexp:^ads?\\d+\\."]));
+        assert_eq!(xray[0]["outboundTag"], json!("block"));
+        assert_eq!(xray[1]["domain"], json!(["geosite:category-ads-all"]));
+        assert_eq!(xray[1]["outboundTag"], json!("direct"));
+
+        let sing = singbox_routing_rules(&routed);
+        assert_eq!(sing[0]["domain_regex"], json!(["^ads?\\d+\\."]));
+        assert_eq!(sing[1]["geosite"], json!(["category-ads-all"]));
     }
 
     fn sample() -> Vec<RoutingRule> {

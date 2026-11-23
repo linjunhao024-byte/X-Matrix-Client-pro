@@ -19,9 +19,13 @@ use std::time::{Duration, Instant};
 use crate::error::{AppError, AppResult};
 
 /// Anything slower than this is reported as a timeout rather than a number.
+/// Kept for the one-off helper below and for tests; the app itself always
+/// passes the user's budget down from the settings.
+#[allow(dead_code)]
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(3);
 
 /// Milliseconds needed to open a TCP connection to `host:port`.
+#[allow(dead_code)]
 pub fn tcp_latency(host: &str, port: u16) -> AppResult<u32> {
     tcp_latency_with_timeout(host, port, DEFAULT_TIMEOUT)
 }

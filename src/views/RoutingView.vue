@@ -122,6 +122,8 @@ const matcherKeys: Record<RoutingRule['matcher']['kind'], string> = {
   domain_suffix: 'match.domain_suffix',
   domain_keyword: 'match.domain_keyword',
   domain_full: 'match.domain_full',
+  domain_regex: 'match.domain_regex',
+  geo_site: 'match.geosite',
   ip_cidr: 'match.ip_cidr',
   geo_ip: 'match.geo_ip',
   port: 'match.port',

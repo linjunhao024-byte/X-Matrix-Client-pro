@@ -32,6 +32,10 @@ base64 = "0.22"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "native-tls"] }
 # Clash-format subscriptions are YAML.
 serde_yaml = "0.9"
+# Domain regex rules are evaluated by the routing UI ("which rule would catch
+# this site?") without a running kernel, and a half-typed pattern has to be
+# rejected at save time instead of letting the kernel refuse the whole config.
+regex = "1"
 thiserror = "2"
 parking_lot = "0.12"
 

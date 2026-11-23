@@ -12,7 +12,7 @@ use tauri_plugin_opener::OpenerExt;
 
 use crate::domain::Node;
 use crate::engine::stats::{self, TrafficSample};
-use crate::engine::{traffic_log, TrafficLog, TrafficPoint};
+use crate::engine::{TrafficLog, TrafficPoint};
 use crate::net::latency;
 use crate::engine::{
     Endpoints, EngineBinary, EngineKind, EngineRuntime, EngineStatus, RenderInput, RunOptions,

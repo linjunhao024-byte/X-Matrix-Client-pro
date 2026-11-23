@@ -338,6 +338,8 @@ export const zh: Record<string, string> = {
   "logs.visible": "{shown} / {total} 行",
   // match
   "match.domain_full": "完整域名",
+  "match.domain_regex": "域名正则",
+  "match.geosite": "域名分类",
   "match.domain_keyword": "域名关键字",
   "match.domain_suffix": "域名后缀",
   "match.geo_ip": "国家",

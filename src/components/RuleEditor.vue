@@ -17,6 +17,10 @@ const matcherKinds: { value: RuleMatcher['kind']; labelKey: string; placeholder:
   { value: 'domain_suffix', labelKey: 'match.domain_suffix', placeholder: 'example.com' },
   { value: 'domain_keyword', labelKey: 'match.domain_keyword', placeholder: 'ads' },
   { value: 'domain_full', labelKey: 'match.domain_full', placeholder: 'www.example.com' },
+  // Both are what Clash subscriptions keep reaching for and the kernels
+  // support: a regex over the domain, and a named geosite list.
+  { value: 'domain_regex', labelKey: 'match.domain_regex', placeholder: '^ads?\\d+\\.' },
+  { value: 'geo_site', labelKey: 'match.geosite', placeholder: 'category-ads-all' },
   { value: 'ip_cidr', labelKey: 'match.ip_cidr', placeholder: '192.168.0.0/16' },
   { value: 'geo_ip', labelKey: 'match.geo_ip', placeholder: 'cn' },
   { value: 'port', labelKey: 'match.port', placeholder: '443' },
@@ -108,6 +112,10 @@ function buildMatcher(): RuleMatcher {
       return { kind: 'domain_keyword', value }
     case 'domain_full':
       return { kind: 'domain_full', value }
+    case 'domain_regex':
+      return { kind: 'domain_regex', value }
+    case 'geo_site':
+      return { kind: 'geo_site', value }
     case 'ip_cidr':
       return { kind: 'ip_cidr', value }
     case 'geo_ip':

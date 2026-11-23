@@ -93,10 +93,6 @@ impl TrafficLog {
         }
     }
 
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
     /// Feed one cumulative sample. `now_seconds` is the wall clock, so the
     /// minute buckets line up with the user's expectation of "which minute".
     pub fn observe(&self, up_total: u64, down_total: u64, now_seconds: i64) {

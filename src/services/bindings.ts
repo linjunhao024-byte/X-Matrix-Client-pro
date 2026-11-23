@@ -650,6 +650,14 @@ export type RuleMatcher =
 { kind: "domain_keyword"; value: string } | 
 /**  Exactly this domain. */
 { kind: "domain_full"; value: string } | 
+/**
+ *  A regular expression tested against the domain, e.g. `^ads?\d+\.`.
+ *  Clash spells it `DOMAIN-REGEX`; both kernels understand it, but they
+ *  use different syntax dials, so the pattern is passed through verbatim.
+ */
+{ kind: "domain_regex"; value: string } | 
+/**  A named list from the geosite database, e.g. `cn` or `category-ads-all`. */
+{ kind: "geo_site"; value: string } | 
 /**  An IP range, e.g. `192.168.0.0/16` or `10.0.0.1`. */
 { kind: "ip_cidr"; value: string } | 
 /**  A geo database code, e.g. `cn`, `private`. */
