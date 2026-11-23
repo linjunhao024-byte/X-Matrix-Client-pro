@@ -890,6 +890,21 @@
     "WS path"
   ],
   [
+    "engine.stale",
+    "规则已保存，但内核还在用旧的一份",
+    "Saved, but the kernel is still running the old rules"
+  ],
+  [
+    "engine.staleApply",
+    "重启内核以生效",
+    "Restart the kernel to apply"
+  ],
+  [
+    "engine.staleBusy",
+    "正在重启…",
+    "Restarting…"
+  ],
+  [
     "error.dismiss",
     "知道了",
     "Dismiss"

@@ -198,6 +198,10 @@ export const zh: Record<string, string> = {
   "editor.uuid": "UUID",
   "editor.wsHost": "WS Host",
   "editor.wsPath": "WS 路径",
+  // engine
+  "engine.stale": "规则已保存，但内核还在用旧的一份",
+  "engine.staleApply": "重启内核以生效",
+  "engine.staleBusy": "正在重启…",
   // error
   "error.dismiss": "知道了",
   "error.title": "出了点问题",

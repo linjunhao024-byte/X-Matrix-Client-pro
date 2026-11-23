@@ -4,8 +4,10 @@ import AppIcon from '../components/AppIcon.vue'
 import EmptyState from '../components/EmptyState.vue'
 import ModalDialog from '../components/ModalDialog.vue'
 import RuleEditor from '../components/RuleEditor.vue'
+import StaleConfig from '../components/StaleConfig.vue'
 import { t } from '../i18n'
 import { api, describeError, type RuleAction, type RoutingRule, type RuleTest_Serialize } from '../services/contract'
+import { useEngineStore } from '../stores/engine'
 import { useGroupsStore } from '../stores/groups'
 import { useRoutingStore } from '../stores/routing'
 import { useRuleSetsStore } from '../stores/rulesets'
@@ -13,12 +15,23 @@ import { useRuleSetsStore } from '../stores/rulesets'
 const store = useRoutingStore()
 const groups = useGroupsStore()
 const ruleSets = useRuleSetsStore()
+const engine = useEngineStore()
 
 const editorOpen = ref(false)
 const editing = ref<RoutingRule | null>(null)
 const pendingDelete = ref<RoutingRule | null>(null)
 const actionError = ref<string | null>(null)
 const busy = ref(false)
+/**
+ * True after a save while a kernel runs: the table on screen and the table the
+ * kernel rendered at startup are now different, and the notice offers the
+ * restart that makes them the same again. A stopped kernel has nothing stale.
+ */
+const stale = ref(false)
+
+function markStale(): void {
+  if (engine.running) stale.value = true
+}
 
 const testOpen = ref(false)
 const testDomainInput = ref('')
@@ -77,6 +90,7 @@ async function submit(rule: RoutingRule) {
   actionError.value = null
   try {
     await store.save(rule)
+    markStale()
     editorOpen.value = false
   } catch (cause) {
     actionError.value = describeError(cause)
@@ -92,6 +106,7 @@ async function confirmDelete() {
   actionError.value = null
   try {
     await store.remove(target.id)
+    markStale()
     pendingDelete.value = null
   } catch (cause) {
     actionError.value = describeError(cause)
@@ -104,6 +119,7 @@ async function move(rule: RoutingRule, delta: number) {
   actionError.value = null
   try {
     await store.move(rule.id, delta)
+    markStale()
   } catch (cause) {
     actionError.value = describeError(cause)
   }
@@ -113,6 +129,7 @@ async function toggle(rule: RoutingRule) {
   actionError.value = null
   try {
     await store.toggle(rule.id)
+    markStale()
   } catch (cause) {
     actionError.value = describeError(cause)
   }
@@ -208,6 +225,8 @@ function actionClass(rule: RoutingRule): string {
 
     <p v-if="store.error" class="alert">{{ store.error }}</p>
     <p v-if="actionError" class="alert">{{ actionError }}</p>
+
+    <StaleConfig :show="stale" @applied="stale = false" />
 
     <section class="surface-plain table-wrap">
       <div v-if="store.loading && !store.loaded" class="empty-state">

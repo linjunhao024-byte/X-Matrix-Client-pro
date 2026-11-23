@@ -4,6 +4,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import AppIcon from '../components/AppIcon.vue'
 import EmptyState from '../components/EmptyState.vue'
 import ModalDialog from '../components/ModalDialog.vue'
+import StaleConfig from '../components/StaleConfig.vue'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
 import { t } from '../i18n'
 import {
@@ -14,9 +15,22 @@ import {
   type RuleSetSource,
 } from '../services/contract'
 import { formatBytes, formatWhen } from '../services/format'
+import { useEngineStore } from '../stores/engine'
 import { useRuleSetsStore } from '../stores/rulesets'
 
 const store = useRuleSetsStore()
+const engine = useEngineStore()
+
+/**
+ * A set's contents, its enabled flag and its address only reach a kernel when
+ * it renders its config at startup, so a running kernel keeps resolving the
+ * old set until it is restarted. Nothing is stale while nothing runs.
+ */
+const stale = ref(false)
+
+function markStale(): void {
+  if (engine.running) stale.value = true
+}
 
 /** `0` = only when I ask, same meaning as on the subscriptions page. */
 const intervals = [
@@ -118,6 +132,7 @@ async function submit(): Promise<void> {
     } else {
       await store.create(form.name.trim(), url)
     }
+    markStale()
     editing.value = false
   } catch (cause) {
     formError.value = describeError(cause)
@@ -141,6 +156,7 @@ async function savePaste(): Promise<void> {
   }
   try {
     const updated = await store.setText(target.id, pasteText.value)
+    markStale()
     note.value = t('rs.note.saved', { name: updated.name, count: updated.entry_count ?? 0 })
     pasting.value = null
   } catch (cause) {
@@ -152,6 +168,7 @@ async function refreshOne(set: RuleSet_Serialize): Promise<void> {
   note.value = null
   try {
     const updated = await store.refresh(set.id)
+    markStale()
     note.value = t('rs.note.refreshed', { name: updated.name, count: updated.entry_count ?? 0 })
   } catch {
     /* store.error already carries the reason */
@@ -163,11 +180,22 @@ async function confirmDelete(): Promise<void> {
   if (!target) return
   try {
     await store.remove(target.id)
+    markStale()
     note.value = t('rs.note.deleted', { name: target.name })
   } catch (cause) {
     store.error = describeError(cause)
   } finally {
     confirming.value = null
+  }
+}
+
+/** The enable switch is a save too: a disabled set stops being a rule target. */
+async function toggleOne(set: RuleSet_Serialize): Promise<void> {
+  try {
+    await store.toggle(set.id)
+    markStale()
+  } catch (cause) {
+    store.error = describeError(cause)
   }
 }
 
@@ -218,6 +246,8 @@ onMounted(() => {
 
     <p v-if="store.error" class="alert">{{ store.error }}</p>
     <p v-if="note" class="notice">{{ note }}</p>
+
+    <StaleConfig :show="stale" @applied="stale = false" />
 
     <section class="surface-plain geo-card">
       <div class="geo-head">
@@ -306,7 +336,7 @@ onMounted(() => {
               >
                 <AppIcon name="edit" :size="14" />
               </button>
-              <button type="button" class="btn btn-ghost btn-sm" @click="store.toggle(set.id)">
+              <button type="button" class="btn btn-ghost btn-sm" @click="toggleOne(set)">
                 {{ set.enabled ? t('common.disable') : t('common.enable') }}
               </button>
               <button

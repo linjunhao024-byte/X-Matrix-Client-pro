@@ -19,6 +19,7 @@ import {
 } from '../services/contract'
 import { onEngineExit, type Unlisten } from '../services/events'
 import { bytes } from '../services/format'
+import { useSettingsStore } from './settings'
 import { useSystemProxyStore } from './sysproxy'
 
 const POLL_INTERVAL_MS = 1000
@@ -270,6 +271,22 @@ export const useEngineStore = defineStore('engine', () => {
     }
   }
 
+  /**
+   * Restart the running kernel so a saved config change becomes live.
+   *
+   * Rule, group and rule-set edits only reach a kernel through the config it
+   * renders at startup, so "saved" and "in effect" are two different things
+   * while a kernel runs. This is the same swap node switching uses: same ports,
+   * one short drop, proxy takeover untouched. Returns false when there is
+   * nothing to restart, so callers can skip the notice entirely.
+   */
+  async function reapply(): Promise<boolean> {
+    const active = useSettingsStore().settings?.last_node_id
+    if (!running.value || !active) return false
+    await apply(active)
+    return true
+  }
+
   async function stop() {
     busy.value = true
     error.value = null
@@ -293,6 +310,7 @@ export const useEngineStore = defineStore('engine', () => {
     busy,
     error,
     apply,
+    reapply,
     rates,
     running,
     hasConnectionsApi,

@@ -17,18 +17,22 @@ const { api, feed } = vi.hoisted(() => {
     nextSample = { up_total: up, down_total: down }
   }
 
+  /** One running-kernel status, so both the start and the swap answer alike. */
+  const runningStatus = (nodeId = 'n1') => ({
+    running: true,
+    kind: 'xray' as const,
+    node_id: nodeId,
+    mixed_port: 7890,
+    api_port: 9090,
+    started_at_ms: 0,
+    last_exit_code: null,
+    last_error: null,
+  })
+
   const api = {
     engineVersion: vi.fn(async (kind: 'xray' | 'sing-box') => `version of ${kind}`),
-    engineStatus: vi.fn(async () => ({
-      running: true,
-      kind: 'xray' as const,
-      node_id: 'n1',
-      mixed_port: 7890,
-      api_port: 9090,
-      started_at_ms: 0,
-      last_exit_code: null,
-      last_error: null,
-    })),
+    engineStatus: vi.fn(async () => runningStatus()),
+    engineApply: vi.fn(async () => runningStatus()),
     trafficSample: vi.fn(async () => {
       if (!nextSample) return null
       return {
@@ -110,6 +114,31 @@ describe('engine store session counter', () => {
     await store.refreshTraffic()
     expect(store.session).toEqual({ up: 0, down: 0 })
     expect(store.rates.up).toBe(0)
+  })
+})
+
+describe('engine store reapply', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('reports false when nothing is running', async () => {
+    // The config pages use this answer to decide whether a "not live yet"
+    // notice makes sense at all: a stopped kernel has nothing to restart.
+    const store = useEngineStore()
+    expect(await store.reapply()).toBe(false)
+    expect(api.engineApply).not.toHaveBeenCalled()
+  })
+
+  it('reports false when a kernel runs but no node was recorded', async () => {
+    // Settings carry the node the restart has to reuse. Without one there is
+    // nothing to restart onto, and `apply` must not be called with a guess.
+    const store = useEngineStore()
+    await store.refreshStatus()
+    expect(store.running).toBe(true)
+    expect(await store.reapply()).toBe(false)
+    expect(api.engineApply).not.toHaveBeenCalled()
   })
 })
 

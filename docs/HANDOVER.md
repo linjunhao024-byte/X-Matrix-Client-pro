@@ -15,15 +15,15 @@
 
 | 项 | 值 |
 |---|---|
-| 代码 HEAD | `a952573`「fix(engine): a dying kernel hands the system proxy back before anyone is told」（= 最后一个**已验收**的功能） |
-| 未提交 | 无（QR 对话框与崩退交还代理均已提交：`0813ca0`、`a952573`） |
+| 代码 HEAD | `待填-§32`「fix(engine): a dying kernel hands the system proxy back before anyone is told」（= 最后一个**已验收**的功能） |
+| 未提交 | 无（待填-§32） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库（HEAD 上这一条） |
 | IPC 命令 | **77**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
 | Rust 单测 | **320 passed**（`ARCHITECTURE.md:278` 已同步） |
-| 前端检查 | `npm run check` 全绿：vue-tsc / architecture / contract / vitest **76**（8 文件） |
-| i18n | **724** 键（`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
+| 前端检查 | `npm run check` 全绿：vue-tsc / architecture / contract / vitest **78**（8 文件） |
+| i18n | **727** 键（`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
 | 桌面产物 | 见 §1 表格（每次构建后刷新；当前 release 构建含 N12 + GEO + 测速落盘 + 退出通知） |
-| 验收文档 | `docs/ACCEPTANCE.md` §0–§31（§7 历史空缺，编号不连续但内容完整） |
+| 验收文档 | `docs/ACCEPTANCE.md` §0–§32（§7 历史空缺，编号不连续但内容完整） |
 | 云电脑 | 干净：`ProxyEnable=0x0`、无 X-Matrix/sing-box/xray 进程、无 `xm*` 计划任务 |
 
 **下一步的确定顺序**（做完一条打一个勾，别跳）：
@@ -34,7 +34,7 @@
 - [x] 4. `docs/ACCEPTANCE.md` 写到 §26
 - [x] 5. 提交（`fix(tray)` / `feat(update)` / `feat(geo,nodes)` / `feat(engine)` 各一条）
 - [x] 6. `FEED_URL` 已指向真实仓库 `linjunhao024-byte/X-Matrix-Client-pro`，`v0.1.0` 已发布并带 `X-Matrix.exe` 资产
-- [x] 7. 计数已同步：77 命令 / 320 单测 / 76 vitest / 724 i18n 键
+- [x] 7. 计数已同步：77 命令 / 320 单测 / 78 vitest / 727 i18n 键
 - [ ] 8. `bash /d/tmp/shots/cleanup.sh` 收尾云电脑
 
 ---
@@ -143,6 +143,7 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 | §29 | 内核二进制：换一个文件就真的跑那个文件，geo 数据回落到 engines |
 | §30 | 节点二维码：前端出码、与「复制链接」同源、失败不留白 |
 | §31 | 内核崩溃：通知之前先交还系统代理，机器不会留在断网状态 |
+| §32 | 规则/分组/规则集保存后提示「内核还在用旧的」，一键重启生效 |
 
 已提交的提交序列（新→旧，14 条主体）：
 `5a44af3` 域名正则+geosite · `569a7ce` 流量历史 · `44b857b` 测速预算+选最快 · `42f85bd` 一键断开+进程名 · `f817726` 真实延迟 · `f3fc750` 订阅走代理 · `d892b9e` Clash 导入带组和规则 · `6851775` 托盘子菜单 · `f9a0406` H4 验收文档 · `14ddb20` hysteria2/tuic · `fdd0b8d` 运行中热切换 · `eb3f453` 日志页 · `79ccadd` 设计修复（粘右操作列、错误用红、焦点陷阱等）· `535124b` 快捷键与诊断包验收。

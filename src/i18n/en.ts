@@ -198,6 +198,10 @@ export const en: Record<string, string> = {
   "editor.uuid": "UUID",
   "editor.wsHost": "WS host",
   "editor.wsPath": "WS path",
+  // engine
+  "engine.stale": "Saved, but the kernel is still running the old rules",
+  "engine.staleApply": "Restart the kernel to apply",
+  "engine.staleBusy": "Restarting…",
   // error
   "error.dismiss": "Dismiss",
   "error.title": "Something went wrong",

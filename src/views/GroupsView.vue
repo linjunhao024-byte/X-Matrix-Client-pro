@@ -4,6 +4,7 @@ import AppIcon from '../components/AppIcon.vue'
 import EmptyState from '../components/EmptyState.vue'
 import GroupEditor from '../components/GroupEditor.vue'
 import ModalDialog from '../components/ModalDialog.vue'
+import StaleConfig from '../components/StaleConfig.vue'
 import { t } from '../i18n'
 import { useEngineStore } from '../stores/engine'
 import { useGroupsStore } from '../stores/groups'
@@ -24,6 +25,16 @@ const editing = ref<ProxyGroup_Serialize | null>(null)
 const pendingDelete = ref<ProxyGroup_Serialize | null>(null)
 const busy = ref(false)
 const actionError = ref<string | null>(null)
+/**
+ * A group edit, a member pick or a toggle only reaches the kernel through the
+ * config it rendered at startup. While one runs, the saved list and the live
+ * one differ until it is restarted; a stopped kernel has nothing stale.
+ */
+const stale = ref(false)
+
+function markStale(): void {
+  if (engine.running) stale.value = true
+}
 
 /// Measured kernel-side delays. Keyed by `group:<id>` and `node:<id>`, because
 /// the same node can appear in several groups and the number belongs to the
@@ -89,6 +100,7 @@ async function onSubmit(group: ProxyGroup_Deserialize) {
   actionError.value = null
   try {
     await store.save(group)
+    markStale()
     editorOpen.value = false
   } catch (cause) {
     actionError.value = describeError(cause)
@@ -101,6 +113,7 @@ async function pick(group: ProxyGroup_Serialize, nodeId: string) {
   if (group.kind !== 'select') return
   try {
     await store.select(group.id, nodeId)
+    markStale()
   } catch (cause) {
     actionError.value = describeError(cause)
   }
@@ -109,6 +122,7 @@ async function pick(group: ProxyGroup_Serialize, nodeId: string) {
 async function toggle(group: ProxyGroup_Serialize) {
   try {
     await store.toggle(group.id)
+    markStale()
   } catch (cause) {
     actionError.value = describeError(cause)
   }
@@ -167,6 +181,7 @@ async function confirmDelete() {
   busy.value = true
   try {
     await store.remove(target.id)
+    markStale()
     pendingDelete.value = null
   } catch (cause) {
     actionError.value = describeError(cause)
@@ -199,6 +214,8 @@ async function confirmDelete() {
     <p v-if="xraySelected" class="alert alert-info">{{ t('groups.xrayHint') }}</p>
     <p v-if="actionError" class="alert">{{ actionError }}</p>
     <p v-if="store.error" class="alert">{{ store.error }}</p>
+
+    <StaleConfig :show="stale" @applied="stale = false" />
 
     <EmptyState
       v-if="isEmpty"
