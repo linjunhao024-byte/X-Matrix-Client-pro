@@ -11,6 +11,7 @@ import {
   describeError,
   type EngineKind,
   type ImportOutcome_Serialize,
+  type LatencyProbe_Serialize,
   type Node_Deserialize,
   type Node_Serialize,
 } from '../services/contract'
@@ -29,6 +30,7 @@ const editing = ref<Node_Serialize | null>(null)
 const importOpen = ref(false)
 const importNote = ref<string | null>(null)
 const actionError = ref<string | null>(null)
+const actionNote = ref<string | null>(null)
 const pendingDelete = ref<Node_Serialize | null>(null)
 const deleting = ref(false)
 const startingId = ref<string | null>(null)
@@ -230,6 +232,7 @@ async function copyText(text: string): Promise<boolean> {
 }
 
 let copyTimer: ReturnType<typeof setTimeout> | null = null
+let actionTimer: ReturnType<typeof setTimeout> | null = null
 
 async function copyLinks(ids: string[]) {
   if (ids.length === 0) return
@@ -288,10 +291,9 @@ async function testSelected() {
   testingAll.value = true
   actionError.value = null
   try {
-    for (const node of targets) {
-      testingId.value = node.id
-      await measure(node)
-    }
+    await measureMany(targets)
+  } catch (cause) {
+    actionError.value = describeError(cause)
   } finally {
     testingId.value = null
     testingAll.value = false
@@ -387,44 +389,102 @@ function speaksQuic(node: Node_Serialize): boolean {
   return node.protocol.kind === 'Hysteria2' || node.protocol.kind === 'Tuic'
 }
 
-async function measure(node: Node_Serialize) {
-  if (speaksQuic(node)) {
-    latency.value = { ...latency.value, [node.id]: 'quic' }
-    return
-  }
-  try {
-    const ms = await api.testNodeLatency(node.id)
-    latency.value = { ...latency.value, [node.id]: ms }
-  } catch {
-    // A node that cannot be reached is a fact about the node, not an error
-    // worth an alert bar: show it on the card instead.
-    latency.value = { ...latency.value, [node.id]: 'timeout' }
-  }
+/** Turn one probe into the card's three-way status.
+ *
+ *  The backend hands back `ms` or `error` together with the id, so cards are
+ *  paired by id and never by position: the list can be filtered, sorted or
+ *  renamed while the probes are still running. */
+function applyProbe(probe: LatencyProbe_Serialize) {
+  const next = { ...latency.value }
+  if (typeof probe.ms === 'number') next[probe.id] = probe.ms
+  // "QUIC" is the backend saying it has no TCP handshake to time; anything
+  // else is a node that did not answer in the budget.
+  else next[probe.id] = (probe.error ?? '').includes('QUIC') ? 'quic' : 'timeout'
+  latency.value = next
+}
+
+/** One call for the whole list: the backend walks it with `test_concurrency`
+ *  workers, which is why "test all" no longer takes three seconds per node. */
+async function measureMany(nodes: Node_Serialize[]) {
+  if (nodes.length === 0) return
+  const probes = await api.testNodesLatency(nodes.map((node) => node.id))
+  for (const probe of probes) applyProbe(probe)
 }
 
 async function testLatency(node: Node_Serialize) {
   testingId.value = node.id
   actionError.value = null
   try {
-    await measure(node)
+    // The batch answers per node, so a dead node comes back as an `error` row
+    // rather than a thrown command; reaching the catch means the call itself
+    // failed (kernel gone, window closing) and that is worth the alert bar.
+    await measureMany([node])
+  } catch (cause) {
+    actionError.value = describeError(cause)
   } finally {
     testingId.value = null
   }
 }
 
-/** Sequential on purpose: a burst of parallel handshakes measures the queue,
- *  not the nodes. */
+/** One command, `test_concurrency` workers.
+ *
+ *  It used to loop here one node at a time: a burst of parallel handshakes
+ *  measures the queue rather than the nodes, and the answer was to make the
+ *  concurrency a setting (default 2) instead of hardcoding one extreme. */
 async function testAll() {
   testingAll.value = true
   actionError.value = null
   try {
-    for (const node of store.items) {
-      testingId.value = node.id
-      await measure(node)
-    }
+    await measureMany(store.items)
+  } catch (cause) {
+    actionError.value = describeError(cause)
   } finally {
     testingId.value = null
     testingAll.value = false
+  }
+}
+
+/** The fastest card that has a real number on it, or null when nothing has
+ *  been measured yet. */
+function fastestNode(): Node_Serialize | null {
+  let best: Node_Serialize | null = null
+  let bestMs = Number.POSITIVE_INFINITY
+  for (const node of store.items) {
+    const value = latency.value[node.id]
+    if (typeof value !== 'number' || value >= bestMs) continue
+    best = node
+    bestMs = value
+  }
+  return best
+}
+
+/** Make the fastest measured node the current one.
+ *
+ *  Running: switch the live kernel (the connections blink, as any switch does).
+ *  Idle: just remember it, so the next start uses it. Starting a kernel because
+ *  someone clicked "pick fastest" would be a surprise. */
+async function pickFastest() {
+  actionError.value = null
+  const best = fastestNode()
+  if (!best) {
+    actionError.value = t('nodes.pickFastestEmpty')
+    return
+  }
+  try {
+    if (engine.running) {
+      await engine.apply(best.id)
+    } else {
+      const current = settings.settings
+      if (!current) return
+      await settings.save({ ...current, last_node_id: best.id })
+    }
+    actionNote.value = t('nodes.pickFastestDone', { name: best.name })
+    if (actionTimer) clearTimeout(actionTimer)
+    actionTimer = setTimeout(() => {
+      actionNote.value = null
+    }, 6000)
+  } catch (cause) {
+    actionError.value = describeError(cause)
   }
 }
 
@@ -515,6 +575,7 @@ function securityLabel(node: Node_Serialize): string {
 
     <p v-if="store.error" class="alert">{{ store.error }}</p>
     <p v-if="actionError" class="alert">{{ actionError }}</p>
+    <p v-else-if="actionNote" class="notice">{{ actionNote }}</p>
     <p v-if="importNote" class="notice">{{ importNote }}</p>
 
     <div v-if="store.loading && !store.loaded" class="empty-state">
@@ -577,6 +638,16 @@ function securityLabel(node: Node_Serialize): string {
           >
             <AppIcon name="refresh" :size="14" />
             {{ testingAll ? t('common.testing') : t('nodes.testAll') }}
+          </button>
+          <button
+            class="btn btn-sm"
+            type="button"
+            :disabled="testingAll || engine.busy"
+            :title="t('nodes.pickFastestHint')"
+            @click="pickFastest"
+          >
+            <AppIcon name="check" :size="14" />
+            {{ t('nodes.pickFastest') }}
           </button>
           <button
             class="btn btn-sm"
@@ -716,8 +787,8 @@ function securityLabel(node: Node_Serialize): string {
               <button
                 class="btn btn-ghost btn-sm"
                 type="button"
-                :disabled="testingId !== null"
-                :title="t('common.test')"
+                :disabled="testingId !== null || speaksQuic(node)"
+                :title="speaksQuic(node) ? t('nodes.latency.quicHint') : t('common.test')"
                 :aria-label="t('common.test')"
                 @click.stop="testLatency(node)"
               >

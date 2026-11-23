@@ -302,6 +302,31 @@ async function save() {
           <input v-model="draft.test_url" class="input input-mono" type="text" />
         </div>
         <p class="field-hint">{{ t('settings.testUrlHint') }}</p>
+        <div class="grid">
+          <label class="field">
+            <span class="field-label">{{ t('settings.testTimeout') }}</span>
+            <input
+              v-model.number="draft.test_timeout_ms"
+              class="input input-narrow"
+              type="number"
+              min="500"
+              max="20000"
+              step="500"
+            />
+          </label>
+          <label class="field">
+            <span class="field-label">{{ t('settings.testConcurrency') }}</span>
+            <input
+              v-model.number="draft.test_concurrency"
+              class="input input-narrow"
+              type="number"
+              min="1"
+              max="16"
+              step="1"
+            />
+          </label>
+        </div>
+        <p class="field-hint">{{ t('settings.testBudgetHint') }}</p>
       </section>
 
       <section class="surface-plain panel">

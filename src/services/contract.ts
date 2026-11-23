@@ -22,6 +22,7 @@ import type {
   ImportOutcome_Serialize,
   ImportPreview_Serialize,
   Language,
+  LatencyProbe_Serialize,
   LogDelta,
   Node_Deserialize,
   Node_Serialize,
@@ -99,6 +100,9 @@ export const api = {
   tagNodes: (ids: string[], tag: string, remove: boolean): Promise<Node_Serialize[]> =>
     unwrap(commands.tagNodes(ids, tag, remove)),
   testNodeLatency: (id: string): Promise<number> => unwrap(commands.testNodeLatency(id)),
+  /** An empty list means every node: the backend reads its own list then. */
+  testNodesLatency: (ids: string[]): Promise<LatencyProbe_Serialize[]> =>
+    unwrap(commands.testNodesLatency(ids)),
 
   // The backend always answers with the full struct; the generated union only
   // exists because specta models both directions, so narrow it here.
@@ -228,6 +232,7 @@ export type {
   ImportOutcome_Serialize,
   ImportPreview_Serialize,
   Language,
+  LatencyProbe_Serialize,
   Node_Deserialize,
   Node_Serialize,
   ProxyGroup_Deserialize,

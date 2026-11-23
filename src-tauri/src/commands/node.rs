@@ -1,3 +1,7 @@
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
+use std::time::Duration;
+
 use tauri::{AppHandle, State};
 
 use crate::domain::{Node, NodeId};
@@ -202,11 +206,109 @@ pub async fn test_node_latency(state: State<'_, AppState>, id: NodeId) -> AppRes
         return Err(refusal);
     }
 
+    let timeout = Duration::from_millis(u64::from(state.settings.read().test_timeout_ms));
+
     tauri::async_runtime::spawn_blocking(move || {
-        crate::net::latency::tcp_latency(&node.server, node.port)
+        crate::net::latency::tcp_latency_with_timeout(&node.server, node.port, timeout)
     })
     .await
     .map_err(|error| AppError::Internal(format!("后台任务失败：{error}")))?
+}
+
+/// One row of a batch latency run.
+///
+/// The UI needs both outcomes at once: a node that answered and a node that did
+/// not are the same kind of fact, and rowing them through `Result` per node
+/// would make the frontend throw away half of the answer to keep the other.
+#[derive(Debug, Clone, serde::Serialize, specta::Type)]
+pub struct LatencyProbe {
+    pub id: NodeId,
+    pub ms: Option<u32>,
+    pub error: Option<String>,
+}
+
+fn probe_one(node: &Node, timeout: Duration) -> LatencyProbe {
+    let id = node.id.clone();
+    if let Some(refusal) = tcp_handshake_refusal(node) {
+        return LatencyProbe { id, ms: None, error: Some(refusal.to_string()) };
+    }
+    match crate::net::latency::tcp_latency_with_timeout(&node.server, node.port, timeout) {
+        Ok(ms) => LatencyProbe { id, ms: Some(ms), error: None },
+        Err(error) => LatencyProbe { id, ms: None, error: Some(error.to_string()) },
+    }
+}
+
+/// Probe every node with a bounded number of worker threads.
+///
+/// Results come back in the order the nodes were handed in, whatever order the
+/// threads finished in: the caller renders them against the same ids it asked
+/// about, and a shuffled answer would look like the cards rearranging themselves.
+fn probe_all(nodes: &[Node], timeout_ms: u32, workers: usize) -> Vec<LatencyProbe> {
+    let timeout = Duration::from_millis(u64::from(timeout_ms));
+    let slots: Mutex<Vec<Option<LatencyProbe>>> = Mutex::new(vec![None; nodes.len()]);
+    let next = AtomicUsize::new(0);
+    let workers = workers.clamp(1, 16).min(nodes.len());
+
+    std::thread::scope(|scope| {
+        for _ in 0..workers {
+            scope.spawn(|| loop {
+                let index = next.fetch_add(1, Ordering::Relaxed);
+                if index >= nodes.len() {
+                    break;
+                }
+                let probe = probe_one(&nodes[index], timeout);
+                let mut slots = slots.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+                slots[index] = Some(probe);
+            });
+        }
+    });
+
+    slots
+        .into_inner()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .into_iter()
+        .flatten()
+        .collect()
+}
+
+/// TCP handshake latency for a list of nodes, in milliseconds.
+///
+/// An empty list means every node: that is what "test all" wants, and asking the
+/// frontend to enumerate the same rows it is about to render only creates a
+/// chance for the two lists to disagree.
+#[tauri::command]
+#[specta::specta]
+pub async fn test_nodes_latency(
+    state: State<'_, AppState>,
+    ids: Vec<NodeId>,
+) -> AppResult<Vec<LatencyProbe>> {
+    let (targets, timeout_ms, workers) = {
+        let nodes = state.nodes.read();
+        let settings = state.settings.read();
+        let targets = if ids.is_empty() {
+            nodes.clone()
+        } else {
+            let mut picked = Vec::with_capacity(ids.len());
+            for id in &ids {
+                let node = nodes
+                    .iter()
+                    .find(|node| &node.id == id)
+                    .cloned()
+                    .ok_or_else(|| AppError::NotFound(format!("节点 {id} 不存在")))?;
+                picked.push(node);
+            }
+            picked
+        };
+        (targets, settings.test_timeout_ms, settings.test_concurrency as usize)
+    };
+
+    if targets.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    tauri::async_runtime::spawn_blocking(move || probe_all(&targets, timeout_ms, workers))
+        .await
+        .map_err(|error| AppError::Internal(format!("后台任务失败：{error}")))
 }
 
 /// Delete several nodes in one call.
@@ -385,6 +487,49 @@ mod tests {
         assert!(apply_tag(&state, &[], "trusted", false).is_err());
         assert!(apply_tag(&state, &["a".into()], "   ", false).is_err());
         assert!(apply_tag(&state, &["missing".into()], "trusted", false).is_err());
+    }
+
+    #[test]
+    fn a_batch_keep_the_order_it_was_asked_in() {
+        // A shuffled answer would look like the cards rearranging themselves,
+        // and the frontend pairs the probes back by index.
+        let nodes: Vec<Node> = (0..8).map(|index| node(&format!("n{index}"), &[])).collect();
+        let probes = probe_all(&nodes, 100, 4);
+
+        assert_eq!(
+            probes.iter().map(|probe| probe.id.as_str()).collect::<Vec<_>>(),
+            nodes.iter().map(|item| item.id.as_str()).collect::<Vec<_>>()
+        );
+        assert_eq!(probes.len(), nodes.len());
+    }
+
+    #[test]
+    fn a_quic_node_in_a_batch_says_why_instead_of_going_missing() {
+        // The row has to exist either way: a node with no answer at all reads
+        // as "the app forgot about it", which is a different bug report.
+        let mut quic = node("q", &[]);
+        quic.protocol = Protocol::Hysteria2 {
+            password: "p".into(),
+            obfs_password: None,
+            up_mbps: None,
+            down_mbps: None,
+        };
+
+        let probes = probe_all(&[quic], 100, 1);
+
+        assert_eq!(probes.len(), 1);
+        assert!(probes[0].ms.is_none());
+        assert!(probes[0].error.as_deref().unwrap_or("").contains("QUIC"));
+    }
+
+    #[test]
+    fn one_worker_for_a_dozen_nodes_is_still_the_right_answer() {
+        // The clamp exists so a setting of 0 cannot spawn zero threads and
+        // deadlock the wait, and so more workers than nodes is not an error.
+        let nodes: Vec<Node> = (0..3).map(|index| node(&format!("n{index}"), &[])).collect();
+
+        assert_eq!(probe_all(&nodes, 100, 0).len(), 3);
+        assert_eq!(probe_all(&nodes, 100, 64).len(), 3);
     }
 
     #[test]

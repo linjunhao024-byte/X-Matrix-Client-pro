@@ -1780,6 +1780,11 @@
     "QUIC"
   ],
   [
+    "nodes.latency.quicHint",
+    "Hysteria2 与 TUIC 走 QUIC，没有 TCP 握手可测；启动内核后用首页的「真实延迟」。",
+    "Hysteria2 and TUIC speak QUIC, so there is no TCP handshake to time. Start the kernel and use the real-latency button on the home page."
+  ],
+  [
     "nodes.latencyHint",
     "测速只量到节点的 TCP 握手，不代表隧道一定能通；通了没网请看内核日志。",
     "A latency test only measures the TCP handshake to the node — it does not prove the tunnel works. If traffic still fails, check the kernel log."
@@ -1798,6 +1803,26 @@
     "nodes.moveUp",
     "上移",
     "Move up"
+  ],
+  [
+    "nodes.pickFastest",
+    "选最快",
+    "Pick fastest"
+  ],
+  [
+    "nodes.pickFastestHint",
+    "把测过的最快节点设为当前节点；内核在跑时会立刻切换",
+    "Make the fastest measured node the current one; switching happens right away while the kernel runs"
+  ],
+  [
+    "nodes.pickFastestEmpty",
+    "还没有测过任何节点的延迟，先点「全部测速」",
+    "Nothing has been measured yet — run \"Test all\" first"
+  ],
+  [
+    "nodes.pickFastestDone",
+    "已切换到 {name}",
+    "Switched to {name}"
   ],
   [
     "nodes.new",
@@ -2888,6 +2913,21 @@
     "settings.testUrlHint",
     "「真实延迟」与「自动测速」策略组都打这个地址，必须是 http://（探测经本机代理，不带 TLS）。gstatic 被墙时换成 http://cp.cloudflare.com/ 之类。",
     "The real-latency button and url-test groups probe this address. It must be http:// (the probe goes through the local proxy, which speaks no TLS). Swap it when gstatic is blocked."
+  ],
+  [
+    "settings.testTimeout",
+    "握手超时（毫秒）",
+    "Handshake timeout (ms)"
+  ],
+  [
+    "settings.testConcurrency",
+    "同时测几个",
+    "Test at once"
+  ],
+  [
+    "settings.testBudgetHint",
+    "超时太短会把慢节点误判成不通；并发越高总数越快，但每次握手都在抢同一条上行，测出来的是队列而不是节点。",
+    "Too short a timeout calls a slow node dead. Higher concurrency finishes a long list faster, but every handshake shares the same uplink, so you start timing the queue instead of the node."
   ],
   [
     "settings.tray",

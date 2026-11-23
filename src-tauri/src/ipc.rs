@@ -20,6 +20,7 @@ pub fn builder() -> Builder<tauri::Wry> {
         commands::node::tag_nodes,
         commands::node::export_node_links,
         commands::node::test_node_latency,
+        commands::node::test_nodes_latency,
         commands::settings::autostart_status,
         commands::settings::get_settings,
         commands::settings::save_settings,

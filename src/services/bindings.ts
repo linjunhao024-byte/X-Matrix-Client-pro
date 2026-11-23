@@ -46,6 +46,14 @@ export const commands = {
 	 */
 	testNodeLatency: (id: string) => typedError<number, AppError>(__TAURI_INVOKE("test_node_latency", { id })),
 	/**
+	 *  TCP handshake latency for a list of nodes, in milliseconds.
+	 * 
+	 *  An empty list means every node: that is what "test all" wants, and asking the
+	 *  frontend to enumerate the same rows it is about to render only creates a
+	 *  chance for the two lists to disagree.
+	 */
+	testNodesLatency: (ids: string[]) => typedError<LatencyProbe_Serialize[], AppError>(__TAURI_INVOKE("test_nodes_latency", { ids })),
+	/**
 	 *  Whether the launch-at-login entry is currently registered.
 	 * 
 	 *  Read from the registry, not from the saved settings: the user (or an
@@ -448,6 +456,41 @@ export type ImportPreview_Serialize = {
 
 export type Language = "zh" | "en";
 
+/**
+ *  One row of a batch latency run.
+ * 
+ *  The UI needs both outcomes at once: a node that answered and a node that did
+ *  not are the same kind of fact, and rowing them through `Result` per node
+ *  would make the frontend throw away half of the answer to keep the other.
+ */
+export type LatencyProbe = LatencyProbe_Serialize | LatencyProbe_Deserialize;
+
+/**
+ *  One row of a batch latency run.
+ * 
+ *  The UI needs both outcomes at once: a node that answered and a node that did
+ *  not are the same kind of fact, and rowing them through `Result` per node
+ *  would make the frontend throw away half of the answer to keep the other.
+ */
+export type LatencyProbe_Deserialize = {
+	id: string,
+	ms?: number | null,
+	error?: string | null,
+};
+
+/**
+ *  One row of a batch latency run.
+ * 
+ *  The UI needs both outcomes at once: a node that answered and a node that did
+ *  not are the same kind of fact, and rowing them through `Result` per node
+ *  would make the frontend throw away half of the answer to keep the other.
+ */
+export type LatencyProbe_Serialize = {
+	id: string,
+	ms: number | null,
+	error: string | null,
+};
+
 /**  One page of a kernel log: the bytes after the caller's cursor. */
 export type LogDelta = {
 	text: string,
@@ -800,6 +843,22 @@ export type Settings_Deserialize = {
 	 */
 	auto_test_minutes?: number,
 	/**
+	 *  How long one latency probe may take, in milliseconds.
+	 * 
+	 *  Three seconds suits a healthy node on a decent line. A satellite link
+	 *  needs more, and a timeout that calls a working node "unreachable" is
+	 *  worse than a slow number, so the knob is a setting and not a constant.
+	 */
+	test_timeout_ms?: number,
+	/**
+	 *  How many nodes "test all" probes at the same time.
+	 * 
+	 *  One is honest: parallel handshakes contend for the same uplink and the
+	 *  numbers then measure the queue rather than the nodes. Dozens of nodes
+	 *  make that tediously slow, so the knob exists with a low default.
+	 */
+	test_concurrency?: number,
+	/**
 	 *  Bypass list written into the Windows proxy settings while X-Matrix owns
 	 *  them. Loopback and RFC1918 are in the default; users behind a corporate
 	 *  PAC or a local gateway usually need to add one more entry.
@@ -890,6 +949,22 @@ export type Settings_Serialize = {
 	 *  something people notice on a metered connection.
 	 */
 	auto_test_minutes: number,
+	/**
+	 *  How long one latency probe may take, in milliseconds.
+	 * 
+	 *  Three seconds suits a healthy node on a decent line. A satellite link
+	 *  needs more, and a timeout that calls a working node "unreachable" is
+	 *  worse than a slow number, so the knob is a setting and not a constant.
+	 */
+	test_timeout_ms: number,
+	/**
+	 *  How many nodes "test all" probes at the same time.
+	 * 
+	 *  One is honest: parallel handshakes contend for the same uplink and the
+	 *  numbers then measure the queue rather than the nodes. Dozens of nodes
+	 *  make that tediously slow, so the knob exists with a low default.
+	 */
+	test_concurrency: number,
 	/**
 	 *  Bypass list written into the Windows proxy settings while X-Matrix owns
 	 *  them. Loopback and RFC1918 are in the default; users behind a corporate

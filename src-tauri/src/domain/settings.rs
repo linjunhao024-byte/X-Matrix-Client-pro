@@ -36,6 +36,18 @@ pub struct Settings {
     /// the button": an app that starts hammering node endpoints on its own is
     /// something people notice on a metered connection.
     pub auto_test_minutes: u32,
+    /// How long one latency probe may take, in milliseconds.
+    ///
+    /// Three seconds suits a healthy node on a decent line. A satellite link
+    /// needs more, and a timeout that calls a working node "unreachable" is
+    /// worse than a slow number, so the knob is a setting and not a constant.
+    pub test_timeout_ms: u32,
+    /// How many nodes "test all" probes at the same time.
+    ///
+    /// One is honest: parallel handshakes contend for the same uplink and the
+    /// numbers then measure the queue rather than the nodes. Dozens of nodes
+    /// make that tediously slow, so the knob exists with a low default.
+    pub test_concurrency: u32,
     /// Bypass list written into the Windows proxy settings while X-Matrix owns
     /// them. Loopback and RFC1918 are in the default; users behind a corporate
     /// PAC or a local gateway usually need to add one more entry.
@@ -73,6 +85,14 @@ pub struct Settings {
 /// The probe used by every "is this node actually reachable" check. Kept in the
 /// domain because it is a persisted default, and referenced by `net::latency`.
 pub const DEFAULT_TEST_URL: &str = "http://www.gstatic.com/generate_204";
+
+/// Three seconds: long enough for a slow-but-working node, short enough that a
+/// dead one does not hold the whole "test all" run hostage.
+pub const DEFAULT_TEST_TIMEOUT_MS: u32 = 3_000;
+
+/// Two at a time. Sequential is the honest default, but a list of thirty nodes
+/// at three seconds each is ninety seconds of watching nothing happen.
+pub const DEFAULT_TEST_CONCURRENCY: u32 = 2;
 
 /// One resolver the user asked for.
 ///
@@ -199,6 +219,8 @@ impl Default for Settings {
             last_engine: None,
             log_level: LogLevel::Warn,
             auto_test_minutes: 0,
+            test_timeout_ms: DEFAULT_TEST_TIMEOUT_MS,
+            test_concurrency: DEFAULT_TEST_CONCURRENCY,
             proxy_bypass: crate::sysproxy::DEFAULT_BYPASS.to_string(),
             test_url: DEFAULT_TEST_URL.to_string(),
             subscription_user_agent: String::new(),
@@ -230,6 +252,16 @@ impl Settings {
         // a second implementation of what the kernel already does.
         if !test_url.starts_with("http://") {
             return Err("test_url must start with http://".into());
+        }
+        // A probe shorter than a second measures the clock, not the network;
+        // anything past twenty seconds and the user has stopped waiting anyway.
+        if !(500..=20_000).contains(&self.test_timeout_ms) {
+            return Err("test_timeout_ms must be between 500 and 20000".into());
+        }
+        // Past sixteen the handshakes queue on the same uplink and the numbers
+        // stop meaning anything, which is the one thing a latency test must not do.
+        if !(1..=16).contains(&self.test_concurrency) {
+            return Err("test_concurrency must be between 1 and 16".into());
         }
         self.dns_entries()?;
         Ok(())
