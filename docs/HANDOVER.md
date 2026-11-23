@@ -15,7 +15,7 @@
 
 | 项 | 值 |
 |---|---|
-| 代码 HEAD | `2398503`「feat(engine): announce a kernel that dies on its own」（= 最后一个**已验收**的功能） |
+| 代码 HEAD | `8e40cbc`「feat(home): an exit IP card that admits when it could not ask」（= 最后一个**已验收**的功能） |
 | 未提交 | 无（交接后已提交：`--quit`、N12、GEO 数据、测速落盘、内核退出通知） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库（HEAD 上这一条） |
 | IPC 命令 | **77**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
