@@ -454,3 +454,99 @@ pub fn close_connection(runtime: Runtime<'_>, id: String) -> AppResult<()> {
     }
     stats::close_connection(status.api_port, &id)
 }
+
+/// How long the kernel takes to reach the probe through one outbound.
+///
+/// This goes through the Clash API instead of the mixed port, which is what
+/// makes a *group* measurable: the kernel dials through the group's own tag,
+/// so the number describes the path that group would take, not the path the
+/// running config happens to use. Only sing-box exposes the endpoint.
+fn delay_of(runtime: &EngineRuntime, tag: &str, url: &str) -> AppResult<u32> {
+    let status = runtime.status();
+    if !status.running {
+        return Err(AppError::Engine(
+            "内核没在运行，测不到真实延迟；先启动内核".to_string(),
+        ));
+    }
+    if status.kind != Some(EngineKind::SingBox) {
+        return Err(AppError::Engine(
+            "Xray 没有 Clash API，分组延迟只能在 sing-box 内核下测".to_string(),
+        ));
+    }
+    stats::clash_delay(status.api_port, tag, url, DELAY_BUDGET_MS)
+}
+
+/// The probe URL, or the built-in one when the setting is blank.
+fn probe_url(state: &AppState) -> String {
+    let settings = state.settings.read();
+    if settings.test_url.trim().is_empty() {
+        latency::PROBE_URL.to_string()
+    } else {
+        settings.test_url.clone()
+    }
+}
+
+/// Kernel-side delay budget. Long enough for a slow overseas hop, short enough
+/// that a dead node answers instead of hanging the button forever.
+const DELAY_BUDGET_MS: u64 = 5000;
+
+/// Real delay of one strategy group, measured by the running sing-box.
+#[tauri::command]
+#[specta::specta]
+pub async fn group_delay(
+    state: State<'_, AppState>,
+    runtime: Runtime<'_>,
+    id: String,
+) -> AppResult<u32> {
+    let group = state
+        .groups
+        .read()
+        .iter()
+        .find(|group| group.id == id)
+        .cloned()
+        .ok_or_else(|| AppError::NotFound(format!("策略组 {id} 不存在")))?;
+    if group.members.is_empty() {
+        return Err(AppError::InvalidInput(format!(
+            "策略组「{}」没有成员，没什么可测的",
+            group.name
+        )));
+    }
+    let tag = group.tag();
+    let url = probe_url(&state);
+    let runtime = Arc::clone(runtime.inner());
+    run_blocking(move || delay_of(&runtime, &tag, &url)).await
+}
+
+/// Real delay of one node, measured by the running sing-box.
+///
+/// A node only has a tag when the running config emits it: the active node is
+/// `proxy`, a group member is `node:<id>`. Anything else has no outbound to
+/// dial through, and saying so is better than measuring someone else's path.
+#[tauri::command]
+#[specta::specta]
+pub async fn node_delay(
+    state: State<'_, AppState>,
+    runtime: Runtime<'_>,
+    id: String,
+) -> AppResult<u32> {
+    let node = lookup_node(&state, &id)?;
+    let active = state.settings.read().last_node_id.clone();
+    let in_group = state
+        .groups
+        .read()
+        .iter()
+        .any(|group| group.enabled && group.members.iter().any(|member| member == &node.id));
+    let tag = if active.as_deref() == Some(node.id.as_str()) {
+        "proxy".to_string()
+    } else if in_group {
+        format!("node:{}", node.id)
+    } else {
+        return Err(AppError::InvalidInput(format!(
+            "「{}」既不是当前节点，也不在任何启用的策略组里，内核里没有它的出站可测；先用首页把它设为当前节点",
+            node.name
+        )));
+    };
+    let url = probe_url(&state);
+    let runtime = Arc::clone(runtime.inner());
+    run_blocking(move || delay_of(&runtime, &tag, &url)).await
+}

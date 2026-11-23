@@ -8,7 +8,12 @@ import { t } from '../i18n'
 import { useEngineStore } from '../stores/engine'
 import { useGroupsStore } from '../stores/groups'
 import { useNodesStore } from '../stores/nodes'
-import { describeError, type ProxyGroup_Deserialize, type ProxyGroup_Serialize } from '../services/contract'
+import {
+  api,
+  describeError,
+  type ProxyGroup_Deserialize,
+  type ProxyGroup_Serialize,
+} from '../services/contract'
 
 const store = useGroupsStore()
 const nodes = useNodesStore()
@@ -19,6 +24,28 @@ const editing = ref<ProxyGroup_Serialize | null>(null)
 const pendingDelete = ref<ProxyGroup_Serialize | null>(null)
 const busy = ref(false)
 const actionError = ref<string | null>(null)
+
+/// Measured kernel-side delays. Keyed by `group:<id>` and `node:<id>`, because
+/// the same node can appear in several groups and the number belongs to the
+/// outbound, not to the row.
+interface Delay {
+  value: number | null
+  error: string | null
+}
+const delays = ref<Record<string, Delay>>({})
+const measuring = ref<Record<string, boolean>>({})
+
+function delayKey(scope: 'group' | 'node', id: string): string {
+  return `${scope}:${id}`
+}
+
+function delayOf(scope: 'group' | 'node', id: string): Delay | undefined {
+  return delays.value[delayKey(scope, id)]
+}
+
+function isMeasuring(id: string): boolean {
+  return measuring.value[id] === true
+}
 
 onMounted(async () => {
   await Promise.all([store.load(), nodes.load(), engine.refreshBinaries()])
@@ -87,6 +114,53 @@ async function toggle(group: ProxyGroup_Serialize) {
   }
 }
 
+/// Ask the running kernel to dial through this group and through every member.
+///
+/// The group number describes what the group would do; the member numbers let
+/// you see why a url-test group picked one of them. Both only exist under
+/// sing-box — the backend says so in words the UI shows as-is.
+async function measureGroup(group: ProxyGroup_Serialize) {
+  const key = delayKey('group', group.id)
+  measuring.value = { ...measuring.value, [key]: true }
+  try {
+    const value = await api.groupDelay(group.id)
+    delays.value = { ...delays.value, [key]: { value, error: null } }
+  } catch (cause) {
+    delays.value = { ...delays.value, [key]: { value: null, error: describeError(cause) } }
+  } finally {
+    measuring.value = { ...measuring.value, [key]: false }
+  }
+  for (const member of group.members) {
+    const nodeKey = delayKey('node', member)
+    try {
+      const value = await api.nodeDelay(member)
+      delays.value = { ...delays.value, [nodeKey]: { value, error: null } }
+    } catch (cause) {
+      delays.value = { ...delays.value, [nodeKey]: { value: null, error: describeError(cause) } }
+    }
+  }
+}
+
+function latencyTone(value: number | null | undefined): string {
+  if (value === null || value === undefined) return 'latency-unknown'
+  if (value < 150) return 'latency-good'
+  if (value < 400) return 'latency-mid'
+  return 'latency-bad'
+}
+
+/// Only sing-box can be asked, and only while it runs.
+const canMeasure = computed(() => engine.running && engine.kind === 'sing-box')
+
+/// Three different reasons the button can be greyed out, and they are not the
+/// same problem: a stopped kernel only needs starting, the wrong kernel needs
+/// switching. Saying "sing-box must run" while sing-box is already selected
+/// sends the reader to the wrong switch.
+const measureHint = computed(() => {
+  if (canMeasure.value) return t('groups.delay.hint')
+  if (!engine.running) return t('groups.delay.noKernel')
+  return t('groups.delay.needsSingBox')
+})
+
 async function confirmDelete() {
   const target = pendingDelete.value
   if (!target) return
@@ -146,8 +220,9 @@ async function confirmDelete() {
             <th scope="col">{{ t('groups.col.kind') }}</th>
             <th scope="col">{{ t('groups.col.members') }}</th>
             <th scope="col">{{ t('groups.col.current') }}</th>
+            <th scope="col">{{ t('groups.col.delay') }}</th>
             <th scope="col">{{ t('groups.col.status') }}</th>
-            <th scope="col" class="col-actions">{{ t('groups.col.actions') }}</th>
+            <th scope="col" class="actions">{{ t('groups.col.actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -179,11 +254,53 @@ async function confirmDelete() {
               <span v-else class="muted">{{ t('groups.autoHint') }}</span>
             </td>
             <td>
+              <span
+                v-if="delayOf('group', group.id)?.error"
+                class="latency latency-unknown"
+                :title="delayOf('group', group.id)?.error ?? ''"
+              >
+                {{ t('groups.delay.failed') }}
+              </span>
+              <span
+                v-else-if="delayOf('group', group.id)?.value !== undefined && delayOf('group', group.id)?.value !== null"
+                class="latency"
+                :class="latencyTone(delayOf('group', group.id)?.value)"
+              >
+                {{ t('nodes.latency.ms', { value: delayOf('group', group.id)?.value ?? 0 }) }}
+              </span>
+              <span v-else class="latency latency-unknown">{{ t('nodes.latency.none') }}</span>
+              <div v-if="group.kind === 'url-test'" class="muted small member-delays">
+                <span
+                  v-for="member in group.members"
+                  :key="member"
+                  class="member-delay"
+                  :class="latencyTone(delayOf('node', member)?.value)"
+                  :title="delayOf('node', member)?.error ?? nodeName(member)"
+                >
+                  {{
+                    delayOf('node', member)?.value !== null && delayOf('node', member)?.value !== undefined
+                      ? `${nodeName(member)} ${delayOf('node', member)?.value}ms`
+                      : nodeName(member)
+                  }}
+                </span>
+              </div>
+            </td>
+            <td>
               <span class="badge" :class="group.enabled ? 'badge-success' : ''">
                 {{ group.enabled ? t('common.enabled') : t('common.disabled') }}
               </span>
             </td>
-            <td class="col-actions">
+            <td class="actions">
+              <button
+                class="btn btn-sm btn-ghost"
+                type="button"
+                :disabled="!canMeasure || isMeasuring(group.id)"
+                :title="measureHint"
+                @click="measureGroup(group)"
+              >
+                <AppIcon name="refresh" :size="14" />
+                {{ isMeasuring(group.id) ? t('common.measuring') : t('groups.delay.measure') }}
+              </button>
               <button class="btn btn-sm btn-ghost" type="button" @click="toggle(group)">
                 {{ group.enabled ? t('common.disable') : t('common.enable') }}
               </button>
@@ -231,11 +348,6 @@ async function confirmDelete() {
   opacity: 0.55;
 }
 
-.col-actions {
-  text-align: right;
-  white-space: nowrap;
-}
-
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -268,5 +380,58 @@ async function confirmDelete() {
   border-color: var(--accent);
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+/* Same tones as the node cards: the number means the same thing on both pages. */
+.latency {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.latency-unknown {
+  color: var(--text-tertiary);
+}
+
+.latency-good {
+  color: var(--success);
+  border-color: var(--success);
+}
+
+.latency-mid {
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+.latency-bad {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.member-delays {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+.member-delay {
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.member-delay.latency-good {
+  color: var(--success);
+}
+
+.member-delay.latency-mid {
+  color: var(--warning);
+}
+
+.member-delay.latency-bad {
+  color: var(--danger);
 }
 </style>

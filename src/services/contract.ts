@@ -159,6 +159,10 @@ export const api = {
 
   /** Download throughput through the tunnel, in bytes per second. */
   proxySpeed: (): Promise<number | null> => unwrap(commands.proxySpeed()),
+  /** Real delay of one strategy group, via the running sing-box Clash API. */
+  groupDelay: (id: string): Promise<number> => unwrap(commands.groupDelay(id)),
+  /** Real delay of one node, via its own outbound in the running sing-box. */
+  nodeDelay: (id: string): Promise<number> => unwrap(commands.nodeDelay(id)),
   /** sing-box only: drop one live connection. */
   closeConnection: (id: string): Promise<void> => unwrap(commands.closeConnection(id)).then(() => undefined),
   /** Write the whole configuration to a file the user picks; null = cancelled. */

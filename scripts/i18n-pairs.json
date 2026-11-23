@@ -345,6 +345,11 @@
     "Loading…"
   ],
   [
+    "common.measuring",
+    "测量中",
+    "Measuring"
+  ],
+  [
     "common.never",
     "从未",
     "Never"
@@ -670,6 +675,16 @@
     "93c559a5d6605453…"
   ],
   [
+    "editor.congestionControl",
+    "拥塞控制",
+    "Congestion control"
+  ],
+  [
+    "editor.downMbps",
+    "下行带宽提示（Mbps）",
+    "Downstream hint (Mbps)"
+  ],
+  [
     "editor.edit",
     "编辑节点",
     "Edit node"
@@ -683,6 +698,11 @@
     "editor.err.name",
     "请填写节点名称",
     "Enter a node name"
+  ],
+  [
+    "editor.err.password",
+    "请填写密码",
+    "Enter the password"
   ],
   [
     "editor.err.port",
@@ -700,6 +720,11 @@
     "Enter a server address"
   ],
   [
+    "editor.err.uuid",
+    "请填写 uuid",
+    "Enter the uuid"
+  ],
+  [
     "editor.fingerprint",
     "指纹（uTLS）",
     "Fingerprint (uTLS)"
@@ -713,6 +738,11 @@
     "editor.grpcService",
     "gRPC 服务名",
     "gRPC service name"
+  ],
+  [
+    "editor.kernelDefault",
+    "内核默认",
+    "Kernel default"
   ],
   [
     "editor.method",
@@ -733,6 +763,16 @@
     "editor.new",
     "新增节点",
     "New node"
+  ],
+  [
+    "editor.obfsPassword",
+    "混淆密码（obfs-password）",
+    "Obfuscation password (obfs-password)"
+  ],
+  [
+    "editor.obfsPasswordHint",
+    "服务端没开 salamander 混淆就留空。",
+    "Leave empty unless the server enables salamander obfuscation."
   ],
   [
     "editor.optional",
@@ -758,6 +798,11 @@
     "editor.publicKey",
     "公钥",
     "Public key"
+  ],
+  [
+    "editor.quicHint",
+    "hysteria2 / TUIC 走 QUIC，传输层由协议自己决定，内核只支持 sing-box。",
+    "hysteria2 and TUIC run over QUIC, so there is no stream transport to pick — and only the sing-box kernel can run them."
   ],
   [
     "editor.security",
@@ -820,6 +865,16 @@
     "Transport"
   ],
   [
+    "editor.udpRelayMode",
+    "UDP 中继模式",
+    "UDP relay mode"
+  ],
+  [
+    "editor.upMbps",
+    "上行带宽提示（Mbps）",
+    "Upstream hint (Mbps)"
+  ],
+  [
     "editor.uuid",
     "UUID",
     "UUID"
@@ -860,6 +915,11 @@
     "Current"
   ],
   [
+    "groups.col.delay",
+    "延迟",
+    "Delay"
+  ],
+  [
     "groups.col.kind",
     "类型",
     "Type"
@@ -883,6 +943,26 @@
     "groups.current",
     "当前出口",
     "Current outbound"
+  ],
+  [
+    "groups.delay.failed",
+    "测不到",
+    "No answer"
+  ],
+  [
+    "groups.delay.hint",
+    "让内核经这个策略组与它的每个成员各发一次请求",
+    "Ask the kernel to probe through this group and each of its members"
+  ],
+  [
+    "groups.delay.measure",
+    "测速",
+    "Measure"
+  ],
+  [
+    "groups.delay.needsSingBox",
+    "分组延迟要 sing-box 内核在运行；Xray 没有 Clash API",
+    "Group delay needs the sing-box kernel running; Xray has no Clash API"
   ],
   [
     "groups.delete.body",
@@ -1325,6 +1405,11 @@
     "Load from file"
   ],
   [
+    "import.groups",
+    "含 {count} 个策略组",
+    "includes {count} proxy groups"
+  ],
+  [
     "import.hint",
     "先点「解析预览」看看会得到什么，再确认写入。",
     "Preview first, then write."
@@ -1358,6 +1443,16 @@
     "import.reparse",
     "重新解析",
     "Parse again"
+  ],
+  [
+    "import.routingHead",
+    "配置里的策略组与规则会一起导入：",
+    "The config's proxy groups and rules come along:"
+  ],
+  [
+    "import.rules",
+    "含 {count} 条规则",
+    "includes {count} routing rules"
   ],
   [
     "import.skipped",
@@ -1653,6 +1748,16 @@
     "nodes.importedDup",
     "{count} 个已存在，跳过",
     "{count} already existed and were skipped"
+  ],
+  [
+    "nodes.importedGroups",
+    "含 {count} 个策略组",
+    "with {count} proxy groups"
+  ],
+  [
+    "nodes.importedRules",
+    "含 {count} 条规则",
+    "with {count} routing rules"
   ],
   [
     "nodes.importedSkipped",
@@ -2740,16 +2845,6 @@
     "Some providers only serve a Clash UA and answer anything else with an empty body or a 403."
   ],
   [
-    "settings.subViaProxy",
-    "订阅走代理拉取",
-    "Fetch subscriptions through the tunnel"
-  ],
-  [
-    "settings.subViaProxyHint",
-    "机场面板只在隧道里能打开时打开它。默认关闭：节点坏了的时候，你还得能刷新订阅。",
-    "Turn this on when the provider's panel is only reachable through the tunnel. Off by default: when the nodes stop working you still need to refresh the subscription."
-  ],
-  [
     "settings.subAgentLabel",
     "拉取订阅时使用的 UA",
     "User-Agent used when fetching subscriptions"
@@ -2758,6 +2853,16 @@
     "settings.subAgentPlaceholder",
     "留空则使用默认（X-Matrix/版本号）",
     "Empty means the default (X-Matrix/version)"
+  ],
+  [
+    "settings.subViaProxy",
+    "订阅走代理拉取",
+    "Fetch subscriptions through the tunnel"
+  ],
+  [
+    "settings.subViaProxyHint",
+    "机场面板只在隧道里能打开时打开它。默认关闭：节点坏了的时候，你还得能刷新订阅。",
+    "Turn this on when the provider's panel is only reachable through the tunnel. Off by default: when the nodes stop working you still need to refresh the subscription."
   ],
   [
     "settings.system",
@@ -3065,78 +3170,13 @@
     "yesterday"
   ],
   [
-    "editor.obfsPassword",
-    "混淆密码（obfs-password）",
-    "Obfuscation password (obfs-password)"
+    "groups.delay.noKernel",
+    "先启动内核才能测真实延迟",
+    "Start the kernel before measuring"
   ],
   [
-    "editor.obfsPasswordHint",
-    "服务端没开 salamander 混淆就留空。",
-    "Leave empty unless the server enables salamander obfuscation."
-  ],
-  [
-    "editor.upMbps",
-    "上行带宽提示（Mbps）",
-    "Upstream hint (Mbps)"
-  ],
-  [
-    "editor.downMbps",
-    "下行带宽提示（Mbps）",
-    "Downstream hint (Mbps)"
-  ],
-  [
-    "editor.congestionControl",
-    "拥塞控制",
-    "Congestion control"
-  ],
-  [
-    "editor.udpRelayMode",
-    "UDP 中继模式",
-    "UDP relay mode"
-  ],
-  [
-    "editor.kernelDefault",
-    "内核默认",
-    "Kernel default"
-  ],
-  [
-    "editor.quicHint",
-    "hysteria2 / TUIC 走 QUIC，传输层由协议自己决定，内核只支持 sing-box。",
-    "hysteria2 and TUIC run over QUIC, so there is no stream transport to pick — and only the sing-box kernel can run them."
-  ],
-  [
-    "editor.err.uuid",
-    "请填写 uuid",
-    "Enter the uuid"
-  ],
-  [
-    "editor.err.password",
-    "请填写密码",
-    "Enter the password"
-  ],
-  [
-    "import.groups",
-    "含 {count} 个策略组",
-    "includes {count} proxy groups"
-  ],
-  [
-    "import.rules",
-    "含 {count} 条规则",
-    "includes {count} routing rules"
-  ],
-  [
-    "import.routingHead",
-    "配置里的策略组与规则会一起导入：",
-    "The config's proxy groups and rules come along:"
-  ],
-  [
-    "nodes.importedGroups",
-    "含 {count} 个策略组",
-    "with {count} proxy groups"
-  ],
-  [
-    "nodes.importedRules",
-    "含 {count} 条规则",
-    "with {count} routing rules"
+    "groups.delay.noKernelHint",
+    "内核没在运行，测不到真实延迟；先启动内核",
+    "The kernel is not running, so there is nothing to measure; start it first"
   ]
 ]

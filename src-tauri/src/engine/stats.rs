@@ -199,6 +199,59 @@ pub fn read_clash(port: u16) -> AppResult<TrafficSample> {
     Ok(sample)
 }
 
+/// sing-box: ask the Clash API to measure one outbound's real delay.
+///
+/// This is the only way to get a number for an outbound that is *not* the one
+/// carrying traffic: the kernel dials through `tag` itself, so the group and
+/// every member of it can be measured without switching to them. Xray has no
+/// equivalent endpoint, which is why the caller has to check the kernel kind.
+pub fn clash_delay(port: u16, tag: &str, url: &str, timeout_ms: u64) -> AppResult<u32> {
+    if tag.trim().is_empty() {
+        return Err(AppError::InvalidInput("出站 tag 为空".into()));
+    }
+    let path = format!(
+        "/proxies/{}/delay?url={}&timeout={timeout_ms}",
+        encode(tag),
+        encode(url)
+    );
+    // The kernel enforces `timeout_ms` itself and answers with `{"delay": n}`
+    // or a 400 carrying why it could not. Give the socket a little more room
+    // than the kernel's own budget so the failing answer arrives intact.
+    //
+    // `url` is sent because the Clash API documents it, but sing-box 1.14
+    // ignores it and probes with the outbound's own `url` (the urltest default
+    // `generate_204`) — measured on the cloud box: the same call answered
+    // `{"delay":109}` with a deliberately dead `http://127.0.0.1:1/nothing`.
+    // Keeping the parameter costs nothing and is right for kernels that do
+    // honour it; do not build a setting on top that assumes it is respected.
+    let budget = std::time::Duration::from_millis(timeout_ms + 1500);
+    let doc = http::get_json_with_timeout(port, &path, budget)?;
+    match doc.get("delay").and_then(Value::as_u64) {
+        Some(delay) => Ok(delay.min(u32::MAX as u64) as u32),
+        None => Err(AppError::Engine(format!(
+            "内核没有给出延迟数字：{}",
+            doc.get("message")
+                .and_then(Value::as_str)
+                .unwrap_or("（没有 message）")
+        ))),
+    }
+}
+
+/// Percent-encode a query-string value. Tags (`group:abc`) and probe URLs both
+/// travel inside a path, so `:` and `/` must not be left raw.
+fn encode(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for byte in value.as_bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                out.push(*byte as char)
+            }
+            _ => out.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    out
+}
+
 /// sing-box: ask the Clash API to drop one connection.
 ///
 /// Only sing-box can do this. Xray exposes counters, not a connection table, so
@@ -316,5 +369,63 @@ mod tests {
         let s = read_clash(port).unwrap();
         assert_eq!(s.up_total, 0);
         assert!(s.supports_connections);
+    }
+
+    /// Serves one request and hands back the request line, so a test can assert
+    /// what the kernel was actually asked for.
+    fn serve_capture(body: &'static str) -> (u16, thread::JoinHandle<String>) {
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = thread::spawn(move || {
+            let mut line = String::new();
+            if let Ok((mut socket, _)) = listener.accept() {
+                let mut buf = [0u8; 1024];
+                let read = socket.read(&mut buf).unwrap_or(0);
+                line = String::from_utf8_lossy(&buf[..read]).to_string();
+                let _ = socket.write_all(response.as_bytes());
+            }
+            line
+        });
+        (port, handle)
+    }
+
+    #[test]
+    fn a_group_delay_asks_the_kernel_for_that_tag() {
+        let (port, handle) = serve_capture(r#"{"delay":123}"#);
+        let delay = clash_delay(port, "group:g1", "http://www.gstatic.com/generate_204", 5000).unwrap();
+        assert_eq!(delay, 123);
+
+        let request = handle.join().unwrap();
+        // The tag and the probe URL are both percent-encoded inside the path.
+        assert!(
+            request.starts_with("GET /proxies/group%3Ag1/delay?url=http%3A%2F%2Fwww.gstatic.com"),
+            "unexpected request line: {request}"
+        );
+        assert!(request.contains("&timeout=5000"), "unexpected request line: {request}");
+    }
+
+    #[test]
+    fn a_delay_answer_without_a_number_carries_the_kernels_complaint() {
+        let port = serve_once(r#"{"message":"context deadline exceeded"}"#);
+        let err = clash_delay(port, "group:g1", "http://www.gstatic.com/generate_204", 2000)
+            .unwrap_err();
+        match err {
+            AppError::Engine(text) => assert!(text.contains("context deadline exceeded"), "{text}"),
+            other => panic!("expected an engine error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_delay_never_overflows_a_u32() {
+        let port = serve_once(r#"{"delay":4294967296}"#);
+        assert_eq!(
+            clash_delay(port, "node:a", "http://www.gstatic.com/generate_204", 1000).unwrap(),
+            u32::MAX
+        );
     }
 }
