@@ -213,7 +213,7 @@ scp -i /c/Users/83611/.ssh/id_ed25519_cpc 本地文件 Administrator@100.106.121
 | `run-uia.sh <cmd-file>` | 推 `uia2.ps1` + 指令文件 → 计划任务 `xmui` → 打印 `uia.txt`；指令：`list` / `dump` / `invoke\|名字` / `invoke_at\|名字\|序号（0 基）` / `invoke_last\|名字` / `setvalue\|名字\|文件` / `value\|名字` |
 | `run-act.sh <act-file> [shot]` | 推 `x-act.ps1` 的 act 脚本 → 计划任务 `xmact` → 打印 `act.log`；act 语法：`click X Y` / `rclick` / `wheel X Y N` / `key K` / `paste NAME`（读 `paste-NAME.txt`）/ `focus` / `wait MS` / `shot NAME` / `shotfull NAME` / `log TEXT` |
 | `run-ps1.sh <local.ps1> <remote-name> [out]` | 跑任意 PS 脚本（脚本必须自己 `Out-File`） |
-| `cleanup.sh` | 杀 `X-Matrix.exe`/`xray.exe`/`sing-box.exe`、删 `xm*` 计划任务与临时文件、`ProxyEnable=0` |
+| `cleanup.sh` | 先用 `X-Matrix.exe --quit` 让程序自己退出（走 `quit_cleanly`，不留死图标），两次不走再兜底强杀；删全部 `xm*` 计划任务与临时文件；`ProxyEnable=0` 并回读确认 |
 
 **踩过的坑（几乎每条都花过半小时）**：
 
@@ -225,7 +225,7 @@ scp -i /c/Users/83611/.ssh/id_ed25519_cpc 本地文件 Administrator@100.106.121
 6. 远端 `.ps1` 必须 **UTF-8 with BOM**（PS 5.1 按 ANSI 解析含中文的脚本会报「字符串缺少终止符」）。
 7. 计划任务要跑 GUI 进程，action 里**不能带 `>` 重定向**（cmd 会算作 action 的一部分）；脚本自己写文件。
 8. `Get-Process | MainWindowHandle` 对计划任务起的进程恒为 0 → 用 `FindWindow([NullString]::Value, 'X-Matrix')`。
-9. `taskkill /F` 不会走 `quit_cleanly()`，**`ProxyEnable` 会留在 1**：收尾必须手动 `reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings" /v ProxyEnable /t REG_DWORD /d 0 /f`（是 **HKCU** 不是 HKLM）。
+9. 停程序一律用 `X-Matrix.exe --quit`（会话 1 里的计划任务，脚本 `D:\tmp\shots\quit-run.ps1`）。`taskkill /F` 不会走 `quit_cleanly()`，**`ProxyEnable` 会留在 1**，还会留下死托盘图标：收尾必须手动 `reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings" /v ProxyEnable /t REG_DWORD /d 0 /f`（是 **HKCU** 不是 HKLM）。
 10. 托盘图标常落进通知区溢出区，**UIA 找不到、右键点不到**：涉及托盘的验收只能靠 `eprintln!` 日志（`托盘菜单 N 个节点 · 模式 X · 内核运行中`）。
 11. `Local-WS` 节点依赖本地测试服务器（`xmsrv` 计划任务跑 `srv-lite2.json`，两入站 uuid 必须与节点一致）；被 `cleanup.sh` 删过之后要重建，否则「隧道在跑但全是 502」。
 12. 追加带反斜杠/中文的文档段落：先用 `write` 落一个临时 `.md`，再用 python 按字节拼接（heredoc 会把 `\t`/`\n` 吃成 TAB 与断行）。
