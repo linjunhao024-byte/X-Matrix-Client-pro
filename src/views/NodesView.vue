@@ -5,6 +5,7 @@ import EmptyState from '../components/EmptyState.vue'
 import ImportDialog from '../components/ImportDialog.vue'
 import ModalDialog from '../components/ModalDialog.vue'
 import NodeEditor from '../components/NodeEditor.vue'
+import QrDialog from '../components/QrDialog.vue'
 import { t } from '../i18n'
 import {
   api,
@@ -31,6 +32,10 @@ const editorOpen = ref(false)
 const editing = ref<Node_Serialize | null>(null)
 const importOpen = ref(false)
 const importNote = ref<string | null>(null)
+/** The node whose share link is being shown as a QR code. */
+const qrOpen = ref(false)
+const qrLink = ref('')
+const qrName = ref('')
 const actionError = ref<string | null>(null)
 const actionNote = ref<string | null>(null)
 const pendingDelete = ref<Node_Serialize | null>(null)
@@ -292,6 +297,26 @@ async function saveLinks(ids: string[]) {
     actionError.value = describeError(cause)
   } finally {
     copying.value = false
+  }
+}
+
+/**
+ * Show one node's share link as a QR code.
+ *
+ * The export returns one link per line in the order given, so a single id
+ * means a single line; the first non-empty one is the code people scan. The
+ * dialog opens even when the export came back empty, because "this node has
+ * no link to export" is an answer the user should read, not a silent click.
+ */
+async function showQr(node: Node_Serialize) {
+  actionError.value = null
+  try {
+    const text = await api.exportNodeLinks([node.id])
+    qrName.value = node.name
+    qrLink.value = text.split(/\r?\n/).find((line) => line.trim() !== '') ?? ''
+    qrOpen.value = true
+  } catch (cause) {
+    actionError.value = describeError(cause)
   }
 }
 
@@ -927,6 +952,15 @@ function securityLabel(node: Node_Serialize): string {
               <button
                 class="btn btn-ghost btn-sm"
                 type="button"
+                :title="t('nodes.qr.action')"
+                :aria-label="t('nodes.qr.action')"
+                @click.stop="showQr(node)"
+              >
+                {{ t('nodes.qr.action') }}
+              </button>
+              <button
+                class="btn btn-ghost btn-sm"
+                type="button"
                 :title="t('common.delete')"
                 :aria-label="t('common.delete')"
                 @click.stop="pendingDelete = node"
@@ -947,6 +981,8 @@ function securityLabel(node: Node_Serialize): string {
     />
 
     <ImportDialog :open="importOpen" @close="importOpen = false" @imported="onImported" />
+
+    <QrDialog :open="qrOpen" :link="qrLink" :name="qrName" @close="qrOpen = false" />
 
     <ModalDialog
       :open="pendingDelete !== null"
@@ -1098,7 +1134,9 @@ function securityLabel(node: Node_Serialize): string {
 }
 
 .tag-chip {
-  font-size: 10.5px;
+  /* 11px is the design floor (check-design reports anything smaller); the chip
+     only looked fine at 10.5px because it sits next to 11px meta text. */
+  font-size: 11px;
   line-height: 1.6;
   padding: 0 6px;
   border-radius: var(--radius-pill);

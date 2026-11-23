@@ -1900,6 +1900,31 @@
     "No result"
   ],
   [
+    "nodes.qr.action",
+    "二维码",
+    "QR code"
+  ],
+  [
+    "nodes.qr.empty",
+    "这个节点没有可导出的链接",
+    "This node has no share link to export"
+  ],
+  [
+    "nodes.qr.failed",
+    "生成二维码失败：{error}",
+    "Could not draw the QR code: {error}"
+  ],
+  [
+    "nodes.qr.hint",
+    "用手机或另一台设备扫这个码导入节点",
+    "Scan this code to import the node on another device"
+  ],
+  [
+    "nodes.qr.title",
+    "二维码",
+    "QR code"
+  ],
+  [
     "nodes.new",
     "新增节点",
     "New node"

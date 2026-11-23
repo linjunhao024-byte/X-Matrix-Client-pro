@@ -20,10 +20,10 @@
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库（HEAD 上这一条） |
 | IPC 命令 | **77**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
 | Rust 单测 | **318 passed**（`ARCHITECTURE.md:278` 已同步） |
-| 前端检查 | `npm run check` 全绿：vue-tsc / architecture / contract / vitest **65**（8 文件） |
-| i18n | **719** 键（`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
+| 前端检查 | `npm run check` 全绿：vue-tsc / architecture / contract / vitest **76**（8 文件） |
+| i18n | **724** 键（`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
 | 桌面产物 | 见 §1 表格（每次构建后刷新；当前 release 构建含 N12 + GEO + 测速落盘 + 退出通知） |
-| 验收文档 | `docs/ACCEPTANCE.md` §0–§29（§7 历史空缺，编号不连续但内容完整） |
+| 验收文档 | `docs/ACCEPTANCE.md` §0–§30（§7 历史空缺，编号不连续但内容完整） |
 | 云电脑 | 干净：`ProxyEnable=0x0`、无 X-Matrix/sing-box/xray 进程、无 `xm*` 计划任务 |
 
 **下一步的确定顺序**（做完一条打一个勾，别跳）：
@@ -34,7 +34,7 @@
 - [x] 4. `docs/ACCEPTANCE.md` 写到 §26
 - [x] 5. 提交（`fix(tray)` / `feat(update)` / `feat(geo,nodes)` / `feat(engine)` 各一条）
 - [x] 6. `FEED_URL` 已指向真实仓库 `linjunhao024-byte/X-Matrix-Client-pro`，`v0.1.0` 已发布并带 `X-Matrix.exe` 资产
-- [x] 7. 计数已同步：77 命令 / 318 单测 / 76 vitest / 719 i18n 键
+- [x] 7. 计数已同步：77 命令 / 318 单测 / 76 vitest / 724 i18n 键
 - [ ] 8. `bash /d/tmp/shots/cleanup.sh` 收尾云电脑
 
 ---
@@ -53,7 +53,7 @@
 | 桌面产物 | `/c/Users/83611/Desktop/X-Matrix.exe`、`/c/Users/83611/Desktop/X-Matrix_0.1.0_x64-setup.exe` |
 | 当前桌面产物版本 | exe **9,823,232 B @10:32**、NSIS **3,181,050 B @10:32**（= N9 那一次构建，**不含 N12**） |
 
-**计数基线（改动后记得同步文档）**：命令 **77**、`cargo test --lib` **318**、vitest **76**（8 个文件）、i18n **719** 键。
+**计数基线（改动后记得同步文档）**：命令 **77**、`cargo test --lib` **318**、vitest **76**（8 个文件）、i18n **724** 键。
 > `README.md:81` 与 `ARCHITECTURE.md:277` 已同步为 77 条命令 / 318 项测试。
 
 命令数核算法：
@@ -141,6 +141,7 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 | §27 | 订阅「下次刷新」倒计时：周期、上次更新、剩余时间同屏 |
 | §28 | 订阅改名与过滤：刷新时先过滤再改名，替换上一次那一批 |
 | §29 | 内核二进制：换一个文件就真的跑那个文件，geo 数据回落到 engines |
+| §30 | 节点二维码：前端出码、与「复制链接」同源、失败不留白 |
 
 已提交的提交序列（新→旧，14 条主体）：
 `5a44af3` 域名正则+geosite · `569a7ce` 流量历史 · `44b857b` 测速预算+选最快 · `42f85bd` 一键断开+进程名 · `f817726` 真实延迟 · `f3fc750` 订阅走代理 · `d892b9e` Clash 导入带组和规则 · `6851775` 托盘子菜单 · `f9a0406` H4 验收文档 · `14ddb20` hysteria2/tuic · `fdd0b8d` 运行中热切换 · `eb3f453` 日志页 · `79ccadd` 设计修复（粘右操作列、错误用红、焦点陷阱等）· `535124b` 快捷键与诊断包验收。
@@ -176,10 +177,10 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 
 | 候选 | 落点 | 代价 | 备注 |
 |---|---|---|---|
-| **N3 节点二维码** | 新命令 `node_share_qr(node_id) -> String`（SVG），复用导出链接逻辑与现有节点对话框 | 中 | 需要 `qrcode` crate；**本机 cargo 缓存里没有**，离线会失败——先试 `cargo add qrcode --offline` 探一下 |
+| ~~N3 节点二维码~~ | 已完成：前端 `qrcode` npm 包出 SVG，节点行「二维码」按钮 + 对话框（§30） | — | 原计划要走 Rust 与 `qrcode` crate，但本机 cargo 缓存里没有；npm 可用，于是改为纯前端，零新增 IPC |
 | ~~N10 订阅重命名 / 过滤~~ | 已完成：`rename_prefix` + 保留/排除正则，刷新时先过滤再改名（§28） | — | 见「已完成」说明 |
 | ~~N11 内核二进制选择~~ | 已完成：`settings.xray_binary` / `singbox_binary` + 原生对话框 + 版本校验 + geo 数据回落 engines（§29） | — | 换内核时暴露了 `XRAY_LOCATION_ASSET` 的定位错误，已一并修 |
-| **N13 更多语言** | `scripts/i18n-pairs.json` 加 zh-TW / ja；`Language` 枚举 + 托盘 `Labels` + `describeError` 的文案都要跟上 | 大 | parity 测试会强制键集完整，686 键 ×2 语言 |
+| **N13 更多语言** | `scripts/i18n-pairs.json` 加 zh-TW / ja；`Language` 枚举 + 托盘 `Labels` + `describeError` 的文案都要跟上 | 大 | parity 测试会强制键集完整，724 键 ×2 语言 |
 | **H5(b) 无内核时的逐节点真实延迟** | 临时起一个最小内核做探测 | 大 | 风险高（要多一条内核生命周期），当初明确「先不做」 |
 | ~~N5 出口 IP~~ | 已完成：首页卡片 + 三主机退让 + 失败清空旧值（§26） | — | 见下方「已完成」说明 |
 | ~~N7 订阅下次刷新倒计时~~ | 已完成：每行「刚刚 / 还有 N 小时」，30 秒共用计时器（§27） | — | 见「已完成」说明 |
