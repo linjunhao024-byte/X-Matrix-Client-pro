@@ -645,6 +645,8 @@ export const en: Record<string, string> = {
   "settings.proxyState": "System proxy now",
   "settings.proxyWarning": "Two clients writing the registry will overwrite each other: if another client (V2RayN, for example) already owns the system proxy, turn it off before starting this one.",
   "settings.restoreProxy": "Restore system proxy",
+  "settings.stalePort": "Saved, but the kernel is still listening on the old ports",
+  "settings.stalePortApply": "Restart the kernel on the new ports",
   "settings.startMinimized": "Start hidden",
   "settings.startMinimizedHint": "Useful with launch at login: appear in the tray only",
   "settings.subAgent": "Subscription User-Agent",

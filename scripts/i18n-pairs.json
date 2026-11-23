@@ -3000,6 +3000,16 @@
     "Restore system proxy"
   ],
   [
+    "settings.stalePort",
+    "端口已改，内核还在旧端口上跑",
+    "Saved, but the kernel is still listening on the old ports"
+  ],
+  [
+    "settings.stalePortApply",
+    "用新端口重启内核",
+    "Restart the kernel on the new ports"
+  ],
+  [
     "settings.startMinimized",
     "启动时隐藏窗口",
     "Start hidden"

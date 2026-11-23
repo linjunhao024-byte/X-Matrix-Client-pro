@@ -16,14 +16,14 @@
 | 项 | 值 |
 |---|---|
 | 代码 HEAD | `5c9e466`「feat(rules): say when the kernel is still running the old rules」（= 最后一个**已验收**的功能） |
-| 未提交 | 无（§32 已提交：`5c9e466`） |
+| 未提交 | 无（§33 提交后同步） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库（HEAD 上这一条） |
 | IPC 命令 | **77**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
 | Rust 单测 | **320 passed**（`ARCHITECTURE.md:278` 已同步） |
 | 前端检查 | `npm run check` 全绿：vue-tsc / architecture / contract / vitest **78**（8 文件） |
-| i18n | **727** 键（`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
+| i18n | **729** 键（`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
 | 桌面产物 | 见 §1 表格（每次构建后刷新；当前 release 构建含 N12 + GEO + 测速落盘 + 退出通知） |
-| 验收文档 | `docs/ACCEPTANCE.md` §0–§32（§7 历史空缺，编号不连续但内容完整） |
+| 验收文档 | `docs/ACCEPTANCE.md` §0–§33（§7 历史空缺，编号不连续但内容完整） |
 | 云电脑 | 干净：`ProxyEnable=0x0`、无 X-Matrix/sing-box/xray 进程、无 `xm*` 计划任务 |
 
 **下一步的确定顺序**（做完一条打一个勾，别跳）：
@@ -34,7 +34,7 @@
 - [x] 4. `docs/ACCEPTANCE.md` 写到 §26
 - [x] 5. 提交（`fix(tray)` / `feat(update)` / `feat(geo,nodes)` / `feat(engine)` 各一条）
 - [x] 6. `FEED_URL` 已指向真实仓库 `linjunhao024-byte/X-Matrix-Client-pro`，`v0.1.0` 已发布并带 `X-Matrix.exe` 资产
-- [x] 7. 计数已同步：77 命令 / 320 单测 / 78 vitest / 727 i18n 键
+- [x] 7. 计数已同步：77 命令 / 320 单测 / 78 vitest / 729 i18n 键
 - [ ] 8. `bash /d/tmp/shots/cleanup.sh` 收尾云电脑
 
 ---
@@ -144,6 +144,7 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 | §30 | 节点二维码：前端出码、与「复制链接」同源、失败不留白 |
 | §31 | 内核崩溃：通知之前先交还系统代理，机器不会留在断网状态 |
 | §32 | 规则/分组/规则集保存后提示「内核还在用旧的」，一键重启生效 |
+| §33 | 端口改保存后提示「内核还在旧端口上跑」，一键用新端口重启并重设系统代理 |
 
 已提交的提交序列（新→旧，14 条主体）：
 `5a44af3` 域名正则+geosite · `569a7ce` 流量历史 · `44b857b` 测速预算+选最快 · `42f85bd` 一键断开+进程名 · `f817726` 真实延迟 · `f3fc750` 订阅走代理 · `d892b9e` Clash 导入带组和规则 · `6851775` 托盘子菜单 · `f9a0406` H4 验收文档 · `14ddb20` hysteria2/tuic · `fdd0b8d` 运行中热切换 · `eb3f453` 日志页 · `79ccadd` 设计修复（粘右操作列、错误用红、焦点陷阱等）· `535124b` 快捷键与诊断包验收。
@@ -153,6 +154,8 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 ---
 
 ## 5. 最近完成的两件事（已提交、已真机验收）
+
+**改了端口就说出来（2026-11-24，§33）**：设置页保存端口后，内核仍绑旧端口，`SettingsView.vue` 用 `stalePorts` 比较「已存设置」与 `engine.status`（非草稿），复用 `StaleConfig`（新增 `message`/`applyLabel`/`busyLabel` 三个可覆盖 prop），按钮走 `engine.reapply()`。重启由 `start_engine` 自己完成：启动成功后 `proxy.enable_with_bypass(..., endpoints.mixed_port, …)` 会在已接管时重写注册表，所以新端口自动生效。真机证据：`xray#5072→#1636`、`ProxyServer=127.0.0.1:7891`、改回 7890 后 `:7890`、停止后 `ProxyEnable=0`。
 
 **崩溃时交还系统代理（2026-11-24，§31）**：`ProxyGuard::release_if_active()`（`src-tauri/src/sysproxy/mod.rs`）只在「快照证明是我们接管的」时还原并删快照；`watch_engine_exits` 在 `app.emit("engine://exited")` **之前**调用它，通知文案只在真交还成功时追加「系统代理已交还，网络已恢复直连」，前端 `src/stores/engine.ts` 的 `watchExits` 顺带刷新系统代理角标。真机证据：`ProxyEnable 1→0`、`app.err.txt` 的 `内核退出后已交还系统代理`、首页回到 `直连（未经代理）`。单元测试 2 条（活动/非活动两条分支），`cargo test --lib` 320。
 

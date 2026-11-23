@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import { t } from '../i18n'
 import { describeError } from '../services/contract'
@@ -14,13 +14,39 @@ import { useSettingsStore } from '../stores/settings'
  * a save. The notice makes that gap explicit and offers the one action that
  * closes it: the same-port restart node switching already uses.
  *
+ * The settings page has the same gap for a different reason — the kernel binds
+ * the ports it was started with, not the ones just saved — so the sentence and
+ * the two button labels are props. Empty means "use the config-page wording",
+ * which is what the routing, group and rule-set pages rely on.
+ *
  * The parent owns `show`; the component owns the restart and its own busy/error
  * state. It emits `applied` once the kernel was swapped (the parent clears the
  * notice — there is no separate "已生效" line, the engine badge and this
  * disappearing box are the confirmation) and `failed` with the readable message
  * so a parent that wants it can also surface it elsewhere.
  */
-const props = defineProps<{ show: boolean }>()
+const props = withDefaults(
+  defineProps<{
+    show: boolean
+    /** Sentence before the button; empty keeps the config-page wording. */
+    message?: string
+    /** Button label while idle; empty keeps the config-page wording. */
+    applyLabel?: string
+    /** Button label while a restart runs; empty keeps the config-page wording. */
+    busyLabel?: string
+  }>(),
+  { message: '', applyLabel: '', busyLabel: '' },
+)
+
+/**
+ * Resolved here rather than as literal defaults: a `t()` default is evaluated
+ * once at mount, so a notice still on screen when the user switches language
+ * would keep the old sentence. These computeds re-read the dictionary on every
+ * render and flip with the locale, exactly like the hard-coded labels did.
+ */
+const message = computed(() => props.message || t('engine.stale'))
+const applyLabel = computed(() => props.applyLabel || t('engine.staleApply'))
+const busyLabel = computed(() => props.busyLabel || t('engine.staleBusy'))
 
 const emit = defineEmits<{
   applied: []
@@ -83,9 +109,9 @@ async function apply(): Promise<void> {
        away with it; `busy` and `error` keep it on screen while a restart is in
        flight or has a reason to show. -->
   <div v-if="show && (engine.running || busy || error)" class="stale surface-plain" role="status">
-    <p class="stale-text">{{ t('engine.stale') }}</p>
+    <p class="stale-text">{{ message }}</p>
     <button class="btn btn-primary btn-sm" type="button" :disabled="busy" @click="apply">
-      {{ busy ? t('engine.staleBusy') : t('engine.staleApply') }}
+      {{ busy ? busyLabel : applyLabel }}
     </button>
     <!-- The reason a failed restart failed is a sentence, not a colour: the
          message is read, so it stays in body text instead of a red block. -->

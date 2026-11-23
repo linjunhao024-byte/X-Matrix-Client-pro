@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import StaleConfig from '../components/StaleConfig.vue'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
 import { availableLocales, locale, setLocale, t } from '../i18n'
 import {
@@ -10,11 +11,13 @@ import {
   type ProxyMode,
   type Settings_Serialize,
 } from '../services/contract'
+import { useEngineStore } from '../stores/engine'
 import { useSettingsStore } from '../stores/settings'
 import { useSystemProxyStore } from '../stores/sysproxy'
 
 const store = useSettingsStore()
 const proxy = useSystemProxyStore()
+const engine = useEngineStore()
 const draft = ref<Settings_Serialize | null>(null)
 const error = ref<string | null>(null)
 const saved = ref(false)
@@ -22,6 +25,25 @@ const autostart = ref<boolean | null>(null)
 /** Result line for backup/restore: what happened, in one sentence. */
 const backupNote = ref<string | null>(null)
 const backupBusy = ref(false)
+
+/**
+ * True when the saved ports are not the ports the running kernel listens on.
+ *
+ * The kernel binds its ports at start, so saving a new 端口 changes only the
+ * document until the process is restarted; "已保存" alone would look broken.
+ * A stopped kernel has nothing stale — the next start renders the saved
+ * settings anyway — and an unloaded document cannot be compared. Deliberately
+ * compares the saved settings, not `draft`: a port the user typed but has not
+ * saved is not a divergence yet.
+ */
+const stalePorts = computed(
+  () =>
+    engine.running &&
+    store.loaded &&
+    store.settings !== null &&
+    (store.settings.mixed_port !== engine.status?.mixed_port ||
+      store.settings.api_port !== engine.status?.api_port),
+)
 
 const modes: { value: ProxyMode; labelKey: string }[] = [
   { value: 'rule', labelKey: 'settings.mode.rule' },
@@ -266,6 +288,15 @@ async function save() {
     </section>
 
     <template v-else>
+      <!-- The ports panel right below owns the values the kernel is bound to,
+           so the "kernel has not caught up" notice sits with them instead of
+           at the bottom of a long page. -->
+      <StaleConfig
+        :show="stalePorts"
+        :message="t('settings.stalePort')"
+        :apply-label="t('settings.stalePortApply')"
+      />
+
       <section class="surface-plain panel">
         <h2 class="section-title">{{ t('settings.ports') }}</h2>
         <div class="grid">

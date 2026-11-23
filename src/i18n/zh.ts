@@ -645,6 +645,8 @@ export const zh: Record<string, string> = {
   "settings.proxyState": "系统代理当前",
   "settings.proxyWarning": "两个客户端同时写注册表会互相覆盖：若系统代理已被其它客户端（例如 V2RayN）接管，先关掉它再启动本客户端。",
   "settings.restoreProxy": "还原系统代理",
+  "settings.stalePort": "端口已改，内核还在旧端口上跑",
+  "settings.stalePortApply": "用新端口重启内核",
   "settings.startMinimized": "启动时隐藏窗口",
   "settings.startMinimizedHint": "开机自启配合使用时有用：只在托盘里出现，不弹窗",
   "settings.subAgent": "订阅 User-Agent",
