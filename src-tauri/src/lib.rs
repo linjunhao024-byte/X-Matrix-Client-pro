@@ -325,13 +325,31 @@ fn watch_engine_exits(app: AppHandle) {
         let Some(code) = runtime.take_unexpected_exit() else {
             continue;
         };
+        // The tunnel is gone but Windows may still be routing everything through it.
+        // Handing the proxy back here is what keeps a crash from becoming "no internet
+        // at all"; a failure is reported and must not stop the notification.
+        // Released before the emit on purpose: the listener re-reads the proxy badge
+        // and must not see our old "已接管" state.
+        let released = match app.try_state::<Arc<ProxyGuard>>() {
+            Some(guard) => match guard.release_if_active() {
+                Ok(released) => released,
+                Err(error) => {
+                    eprintln!("x-matrix: 内核退出后交还系统代理失败（不影响通知）：{error}");
+                    false
+                }
+            },
+            None => false,
+        };
+        if released {
+            eprintln!("x-matrix: 内核退出后已交还系统代理");
+        }
         // `--quit` and the X button go through `stop()` first, and a stop marks
         // the exit as expected — so this branch is never reached on those
         // paths, rather than suppressed with a flag here.
         if let Err(error) = app.emit("engine://exited", code) {
             eprintln!("x-matrix: 内核退出事件推送失败：{error}");
         }
-        notify_engine_exit(&app, code);
+        notify_engine_exit(&app, code, released);
     });
 }
 
@@ -340,7 +358,7 @@ fn watch_engine_exits(app: AppHandle) {
 /// A notification is a courtesy, not part of the lifecycle: a denied permission
 /// or a platform without a notification service prints one line and the watcher
 /// carries on. It must never panic, and never be the reason a start/stop fails.
-fn notify_engine_exit(app: &AppHandle, code: i32) {
+fn notify_engine_exit(app: &AppHandle, code: i32, released_proxy: bool) {
     use tauri_plugin_notification::NotificationExt;
 
     // Assembled here, so it cannot reuse `src/i18n/*`: the backend has no
@@ -350,16 +368,22 @@ fn notify_engine_exit(app: &AppHandle, code: i32) {
         .try_state::<AppState>()
         .map(|state| state.settings.read().language == crate::domain::settings::Language::En)
         .unwrap_or(false);
+    // The proxy sentence only appears when the watcher actually handed it back:
+    // claiming "网络已恢复直连" after a failed restore would be a lie the user
+    // discovers by trying to browse.
     let (title, body) = if english {
-        (
-            "X-Matrix · kernel exited",
-            format!("A kernel died on its own (code {code}). Open Logs to see what it said."),
-        )
+        let mut body =
+            format!("A kernel died on its own (code {code}). Open Logs to see what it said.");
+        if released_proxy {
+            body.push_str(" The system proxy was handed back, so the network goes direct again.");
+        }
+        ("X-Matrix · kernel exited", body)
     } else {
-        (
-            "X-Matrix · 内核已退出",
-            format!("内核意外退出（代码 {code}），点「日志」看它最后说了什么。"),
-        )
+        let mut body = format!("内核意外退出（代码 {code}），点「日志」看它最后说了什么。");
+        if released_proxy {
+            body.push_str("系统代理已交还，网络已恢复直连。");
+        }
+        ("X-Matrix · 内核已退出", body)
     };
 
     // Log both outcomes: without the success line a silent toast setting on the

@@ -275,7 +275,7 @@ pub enum StatsChannel {
 | 层 | 状态 | 证据 |
 |---|---|---|
 | 契约层 | 完成 | `tauri-specta` 生成 `src/services/bindings.ts`，77 个命令；`npm run check:contract` 校验不过期 |
-| 引擎层 | Xray + sing-box 配置渲染、启停、就绪探测、统计读取、日志尾部、启动前端口预检 | `cargo test --lib`（全库 318 项）；渲染是纯函数，测试不需要任何内核二进制 |
+| 引擎层 | Xray + sing-box 配置渲染、启停、就绪探测、统计读取、日志尾部、启动前端口预检 | `cargo test --lib`（全库 320 项）；渲染是纯函数，测试不需要任何内核二进制 |
 | 数据层 | 单文件 JSON 原子替换 + 坏文件留证 | `store.rs`，重启后节点/设置/规则都在 |
 | 导入 | vless / vmess / trojan / ss + 整包 base64 | `import.rs`，不支持的行进 `skipped` 而不是报错 |
 | 路由 | 7 种匹配器 × 4 种动作（代理/直连/拦截/策略组），双内核各自渲染 | `domain/routing.rs` + `render.rs`（唯一的内核差异点） |

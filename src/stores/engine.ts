@@ -19,6 +19,7 @@ import {
 } from '../services/contract'
 import { onEngineExit, type Unlisten } from '../services/events'
 import { bytes } from '../services/format'
+import { useSystemProxyStore } from './sysproxy'
 
 const POLL_INTERVAL_MS = 1000
 /** One minute of samples at the poll cadence — enough to see a trend, cheap to keep. */
@@ -211,7 +212,14 @@ export const useEngineStore = defineStore('engine', () => {
   async function watchExits() {
     if (unlistenExit) return
     try {
-      unlistenExit = await onEngineExit(() => void refreshStatus())
+      // The backend releases the system proxy *before* it emits this event, so
+      // the home-page badge must be re-read instead of assumed: leaving the old
+      // "已接管" on screen after a crash describes a machine that no longer
+      // routes through us.
+      unlistenExit = await onEngineExit(() => {
+        void refreshStatus()
+        void useSystemProxyStore().refresh()
+      })
     } catch {
       // No event bridge (unit tests, a browser preview) is not a broken app:
       // the poller is still there as the fallback.

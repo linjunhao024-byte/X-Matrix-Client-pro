@@ -695,3 +695,26 @@
 1. **`CopyFromScreen` 在这台机器上抓到的是黑屏加一块噪声。** 桌面会话里 WebView2 的硬件表面不会被 GDI 拷走；必须用 `PrintWindow(hwnd, hdc, 2)` 抓窗口，而且抓到的是半分辨率（每个像素横竖各重复两次），直接按截图坐标量模块会全军覆没。
 2. **没有扫码设备就没有「扫出来是什么」的硬证据。** 这台测试机没有摄像头、也没有离线解码器（npm registry 此刻解析不了 `jsqr`），所以本节记录的是「码被画出来 + 它和明文链接同源」，不是「扫出来逐字一致」。要补这一条，得用真手机扫一次并记录解码结果——留作后续。
 3. **`navigator.clipboard` 在非安全上下文里会拒绝。** 复制失败时对话框显示 `复制失败，剪贴板不可用`，不会假装成功。
+
+## 31. 内核崩了，机器也不能留在断网状态：崩的一瞬间把系统代理还回去（2026-11-24，云电脑 cloudpc-test）
+
+**验法**：`bash /d/tmp/shots/proxy-accept.sh`（`--quit` 旧实例 → 部署 → 启动 → 点「启动」→ 读注册表 `ProxyEnable/ProxyServer` → 用 `taskkill /F /PID` 从外部杀掉内核 → 再读注册表 → 读首页文字与 `app.err.txt`）。此前（§25）只证明了「内核死了会被通知」，没证明「通知的同时机器还能上网」——这一节补的就是那段空隙。
+
+| 判据 | 验法 | 结果 |
+|---|---|---|
+| 启动内核就接管系统代理 | 点「启动」后 `HKCU\...\Internet Settings`：`ProxyEnable=1`、`ProxyServer=127.0.0.1:7890` | **通过** |
+| 内核被外部杀掉后代理真的还回去 | 杀掉后 3.5 秒再读：`ProxyEnable=0`、`ProxyServer` 变回未设置 | **通过** |
+| 还的时候留了话 | `app.err.txt` 里 `x-matrix: 内核退出后已交还系统代理`，紧跟 `x-matrix: 内核退出通知已发送（退出码 1）` | **通过** |
+| 界面不再假装还接管着 | 首页文字回到 `直连（未经代理）`，同时显示 `上一次内核退出码 1…` | **通过** |
+| 没有快照就不许乱动 | 单元测试 `releasing_an_inactive_guard_never_writes`：`writes().len()` 前后一致 | **通过**（`cargo test --lib` 320 passed） |
+| 还完不留垃圾 | 单元测试 `releasing_an_active_guard_restores_the_previous_state`：快照文件被删除、`is_active()` 变回 false | **通过** |
+
+**三个设计理由**：
+- **交还在推送之前。** 前端收到 `engine://exited` 时会重新读一次状态（`src/stores/engine.ts` 的 `watchExits` 顺带 `useSystemProxyStore().refresh()`）；如果先 emit 再交还，界面就会先读到一个「已接管」的旧世界，随后再被下一次轮询纠正。先交还，事件描述的就是已经修好的机器。
+- **通知里那句话是可选的。** `notify_engine_exit(app, code, released_proxy)` 只在真的交还成功时追加「系统代理已交还，网络已恢复直连」；交还失败时宁可只说「内核退出」，也不让用户以为自己已经能上网——失败本身会以 `内核退出后交还系统代理失败…` 打在 stderr 上。
+- **交还逻辑放在 `ProxyGuard` 里，而不是散在监听线程里。** `release_if_active()` 只有 6 行，但它决定「动别人的设置」还是「什么都不做」；放进能注入 `FakeProxy` 的类型里，两条分支都能被单元测试钉死，而不是靠真机注册表碰运气。
+
+**三个坑**：
+1. **`findstr /C:"代理"` 在 cmd 里什么都找不到。** 远程 shell 是 `cmd.exe`，中文参数到 `findstr` 时编码已经变了，一条都不匹配；结论要从 `app.err.txt` 拉回本机再 `grep`。这也顺带解释了为什么第一次跑完「app stderr (proxy lines)」是空的，但日志里其实有两行。
+2. **只有 `system_proxy=true` 且用了「启动」才走这条路。** 崩溃时若我们本来没接管（用户自己关的、或从没启动过），`release_if_active()` 必须什么都不写——真机上验证这一点要靠单元测试，因为云电脑的 store 一直是 `system_proxy=true`。
+3. **代理是不是「我们的」靠快照判断。** 快照文件 `proxy-snapshot.json` 只在接管前写、交还后删；如果别的软件（V2RayN、手动设置）把代理开着，我们崩了也不该动它——这正是 `is_active()` 而不是「读注册表看开没开」的原因。

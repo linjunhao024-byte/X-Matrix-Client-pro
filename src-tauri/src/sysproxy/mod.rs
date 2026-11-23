@@ -145,6 +145,19 @@ impl ProxyGuard {
         Ok(())
     }
 
+    /// Give the proxy back only if we are the ones holding it.
+    ///
+    /// Called right after an unexpected kernel exit: the tunnel is gone, so the
+    /// machine must stop pointing at it instead of waiting for the next launch to
+    /// notice. Returns whether anything was actually released.
+    pub fn release_if_active(&self) -> AppResult<bool> {
+        if !self.is_active() {
+            return Ok(false);
+        }
+        self.disable()?;
+        Ok(true)
+    }
+
     /// Called at start: if a snapshot exists, the previous run died while
     /// holding the proxy. Restore it now, so the machine is not left hijacked.
     pub fn recover(&self) -> AppResult<bool> {
@@ -416,6 +429,38 @@ mod tests {
 
         assert!(fake.writes().is_empty());
         assert_eq!(*fake.state.lock(), before);
+    }
+
+    #[test]
+    fn releasing_an_active_guard_restores_the_previous_state() {
+        // The crash path: the kernel died while we held the proxy, so the only
+        // safe move is to put the user's own settings back immediately.
+        let before = custom();
+        let fake = Arc::new(FakeProxy::with(before.clone()));
+        let path = scratch("release-active");
+        let guard = ProxyGuard::new(Box::new(fake.clone()), &path);
+
+        guard.enable_with_bypass("127.0.0.1", 7890, DEFAULT_BYPASS).unwrap();
+        assert!(guard.is_active());
+
+        assert!(guard.release_if_active().unwrap());
+        assert_eq!(*fake.state.lock(), before);
+        assert!(!guard.is_active());
+        assert!(!path.exists(), "the snapshot must not outlive the release");
+    }
+
+    #[test]
+    fn releasing_an_inactive_guard_never_writes() {
+        // We must not hand back a proxy we never took: doing so would overwrite
+        // whatever the user configured on their own.
+        let fake = Arc::new(FakeProxy::with(custom()));
+        let path = scratch("release-inactive");
+        let _ = std::fs::remove_file(&path);
+        let guard = ProxyGuard::new(Box::new(fake.clone()), &path);
+        let writes_before = fake.writes().len();
+
+        assert!(!guard.release_if_active().unwrap());
+        assert_eq!(fake.writes().len(), writes_before);
     }
 
     #[test]

@@ -19,11 +19,11 @@
 | 未提交 | 无（交接后已提交：`--quit`、N12、GEO 数据、测速落盘、内核退出通知） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库（HEAD 上这一条） |
 | IPC 命令 | **77**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
-| Rust 单测 | **318 passed**（`ARCHITECTURE.md:278` 已同步） |
+| Rust 单测 | **320 passed**（`ARCHITECTURE.md:278` 已同步） |
 | 前端检查 | `npm run check` 全绿：vue-tsc / architecture / contract / vitest **76**（8 文件） |
 | i18n | **724** 键（`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
 | 桌面产物 | 见 §1 表格（每次构建后刷新；当前 release 构建含 N12 + GEO + 测速落盘 + 退出通知） |
-| 验收文档 | `docs/ACCEPTANCE.md` §0–§30（§7 历史空缺，编号不连续但内容完整） |
+| 验收文档 | `docs/ACCEPTANCE.md` §0–§31（§7 历史空缺，编号不连续但内容完整） |
 | 云电脑 | 干净：`ProxyEnable=0x0`、无 X-Matrix/sing-box/xray 进程、无 `xm*` 计划任务 |
 
 **下一步的确定顺序**（做完一条打一个勾，别跳）：
@@ -34,7 +34,7 @@
 - [x] 4. `docs/ACCEPTANCE.md` 写到 §26
 - [x] 5. 提交（`fix(tray)` / `feat(update)` / `feat(geo,nodes)` / `feat(engine)` 各一条）
 - [x] 6. `FEED_URL` 已指向真实仓库 `linjunhao024-byte/X-Matrix-Client-pro`，`v0.1.0` 已发布并带 `X-Matrix.exe` 资产
-- [x] 7. 计数已同步：77 命令 / 318 单测 / 76 vitest / 724 i18n 键
+- [x] 7. 计数已同步：77 命令 / 320 单测 / 76 vitest / 724 i18n 键
 - [ ] 8. `bash /d/tmp/shots/cleanup.sh` 收尾云电脑
 
 ---
@@ -53,8 +53,8 @@
 | 桌面产物 | `/c/Users/83611/Desktop/X-Matrix.exe`、`/c/Users/83611/Desktop/X-Matrix_0.1.0_x64-setup.exe` |
 | 当前桌面产物版本 | exe **9,823,232 B @10:32**、NSIS **3,181,050 B @10:32**（= N9 那一次构建，**不含 N12**） |
 
-**计数基线（改动后记得同步文档）**：命令 **77**、`cargo test --lib` **318**、vitest **76**（8 个文件）、i18n **724** 键。
-> `README.md:81` 与 `ARCHITECTURE.md:277` 已同步为 77 条命令 / 318 项测试。
+**计数基线（改动后记得同步文档）**：命令 **77**、`cargo test --lib` **320**、vitest **76**（8 个文件）、i18n **724** 键。
+> `README.md:81` 与 `ARCHITECTURE.md:277` 已同步为 77 条命令 / 320 项测试。
 
 命令数核算法：
 
@@ -142,6 +142,7 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 | §28 | 订阅改名与过滤：刷新时先过滤再改名，替换上一次那一批 |
 | §29 | 内核二进制：换一个文件就真的跑那个文件，geo 数据回落到 engines |
 | §30 | 节点二维码：前端出码、与「复制链接」同源、失败不留白 |
+| §31 | 内核崩溃：通知之前先交还系统代理，机器不会留在断网状态 |
 
 已提交的提交序列（新→旧，14 条主体）：
 `5a44af3` 域名正则+geosite · `569a7ce` 流量历史 · `44b857b` 测速预算+选最快 · `42f85bd` 一键断开+进程名 · `f817726` 真实延迟 · `f3fc750` 订阅走代理 · `d892b9e` Clash 导入带组和规则 · `6851775` 托盘子菜单 · `f9a0406` H4 验收文档 · `14ddb20` hysteria2/tuic · `fdd0b8d` 运行中热切换 · `eb3f453` 日志页 · `79ccadd` 设计修复（粘右操作列、错误用红、焦点陷阱等）· `535124b` 快捷键与诊断包验收。
@@ -151,6 +152,8 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 ---
 
 ## 5. 最近完成的两件事（已提交、已真机验收）
+
+**崩溃时交还系统代理（2026-11-24，§31）**：`ProxyGuard::release_if_active()`（`src-tauri/src/sysproxy/mod.rs`）只在「快照证明是我们接管的」时还原并删快照；`watch_engine_exits` 在 `app.emit("engine://exited")` **之前**调用它，通知文案只在真交还成功时追加「系统代理已交还，网络已恢复直连」，前端 `src/stores/engine.ts` 的 `watchExits` 顺带刷新系统代理角标。真机证据：`ProxyEnable 1→0`、`app.err.txt` 的 `内核退出后已交还系统代理`、首页回到 `直连（未经代理）`。单元测试 2 条（活动/非活动两条分支），`cargo test --lib` 320。
 
 **N12 应用内更新检查**（`docs/ACCEPTANCE.md` §22）：仓库发布 `v0.1.0` 后「关于 → 检查更新」显示「已是最新版本（0.1.0）」，未发版时显示「发布页还没有发布记录（HTTP 404）」。
 
