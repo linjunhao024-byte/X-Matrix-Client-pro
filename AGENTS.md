@@ -84,6 +84,14 @@ KEY="-i C:/Users/83611/.ssh/id_ed25519_cpc -o StrictHostKeyChecking=no -o BatchM
 **并发上限：同时最多 2 个子代理运行。** 第三个任务排队，等其中一个结束再派。
 *At most 2 subagents may run at the same time; queue the rest.*
 
+**子代理用一次就丢掉，不复用。** 每个子代理只承载一个任务：拿到任务包、做完、交回结果，然后结束；不要给它追加第二个任务，也不要「接着问它一句」。同一件事需要继续做，就开一个新的子代理并把当前状态重新讲清楚。
+*One subagent = one task. Never hand a second task to the same subagent; start a fresh one and restate the state.*
+
+理由：子代理的上下文和主窗口不共享，复用它意味着它带着上一次任务的假设继续做事；一旦它静默死亡，上一次和这一次的产出会一起丢，主窗口无从判断哪一步做了、哪一步没做。用一次一换，每次的输入和产出都是可核对的。
+
+**派发前先减上下文。** 派发前如果主窗口已经很长，先压缩或分段，别把一整个长会话当成任务包塞进去；任务包只写做这件事真正需要的东西（目标、边界、验证命令、已知坑）。
+*Compress or split the Lead context before dispatching; the task packet carries only what the job needs.*
+
 已知本环境的子代理曾出现静默死亡、零产出，因此：
 - 每个任务都要有**可核对的落点**（改哪个文件、跑哪条命令、期望输出什么）；
 - 汇报只作参考，验收以工作区里的实际 diff 与测试结果为准；

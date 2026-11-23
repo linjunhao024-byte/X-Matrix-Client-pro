@@ -19,7 +19,7 @@
 | 未提交 | N12：9 个已改文件 + `src-tauri/src/update.rs`（新文件） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库（HEAD 上这一条） |
 | IPC 命令 | **73**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
-| Rust 单测 | **270 passed**（`ARCHITECTURE.md:277` 已同步） |
+| Rust 单测 | **272 passed**（`ARCHITECTURE.md:278` 已同步） |
 | 前端检查 | `npm run check` 全绿：vue-tsc / architecture / contract / vitest **57**（8 文件） |
 | i18n | **666** 键（`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
 | 桌面产物 | `X-Matrix.exe` **9,823,232 B @10:32**、`X-Matrix_0.1.0_x64-setup.exe` **3,181,050 B @10:32** —— 都是 **N9 版**，不含 N12 |
@@ -30,8 +30,8 @@
 
 - [x] 1. `npm run tauri build`（2026-11-23 23:27 完成，`x-matrix.exe` 9,854,976 B）
 - [ ] 2. `cp` 刷桌面两件 + `cmp` 校验
-- [ ] 3. 云电脑真机点「关于 → 检查更新」，如实记录成功或失败文案
-- [ ] 4. 写 `docs/ACCEPTANCE.md` §21（验法 / 判据 / 设计理由 / 坑）
+- [x] 3. 云电脑真机点「关于 → 检查更新」：未发版时 404 文案正确，发布 `v0.1.0` 后显示「已是最新版本（0.1.0）」
+- [x] 4. 写 `docs/ACCEPTANCE.md` §21（正常退出）与 §22（检查更新）
 - [ ] 5. 提交 N12（提交信息建议 `feat(update): ask the release feed, never touch the binary`）
 - [x] 6. `src-tauri/src/update.rs:23` 的 `FEED_URL` 已指向真实仓库 `linjunhao024-byte/X-Matrix-Client-pro`
 - [x] 7. 已同步 `README.md:81` 的 71→73、`ARCHITECTURE.md:277` 的 260→270
@@ -53,8 +53,8 @@
 | 桌面产物 | `/c/Users/83611/Desktop/X-Matrix.exe`、`/c/Users/83611/Desktop/X-Matrix_0.1.0_x64-setup.exe` |
 | 当前桌面产物版本 | exe **9,823,232 B @10:32**、NSIS **3,181,050 B @10:32**（= N9 那一次构建，**不含 N12**） |
 
-**计数基线（改动后记得同步文档）**：命令 **73**、`cargo test --lib` **270**、vitest **57**（8 个文件）、i18n **666** 键。
-> `README.md:81` 与 `ARCHITECTURE.md:277` 已同步为 73 条命令 / 270 项测试。
+**计数基线（改动后记得同步文档）**：命令 **73**、`cargo test --lib` **272**、vitest **57**（8 个文件）、i18n **666** 键。
+> `README.md:81` 与 `ARCHITECTURE.md:277` 已同步为 73 条命令 / 272 项测试。
 
 命令数核算法：
 
@@ -142,7 +142,7 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 
 ## 5. 未提交的工作：N12「应用内更新检查」（做到一半）
 
-**状态：代码完成、`cargo test --lib` 270 通过、`npm run check` 全绿、已构建（2026-11-23 23:27）；「检查更新」按钮尚未真机点过，验收小节待补（`docs/ACCEPTANCE.md` §22）。**
+**状态：已完成并真机验收（2026-11-24，见 `docs/ACCEPTANCE.md` §22）：仓库发布 `v0.1.0` 后「检查更新」显示「已是最新版本（0.1.0）」，未发版时显示「发布页还没有发布记录（HTTP 404）」。`cargo test --lib` 272 通过。**
 
 改动的文件（`git status` 当前输出）：
 
@@ -249,7 +249,7 @@ scp -i /c/Users/83611/.ssh/id_ed25519_cpc 本地文件 Administrator@100.106.121
 
 1. `cd /d/GitHub-Warehouse/X-Matrix-Client-Pro && git status` —— 确认只有 N12 那批改动，没有别人在写。
 2. 读本文件的 §5 与 `docs/ACCEPTANCE.md` 的最后两节，对齐上下文。
-3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 270 passed）。
+3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 272 passed）。
 4. `cd .. && npm run check`（应为全绿）。
 5. 决定这一步要做哪一项（建议先把 N12 收尾：构建 + 真机 + 文档 + 提交），**一项一提交**，提交信息用英文 `feat(...)/fix(...)/docs: ...`。
 6. 真机验证前先跑 `bash /d/tmp/shots/deploy-tray.sh <exe>`；远端被 `cleanup.sh` 清过的话，先 `scp x-act.ps1 uia2.ps1 ocr.ps1` 上去。
