@@ -40,9 +40,20 @@ export const useSubscriptionsStore = defineStore('subscriptions', () => {
     }
   }
 
-  async function create(name: string, url: string): Promise<void> {
-    items.value = await api.createSubscription(name, url)
+  /**
+   * Creating a source takes name and url only, so giving it a rename/filter
+   * policy is a second call. The caller therefore needs the row that was just
+   * added: the backend answers with the whole table, so pick out the one id
+   * that was not there before.
+   */
+  async function create(name: string, url: string): Promise<Subscription_Serialize> {
+    const known = new Set(items.value.map((item) => item.id))
+    const table = await api.createSubscription(name, url)
+    items.value = table
     loaded.value = true
+    const created = table.find((item) => !known.has(item.id)) ?? table[table.length - 1]
+    if (!created) throw new Error('订阅已创建，但列表里找不到它')
+    return created
   }
 
   async function save(subscription: Subscription_Deserialize): Promise<void> {
@@ -74,11 +85,17 @@ export const useSubscriptionsStore = defineStore('subscriptions', () => {
   }
 
   /**
-   * Refreshing every due source answers with both numbers: how many nodes came
-   * in and how many were dropped. Reporting only the first would make a
-   * provider that lists duplicates look like it shrank.
+   * Refreshing every due source answers with three counts: nodes that came in,
+   * nodes dropped as duplicates, and nodes dropped by the source's own
+   * include/exclude patterns. Reporting only the first would make a provider
+   * that lists duplicates look like it shrank, and a filter look like a bug.
    */
-  async function refreshAll(): Promise<{ imported: number; skipped: number; note: string | null }> {
+  async function refreshAll(): Promise<{
+    imported: number
+    skipped: number
+    filtered: number
+    note: string | null
+  }> {
     loading.value = true
     error.value = null
     try {
@@ -89,9 +106,10 @@ export const useSubscriptionsStore = defineStore('subscriptions', () => {
         (sum, outcome) => ({
           imported: sum.imported + (outcome.imported ?? 0),
           skipped: sum.skipped + (outcome.skipped?.length ?? 0),
+          filtered: sum.filtered + (outcome.filtered ?? 0),
           note: sum.note ?? outcome.note ?? null,
         }),
-        { imported: 0, skipped: 0, note: null as string | null },
+        { imported: 0, skipped: 0, filtered: 0, note: null as string | null },
       )
       return total
     } catch (cause) {

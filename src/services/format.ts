@@ -130,3 +130,87 @@ export function formatDay(value: number | null | undefined): string {
   const day = String(at.getDate()).padStart(2, '0')
   return `${at.getFullYear()}-${month}-${day}`
 }
+
+/**
+ * The fields a subscription needs for its refresh countdown, structurally.
+ *
+ * Declared here rather than imported from the contract for the same reason as
+ * `ProbeRecord`: `format.test.ts` runs without the Tauri bridge.
+ */
+export interface RefreshSchedule {
+  enabled: boolean
+  update_interval_minutes?: number | null
+  updated_at_ms?: number | null
+}
+
+/** The shape of `t()`, so a sentence can be built without a fixed dictionary. */
+export type Translator = (key: string, params?: Record<string, string | number>) => string
+
+/**
+ * Milliseconds until the next automatic refresh, `null` when there is none to
+ * count down to.
+ *
+ * Three honest "nothing to count" cases, all matching the backend's `is_due`:
+ * the source is disabled, it is "only when I ask" (interval 0 or absent), or it
+ * was never fetched successfully — a countdown started from a timestamp that
+ * does not exist would be invented, and the row already says 从未.
+ *
+ * The result can be negative: that means the source is overdue and the sweep
+ * simply has not reached it yet.
+ */
+export function nextRefreshInMs(sub: RefreshSchedule, nowMs: number): number | null {
+  if (!sub.enabled) return null
+  const interval = sub.update_interval_minutes
+  if (typeof interval !== 'number' || !Number.isFinite(interval) || interval <= 0) return null
+  const updatedAt = sub.updated_at_ms
+  // 0 is what an older build left for "no timestamp" — same as `formatWhen`.
+  if (typeof updatedAt !== 'number' || !Number.isFinite(updatedAt) || updatedAt <= 0) return null
+  return updatedAt + interval * 60_000 - nowMs
+}
+
+/** `5 分钟` / `1 hour` — singular is spelled out instead of shipping "1 hours". */
+function refreshDuration(count: number, unit: 'minute' | 'hour' | 'day', translate: Translator): string {
+  return translate(`sub.next.${count === 1 ? unit : `${unit}s`}`, { count })
+}
+
+/**
+ * When the next automatic refresh is due, as a sentence:
+ * `还有 5 分钟`, `该刷新了`, `只手动刷新`, or `''` for a row that has nothing to add.
+ *
+ * Down-rounded on purpose: a countdown that says `还有 5 小时` must never promise
+ * less time than is actually left, so the refresh can only be early, never late.
+ *
+ * `nowMs` is a parameter (not `Date.now()`) so the caller owns the ticking clock
+ * and this stays a pure function of its inputs.
+ */
+export function formatNextRefresh(
+  sub: RefreshSchedule,
+  nowMs: number,
+  translate: Translator = t,
+): string {
+  const remaining = nextRefreshInMs(sub, nowMs)
+  if (remaining === null) {
+    // Disabled and "only when I ask" read the same to the user: nothing happens
+    // on its own, refreshing is their call. Never-fetched with a real interval
+    // stays quiet — the 从未 next to it is the whole truth.
+    if (!sub.enabled) return translate('sub.next.manual')
+    const interval = sub.update_interval_minutes
+    if (typeof interval !== 'number' || !Number.isFinite(interval) || interval <= 0) {
+      return translate('sub.next.manual')
+    }
+    return ''
+  }
+  if (remaining <= 0) return translate('sub.next.due')
+  // A few seconds short of the interval still reads as the smallest unit that
+  // exists rather than as "还有 0 分钟".
+  const minutes = Math.max(1, Math.floor(remaining / 60_000))
+  let when: string
+  if (minutes < 60) {
+    when = refreshDuration(minutes, 'minute', translate)
+  } else if (minutes < 48 * 60) {
+    when = refreshDuration(Math.floor(minutes / 60), 'hour', translate)
+  } else {
+    when = refreshDuration(Math.floor(minutes / 1440), 'day', translate)
+  }
+  return translate('sub.next.in', { when })
+}

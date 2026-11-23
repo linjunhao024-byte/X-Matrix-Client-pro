@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 
 import AppIcon from '../components/AppIcon.vue'
 import EmptyState from '../components/EmptyState.vue'
@@ -7,7 +7,7 @@ import ModalDialog from '../components/ModalDialog.vue'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
 import { t } from '../i18n'
 import { describeError, type Subscription_Serialize } from '../services/contract'
-import { formatBytesCompact, formatDay, formatWhen } from '../services/format'
+import { formatBytesCompact, formatDay, formatNextRefresh, formatWhen } from '../services/format'
 import { useSubscriptionsStore } from '../stores/subscriptions'
 
 const store = useSubscriptionsStore()
@@ -27,6 +27,14 @@ const form = reactive({
   id: '',
   name: '',
   url: '',
+  /**
+   * The source's own rename/filter policy. They are applied by the backend
+   * while the document is parsed, so the editor only has to round-trip them;
+   * an empty string is "off" for all three.
+   */
+  rename_prefix: '',
+  include: '',
+  exclude: '',
   enabled: true,
   update_interval_minutes: 360,
   /** Carried through an edit so saving never resets the count to zero. */
@@ -49,6 +57,15 @@ const note = ref<string | null>(null)
  * the fetch itself, and folding them together makes both unreadable.
  */
 const routeNote = ref<string | null>(null)
+
+/**
+ * One clock for the whole page, refreshed every 30 s, so every row's countdown
+ * moves together. Rows must not own intervals: a table of ten subscriptions
+ * would otherwise wake up ten times per tick and drift apart.
+ */
+const now = ref(Date.now())
+const CLOCK_MS = 30_000
+let clock: ReturnType<typeof setInterval> | null = null
 
 const isEmpty = computed(() => store.loaded && store.items.length === 0)
 
@@ -74,10 +91,43 @@ function expiryLabel(subscription: Subscription_Serialize): string {
   return t('sub.quota.expires', { day: formatDay(subscription.expires_at_ms) })
 }
 
+/** `还有 5 小时` / `该刷新了` / `只手动刷新`, or `''` when the row has none to show. */
+function nextRefreshLabel(subscription: Subscription_Serialize): string {
+  return formatNextRefresh(subscription, now.value, t)
+}
+
+/**
+ * `前缀 机场A · · 保留 香港|台湾 · 排除 过期` — the source's own policy in one
+ * quiet line, so a list that looks shorter than the provider says explains
+ * itself without opening the editor. `''` hides the line entirely.
+ */
+function tuningLabel(subscription: Subscription_Serialize): string {
+  // Trimmed only for the "is this set?" question: the prefix is used verbatim
+  // (its trailing space is the separator), and whitespace alone is "off" on
+  // the backend too, so it must not show up as a policy here.
+  const prefix = (subscription.rename_prefix ?? '').trim()
+  const include = (subscription.include ?? '').trim()
+  const exclude = (subscription.exclude ?? '').trim()
+  const parts: string[] = []
+  if (prefix) {
+    parts.push(t('sub.tuning.prefix', { prefix: subscription.rename_prefix }))
+  }
+  if (include) {
+    parts.push(t('sub.tuning.include', { pattern: subscription.include }))
+  }
+  if (exclude) {
+    parts.push(t('sub.tuning.exclude', { pattern: subscription.exclude }))
+  }
+  return parts.join(' · ')
+}
+
 function openCreate(): void {
   form.id = ''
   form.name = ''
   form.url = ''
+  form.rename_prefix = ''
+  form.include = ''
+  form.exclude = ''
   form.enabled = true
   form.update_interval_minutes = 360
   form.node_count = 0
@@ -92,6 +142,9 @@ function openEdit(subscription: Subscription_Serialize): void {
   form.id = subscription.id
   form.name = subscription.name
   form.url = subscription.url
+  form.rename_prefix = subscription.rename_prefix ?? ''
+  form.include = subscription.include ?? ''
+  form.exclude = subscription.exclude ?? ''
   form.enabled = subscription.enabled
   form.update_interval_minutes = subscription.update_interval_minutes ?? 0
   form.node_count = subscription.node_count
@@ -119,6 +172,9 @@ async function submit(): Promise<void> {
         id: form.id,
         name: form.name.trim(),
         url: form.url.trim(),
+        rename_prefix: form.rename_prefix,
+        include: form.include,
+        exclude: form.exclude,
         enabled: form.enabled,
         update_interval_minutes: form.update_interval_minutes,
         node_count: form.node_count,
@@ -127,7 +183,20 @@ async function submit(): Promise<void> {
         expires_at_ms: form.expires_at_ms,
       })
     } else {
-      await store.create(form.name.trim(), form.url.trim())
+      const created = await store.create(form.name.trim(), form.url.trim())
+      // `create_subscription` still knows only name and url; the policy travels
+      // through the whole-object upsert. Taking the id first means a rejected
+      // pattern leaves the dialog on the edit path, so fixing it and pressing
+      // save again never creates a second source.
+      form.id = created.id
+      if (form.rename_prefix || form.include || form.exclude) {
+        await store.save({
+          ...created,
+          rename_prefix: form.rename_prefix,
+          include: form.include,
+          exclude: form.exclude,
+        })
+      }
     }
     editing.value = false
   } catch (cause) {
@@ -143,13 +212,18 @@ async function refreshOne(subscription: Subscription_Serialize): Promise<void> {
   try {
     const outcome = await store.refresh(subscription.id)
     const skipped = outcome.skipped?.length ?? 0
+    // A node the source's own filter dropped is not a duplicate and not a
+    // failure: it needs its own number, or the count looks like data loss.
+    const filtered = outcome.filtered ?? 0
     routeNote.value = outcome.note ?? null
     note.value =
       t('sub.note.refreshed', {
         name: outcome.subscription.name,
         imported: outcome.imported ?? 0,
         removed: outcome.removed ?? 0,
-      }) + (skipped > 0 ? t('sub.note.skipped', { count: skipped }) : '')
+      }) +
+      (skipped > 0 ? t('sub.note.skipped', { count: skipped }) : '') +
+      (filtered > 0 ? t('sub.note.filtered', { count: filtered }) : '')
   } catch {
     /* store.error already carries the reason */
   }
@@ -159,9 +233,12 @@ async function refreshAll(): Promise<void> {
   note.value = null
   routeNote.value = null
   try {
-    const { imported, skipped, note: caveat } = await store.refreshAll()
+    const { imported, skipped, filtered, note: caveat } = await store.refreshAll()
     const head = imported > 0 ? t('sub.note.due', { count: imported }) : t('sub.note.noneDue')
-    note.value = head + (skipped > 0 ? t('sub.note.skipped', { count: skipped }) : '')
+    note.value =
+      head +
+      (skipped > 0 ? t('sub.note.skipped', { count: skipped }) : '') +
+      (filtered > 0 ? t('sub.note.filtered', { count: filtered }) : '')
     routeNote.value = caveat
   } catch {
     /* store.error already carries the reason */
@@ -183,6 +260,13 @@ async function confirmDelete(): Promise<void> {
 
 onMounted(() => {
   void store.load()
+  clock = setInterval(() => {
+    now.value = Date.now()
+  }, CLOCK_MS)
+})
+
+onBeforeUnmount(() => {
+  if (clock !== null) clearInterval(clock)
 })
 </script>
 
@@ -245,10 +329,21 @@ onMounted(() => {
               <div v-if="usageLabel(subscription)" class="sub-quota">{{ usageLabel(subscription) }}</div>
               <div v-if="expiryLabel(subscription)" class="sub-quota">{{ expiryLabel(subscription) }}</div>
               <div v-if="!usageLabel(subscription) && !expiryLabel(subscription)" class="sub-quota">—</div>
+              <!-- The policy line below the numbers: a provider that lists 200
+                   nodes while the row says 20 should say why without the editor. -->
+              <div v-if="tuningLabel(subscription)" class="sub-tuning">{{ tuningLabel(subscription) }}</div>
             </td>
             <td class="num nowrap">{{ subscription.node_count ?? 0 }}</td>
             <td class="nowrap">{{ intervalLabel(subscription.update_interval_minutes) }}</td>
-            <td class="nowrap">{{ formatWhen(subscription.updated_at_ms) }}</td>
+            <td>
+              <div class="nowrap">{{ formatWhen(subscription.updated_at_ms) }}</div>
+              <!-- Under the last-update time, not in a column of its own: the two
+                   lines answer one question ("is this source fresh?") and the
+                   table already scrolls sideways at 1050px. -->
+              <span v-if="nextRefreshLabel(subscription)" class="muted small nowrap">
+                {{ nextRefreshLabel(subscription) }}
+              </span>
+            </td>
             <td>
               <span v-if="subscription.last_error" class="badge badge-danger" :title="subscription.last_error">
                 {{ t('sub.status.failed') }}
@@ -313,6 +408,42 @@ onMounted(() => {
           placeholder="https://example.com/api/v1/client/subscribe?token=…"
         />
         <p class="field-hint">{{ t('sub.editor.urlHint') }}</p>
+      </div>
+      <!-- The source's own policy. Kept next to the url because it is part of
+           "what this source brings in", not a refresh setting; all three apply
+           while the document is parsed, so they show up on the next refresh. -->
+      <div class="field">
+        <p class="field-hint">{{ t('sub.editor.tuningHint') }}</p>
+      </div>
+      <div class="field">
+        <label class="field-label" for="sub-prefix">{{ t('sub.editor.prefix') }}</label>
+        <input
+          id="sub-prefix"
+          v-model="form.rename_prefix"
+          class="input"
+          :placeholder="t('sub.editor.prefixPlaceholder')"
+        />
+        <p class="field-hint">{{ t('sub.editor.prefixHint') }}</p>
+      </div>
+      <div class="field">
+        <label class="field-label" for="sub-include">{{ t('sub.editor.include') }}</label>
+        <input
+          id="sub-include"
+          v-model="form.include"
+          class="input input-mono"
+          :placeholder="t('sub.editor.includePlaceholder')"
+        />
+        <p class="field-hint">{{ t('sub.editor.includeHint') }}</p>
+      </div>
+      <div class="field">
+        <label class="field-label" for="sub-exclude">{{ t('sub.editor.exclude') }}</label>
+        <input
+          id="sub-exclude"
+          v-model="form.exclude"
+          class="input input-mono"
+          :placeholder="t('sub.editor.excludePlaceholder')"
+        />
+        <p class="field-hint">{{ t('sub.editor.excludeHint') }}</p>
       </div>
       <div class="field">
         <label class="field-label" for="sub-interval">{{ t('sub.editor.interval') }}</label>
@@ -401,6 +532,23 @@ onMounted(() => {
   color: var(--text-secondary);
   white-space: nowrap;
   line-height: 1.35;
+}
+/* The rename/filter policy: quieter than the quota lines, and clipped rather
+   than wrapped because a long regex would otherwise widen the name column. */
+.sub-tuning {
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--text-tertiary);
+}
+/* Same definition as the other data views: `muted small` is the page's quiet
+   second line, and the countdown is exactly that. */
+.small {
+  font-size: 12px;
 }
 .actions {
   text-align: right;

@@ -19,6 +19,11 @@ use crate::net::remote;
 use crate::state::AppState;
 
 /// What one refresh did, so the UI can say something specific.
+///
+/// `imported`, `removed`, `filtered` and `skipped` are four different
+/// stories: nodes that made it in, nodes the previous batch lost, nodes this
+/// source's own rename/filter policy asked us to drop, and lines the provider
+/// sent that could not be used (unreadable, or a duplicate of another source).
 #[derive(Debug, Clone, serde::Serialize, specta::Type)]
 pub struct RefreshOutcome {
     pub subscription: Subscription,
@@ -26,6 +31,12 @@ pub struct RefreshOutcome {
     pub imported: usize,
     #[specta(type = f64)]
     pub removed: usize,
+    /// Nodes the subscription's `include`/`exclude` patterns kept out of the
+    /// table. Kept apart from duplicates on purpose: "the provider sent 300,
+    /// 200 matched your filter" is not the same complaint as "100 were already
+    /// here", and the UI says which one happened.
+    #[specta(type = f64)]
+    pub filtered: u32,
     pub skipped: Vec<String>,
     /// Something true about this refresh that is not about the body: which
     /// route it took, for instance. Kept apart from `skipped` because that list
@@ -233,6 +244,10 @@ pub fn apply_document(
             .cloned()
             .ok_or_else(|| AppError::NotFound(format!("订阅 {id} 不存在")))?
     };
+    // A store from before this feature, or one edited by hand, can carry a
+    // pattern that does not compile. Refuse the refresh instead of quietly
+    // keeping every node the user asked to filter out.
+    subscription.validate()?;
     let tag = subscription.tag();
 
     let mut imported_nodes: Vec<Node> = report
@@ -246,6 +261,20 @@ pub fn apply_document(
     imported_nodes.retain(|node| {
         // A provider can hand back junk; the same rules as manual import apply.
         node.validate().is_ok()
+    });
+
+    // The source's own policy runs before the dedup pass. A node the filters
+    // rejected is not a duplicate of anything, and counting it as one would
+    // tell the user their provider repeated itself when it did not. The prefix
+    // is applied here too, so the name stored is the name the user will see.
+    let mut filtered: u32 = 0;
+    imported_nodes.retain_mut(|node| {
+        if subscription.tune(node) {
+            true
+        } else {
+            filtered += 1;
+            false
+        }
     });
 
     // Two subscriptions (or one provider repeating itself) listing the same
@@ -316,6 +345,7 @@ pub fn apply_document(
         subscription,
         imported: imported_nodes.len(),
         removed,
+        filtered,
         note: None,
         skipped: {
             let mut skipped = report.skipped;
@@ -551,5 +581,75 @@ proxies:
 
         subscription.enabled = false;
         assert!(!subscription.is_due(now_ms() + 10.0 * 3_600_000.0));
+    }
+
+    #[test]
+    fn filtered_nodes_are_counted_apart_from_duplicates() {
+        let mut subscription = Subscription::new("机场".into(), "https://example.com/sub".into());
+        subscription.include = "甲".into();
+        let state = state_with(subscription.clone());
+
+        let outcome = apply_document(&state, &subscription.id, CLASH, None).unwrap();
+
+        assert_eq!(outcome.imported, 1);
+        assert_eq!(outcome.filtered, 1);
+        assert!(
+            outcome.skipped.is_empty(),
+            "a filtered node is not a duplicate: {:?}",
+            outcome.skipped
+        );
+        assert_eq!(state.nodes.read().len(), 1);
+        assert_eq!(state.nodes.read()[0].name, "甲");
+    }
+
+    #[test]
+    fn exclude_drops_nodes_and_the_rest_keep_their_prefix() {
+        let mut subscription = Subscription::new("机场".into(), "https://example.com/sub".into());
+        subscription.rename_prefix = "机场A · ".into();
+        subscription.exclude = "乙".into();
+        let state = state_with(subscription.clone());
+
+        let outcome = apply_document(&state, &subscription.id, CLASH, None).unwrap();
+
+        assert_eq!(outcome.imported, 1);
+        assert_eq!(outcome.filtered, 1);
+        let nodes = state.nodes.read();
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].name, "机场A · 甲");
+    }
+
+    #[test]
+    fn a_prefix_does_not_hide_a_duplicate_from_another_source() {
+        // Dedup compares endpoints, not labels, so two sources that rename the
+        // same servers differently still collapse into one entry.
+        let mut first = Subscription::new("甲机场".into(), "https://a.example.com/sub".into());
+        first.rename_prefix = "甲 · ".into();
+        let mut second = Subscription::new("乙机场".into(), "https://b.example.com/sub".into());
+        second.rename_prefix = "乙 · ".into();
+        let state = state_with(first.clone());
+        state.subscriptions.write().push(second.clone());
+
+        apply_document(&state, &first.id, CLASH, None).unwrap();
+        let outcome = apply_document(&state, &second.id, CLASH, None).unwrap();
+
+        assert_eq!(outcome.imported, 0);
+        assert_eq!(outcome.filtered, 0);
+        assert_eq!(outcome.skipped.len(), 2, "both are reported as duplicates");
+        assert_eq!(state.nodes.read().len(), 2, "the list did not double");
+        assert!(state.nodes.read().iter().all(|node| node.name.starts_with("甲 · ")));
+    }
+
+    #[test]
+    fn a_stored_pattern_that_does_not_compile_refuses_the_refresh() {
+        // `upsert_subscription` validates, so this can only come from an older
+        // or hand-edited store. Keeping every node silently would be a lie.
+        let mut subscription = Subscription::new("机场".into(), "https://example.com/sub".into());
+        subscription.include = "(香港".into();
+        let state = state_with(subscription.clone());
+
+        let error = apply_document(&state, &subscription.id, CLASH, None)
+            .expect_err("a broken filter must not be ignored");
+        assert!(matches!(error, AppError::InvalidInput(_)), "got {error:?}");
+        assert!(state.nodes.read().is_empty(), "nothing was installed");
     }
 }

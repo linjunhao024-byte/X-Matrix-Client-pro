@@ -8,11 +8,14 @@ import {
   formatClock,
   formatDay,
   formatDelay,
+  formatNextRefresh,
   formatProbe,
   formatRate,
   formatWhen,
+  nextRefreshInMs,
   probeTime,
 } from './format'
+import type { RefreshSchedule } from './format'
 
 describe('bytes', () => {
   it('treats null and undefined as zero', () => {
@@ -190,5 +193,120 @@ describe('formatBytesCompact', () => {
 
   it('treats missing values as zero bytes', () => {
     expect(formatBytesCompact(null)).toBe('0 B')
+  })
+})
+
+describe('nextRefreshInMs', () => {
+  const now = Date.UTC(2026, 10, 21, 12, 0, 0)
+  const minutesAgo = (minutes: number) => now - minutes * 60_000
+  // A source refreshed 10 minutes ago, on an hourly schedule: 50 minutes left.
+  const sub = (patch: Partial<RefreshSchedule> = {}): RefreshSchedule => ({
+    enabled: true,
+    update_interval_minutes: 60,
+    updated_at_ms: minutesAgo(10),
+    ...patch,
+  })
+
+  it('counts down from the last successful fetch', () => {
+    expect(nextRefreshInMs(sub(), now)).toBe(50 * 60_000)
+  })
+
+  it('goes negative once the interval has passed', () => {
+    // Overdue is a real state - the sweep simply has not reached it yet - so the
+    // number stays signed instead of clamping to zero.
+    expect(nextRefreshInMs(sub({ updated_at_ms: minutesAgo(90) }), now)).toBe(-30 * 60_000)
+    expect(nextRefreshInMs(sub({ updated_at_ms: minutesAgo(60) }), now)).toBe(0)
+  })
+
+  it('says nothing for a manual interval', () => {
+    // `0` is what the editor stores for "only when I ask", not "every 0 minutes".
+    expect(nextRefreshInMs(sub({ update_interval_minutes: 0 }), now)).toBeNull()
+    expect(nextRefreshInMs(sub({ update_interval_minutes: null }), now)).toBeNull()
+  })
+
+  it('says nothing for a disabled source', () => {
+    expect(
+      nextRefreshInMs(sub({ enabled: false, updated_at_ms: minutesAgo(120) }), now),
+    ).toBeNull()
+  })
+
+  it('says nothing when it was never fetched', () => {
+    // No timestamp means no countdown to count: the row's 从未 already says it.
+    expect(nextRefreshInMs(sub({ updated_at_ms: null }), now)).toBeNull()
+    expect(nextRefreshInMs({ enabled: true, update_interval_minutes: 60 }, now)).toBeNull()
+  })
+})
+
+describe('formatNextRefresh', () => {
+  const now = Date.UTC(2026, 10, 21, 12, 0, 0)
+  const minutesAgo = (minutes: number) => now - minutes * 60_000
+  const sub = (patch: Partial<RefreshSchedule> = {}): RefreshSchedule => ({
+    enabled: true,
+    update_interval_minutes: 60,
+    updated_at_ms: minutesAgo(10),
+    ...patch,
+  })
+
+  beforeEach(() => setLocale('zh'))
+
+  it('says 该刷新了 once the interval has passed', () => {
+    expect(formatNextRefresh(sub({ updated_at_ms: minutesAgo(120) }), now)).toBe('该刷新了')
+    // The boundary is due, matching the backend's `now - last >= interval`.
+    expect(formatNextRefresh(sub({ updated_at_ms: minutesAgo(60) }), now)).toBe('该刷新了')
+  })
+
+  it('counts minutes, then hours, then days', () => {
+    expect(formatNextRefresh(sub({ updated_at_ms: minutesAgo(55) }), now)).toBe('还有 5 分钟')
+    expect(formatNextRefresh(sub({ update_interval_minutes: 360, updated_at_ms: minutesAgo(60) }), now)).toBe(
+      '还有 5 小时',
+    )
+    expect(
+      formatNextRefresh(
+        sub({ update_interval_minutes: 7 * 24 * 60, updated_at_ms: minutesAgo(2 * 24 * 60) }),
+        now,
+      ),
+    ).toBe('还有 5 天')
+  })
+
+  it('keeps the number readable at the unit boundaries', () => {
+    // 59 s and 61 min read as whole minutes/hours rather than "还有 0 分钟".
+    expect(
+      formatNextRefresh(sub({ update_interval_minutes: 1, updated_at_ms: now - 59_000 }), now),
+    ).toBe('还有 1 分钟')
+    expect(
+      formatNextRefresh(sub({ update_interval_minutes: 61, updated_at_ms: minutesAgo(0) }), now),
+    ).toBe('还有 1 小时')
+    // 47 h stays in hours, 48 h becomes days.
+    expect(
+      formatNextRefresh(sub({ update_interval_minutes: 47 * 60, updated_at_ms: now }), now),
+    ).toBe('还有 47 小时')
+    expect(
+      formatNextRefresh(sub({ update_interval_minutes: 48 * 60, updated_at_ms: now }), now),
+    ).toBe('还有 2 天')
+  })
+
+  it('explains a source that will not refresh on its own', () => {
+    expect(formatNextRefresh(sub({ update_interval_minutes: 0 }), now)).toBe('只手动刷新')
+    expect(formatNextRefresh(sub({ enabled: false }), now)).toBe('只手动刷新')
+  })
+
+  it('stays quiet when there is no countdown to show', () => {
+    // Never fetched: the caller omits the line instead of inventing a schedule.
+    expect(formatNextRefresh(sub({ updated_at_ms: null }), now)).toBe('')
+  })
+
+  it('follows the current language and spells out a single unit', () => {
+    setLocale('en')
+    expect(formatNextRefresh(sub({ updated_at_ms: minutesAgo(55) }), now)).toBe('in 5 minutes')
+    expect(
+      formatNextRefresh(sub({ update_interval_minutes: 1, updated_at_ms: now - 59_000 }), now),
+    ).toBe('in 1 minute')
+    expect(formatNextRefresh(sub({ updated_at_ms: minutesAgo(120) }), now)).toBe(
+      'due for a refresh',
+    )
+    expect(formatNextRefresh(sub({ update_interval_minutes: 0 }), now)).toBe(
+      'manual refresh only',
+    )
+    setLocale('zh')
   })
 })

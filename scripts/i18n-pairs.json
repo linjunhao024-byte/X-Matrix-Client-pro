@@ -3145,6 +3145,36 @@
     "Disabled subscriptions stop updating, but their nodes stay in the list."
   ],
   [
+    "sub.editor.exclude",
+    "排除名字匹配",
+    "Drop names matching"
+  ],
+  [
+    "sub.editor.excludeHint",
+    "正则。留空表示不丢。例如「过期|剩余」会把名字里带这两个词的节点丢掉；排除优先于保留。",
+    "Regex. Empty drops nothing. `expired|remaining` removes nodes whose name contains either; this wins over the keep pattern."
+  ],
+  [
+    "sub.editor.excludePlaceholder",
+    "过期|剩余",
+    "expired|remaining"
+  ],
+  [
+    "sub.editor.include",
+    "只保留名字匹配",
+    "Keep names matching"
+  ],
+  [
+    "sub.editor.includeHint",
+    "正则。留空表示全都要。例如「香港|台湾」只留下名字里带这两个词的节点。",
+    "Regex. Empty keeps everything. `Hong Kong|Taiwan` keeps only nodes whose name contains either."
+  ],
+  [
+    "sub.editor.includePlaceholder",
+    "香港|台湾",
+    "Hong Kong|Taiwan"
+  ],
+  [
     "sub.editor.interval",
     "自动更新",
     "Auto update"
@@ -3163,6 +3193,26 @@
     "sub.editor.new",
     "新增订阅",
     "New subscription"
+  ],
+  [
+    "sub.editor.prefix",
+    "改名前缀",
+    "Rename prefix"
+  ],
+  [
+    "sub.editor.prefixHint",
+    "加在每个节点名前面，下一次刷新后生效。例如「机场A · 」会把「香港 01」变成「机场A · 香港 01」；已经带这个前缀的名字不会再加一次。",
+    "Added in front of every node name from this source, from the next refresh on. `Airport A · ` turns `Hong Kong 01` into `Airport A · Hong Kong 01`; a name that already starts with it is left alone."
+  ],
+  [
+    "sub.editor.prefixPlaceholder",
+    "机场A · ",
+    "Airport A · "
+  ],
+  [
+    "sub.editor.tuningHint",
+    "下面三条只影响这条订阅带进来的节点，刷新时生效。",
+    "The three fields below apply only to the nodes this source brings in, and take effect on the next refresh."
   ],
   [
     "sub.editor.url",
@@ -3235,6 +3285,51 @@
     "New subscription"
   ],
   [
+    "sub.next.day",
+    "1 天",
+    "1 day"
+  ],
+  [
+    "sub.next.days",
+    "{count} 天",
+    "{count} days"
+  ],
+  [
+    "sub.next.due",
+    "该刷新了",
+    "due for a refresh"
+  ],
+  [
+    "sub.next.hour",
+    "1 小时",
+    "1 hour"
+  ],
+  [
+    "sub.next.hours",
+    "{count} 小时",
+    "{count} hours"
+  ],
+  [
+    "sub.next.in",
+    "还有 {when}",
+    "in {when}"
+  ],
+  [
+    "sub.next.manual",
+    "只手动刷新",
+    "manual refresh only"
+  ],
+  [
+    "sub.next.minute",
+    "1 分钟",
+    "1 minute"
+  ],
+  [
+    "sub.next.minutes",
+    "{count} 分钟",
+    "{count} minutes"
+  ],
+  [
     "sub.note.deleted",
     "已删除「{name}」及其节点",
     "Deleted \"{name}\" and its nodes"
@@ -3243,6 +3338,11 @@
     "sub.note.due",
     "已更新到期的订阅，共 {count} 个节点",
     "Updated the due subscriptions, {count} nodes in total"
+  ],
+  [
+    "sub.note.filtered",
+    "，按过滤规则丢掉 {count} 个",
+    ", {count} dropped by your filter"
   ],
   [
     "sub.note.noneDue",
@@ -3283,6 +3383,21 @@
     "sub.status.ok",
     "正常",
     "OK"
+  ],
+  [
+    "sub.tuning.exclude",
+    "排除 {pattern}",
+    "drop {pattern}"
+  ],
+  [
+    "sub.tuning.include",
+    "保留 {pattern}",
+    "keep {pattern}"
+  ],
+  [
+    "sub.tuning.prefix",
+    "前缀 {prefix}",
+    "prefix {prefix}"
   ],
   [
     "time.days",

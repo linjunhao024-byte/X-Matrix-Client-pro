@@ -724,14 +724,35 @@ export type ProxyGroup_Serialize = {
 
 export type ProxyMode = "rule" | "global" | "direct";
 
-/**  What one refresh did, so the UI can say something specific. */
+/**
+ *  What one refresh did, so the UI can say something specific.
+ * 
+ *  `imported`, `removed`, `filtered` and `skipped` are four different
+ *  stories: nodes that made it in, nodes the previous batch lost, nodes this
+ *  source's own rename/filter policy asked us to drop, and lines the provider
+ *  sent that could not be used (unreadable, or a duplicate of another source).
+ */
 export type RefreshOutcome = RefreshOutcome_Serialize | RefreshOutcome_Deserialize;
 
-/**  What one refresh did, so the UI can say something specific. */
+/**
+ *  What one refresh did, so the UI can say something specific.
+ * 
+ *  `imported`, `removed`, `filtered` and `skipped` are four different
+ *  stories: nodes that made it in, nodes the previous batch lost, nodes this
+ *  source's own rename/filter policy asked us to drop, and lines the provider
+ *  sent that could not be used (unreadable, or a duplicate of another source).
+ */
 export type RefreshOutcome_Deserialize = {
 	subscription: Subscription_Deserialize,
 	imported: number | null,
 	removed: number | null,
+	/**
+	 *  Nodes the subscription's `include`/`exclude` patterns kept out of the
+	 *  table. Kept apart from duplicates on purpose: "the provider sent 300,
+	 *  200 matched your filter" is not the same complaint as "100 were already
+	 *  here", and the UI says which one happened.
+	 */
+	filtered: number | null,
 	skipped: string[],
 	/**
 	 *  Something true about this refresh that is not about the body: which
@@ -741,11 +762,25 @@ export type RefreshOutcome_Deserialize = {
 	note?: string | null,
 };
 
-/**  What one refresh did, so the UI can say something specific. */
+/**
+ *  What one refresh did, so the UI can say something specific.
+ * 
+ *  `imported`, `removed`, `filtered` and `skipped` are four different
+ *  stories: nodes that made it in, nodes the previous batch lost, nodes this
+ *  source's own rename/filter policy asked us to drop, and lines the provider
+ *  sent that could not be used (unreadable, or a duplicate of another source).
+ */
 export type RefreshOutcome_Serialize = {
 	subscription: Subscription_Serialize,
 	imported: number | null,
 	removed: number | null,
+	/**
+	 *  Nodes the subscription's `include`/`exclude` patterns kept out of the
+	 *  table. Kept apart from duplicates on purpose: "the provider sent 300,
+	 *  200 matched your filter" is not the same complaint as "100 were already
+	 *  here", and the UI says which one happened.
+	 */
+	filtered: number | null,
 	skipped: string[],
 	/**
 	 *  Something true about this refresh that is not about the body: which
@@ -1171,6 +1206,23 @@ export type Subscription_Deserialize = {
 	id: string,
 	name: string,
 	url: string,
+	/**
+	 *  Added in front of every node name this source brings in. Empty (or
+	 *  whitespace-only) means "leave the names alone". Applied once: a name
+	 *  that already starts with the prefix is not prefixed again, so a refresh
+	 *  never stacks `机场A · 机场A · 香港 01`.
+	 */
+	rename_prefix?: string,
+	/**
+	 *  Regex over the node name as the provider wrote it; when non-empty only
+	 *  matching nodes are kept. Empty keeps everything.
+	 */
+	include?: string,
+	/**
+	 *  Regex over the same name; when non-empty matching nodes are dropped.
+	 *  Runs after `include`, so it wins when both match.
+	 */
+	exclude?: string,
 	enabled: boolean,
 	/**  Minutes between automatic refreshes. `0` means "only when I ask". */
 	update_interval_minutes: number | null,
@@ -1194,6 +1246,23 @@ export type Subscription_Serialize = {
 	id: string,
 	name: string,
 	url: string,
+	/**
+	 *  Added in front of every node name this source brings in. Empty (or
+	 *  whitespace-only) means "leave the names alone". Applied once: a name
+	 *  that already starts with the prefix is not prefixed again, so a refresh
+	 *  never stacks `机场A · 机场A · 香港 01`.
+	 */
+	rename_prefix: string,
+	/**
+	 *  Regex over the node name as the provider wrote it; when non-empty only
+	 *  matching nodes are kept. Empty keeps everything.
+	 */
+	include: string,
+	/**
+	 *  Regex over the same name; when non-empty matching nodes are dropped.
+	 *  Runs after `include`, so it wins when both match.
+	 */
+	exclude: string,
 	enabled: boolean,
 	/**  Minutes between automatic refreshes. `0` means "only when I ask". */
 	update_interval_minutes: number | null,
