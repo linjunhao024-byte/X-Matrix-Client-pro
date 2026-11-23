@@ -78,7 +78,7 @@ src-tauri/src/
   engine/                引擎抽象 + 双内核渲染 + 进程运行时 + 统计
   net/                   最小 HTTP 客户端 + TCP 测速（唯一离开 loopback 的地方）
   sysproxy/              系统代理接管与还原（快照、Drop 兜底）
-  commands/              命令层（IPC 边界，71 个命令）
+  commands/              命令层（IPC 边界，73 个命令）
   store.rs               单文件 JSON 原子替换持久化
   autostart.rs           开机自启
 docs/ENGINE-SPEC.md      两个内核的行为规格（每条结论都带上游源码行号）

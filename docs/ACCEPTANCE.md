@@ -434,3 +434,32 @@
 2. **读远端配置截片段要夹长度。** `$t.Substring($i, 900)` 在文件短于 900 字节时会抛 `ArgumentOutOfRangeException: length`；写 `[Math]::Min(760, $t.Length - $s)`。另外 `IndexOf('routing')` 只对 Xray 有效，sing-box 那边键叫 `route`。
 
 **旁证：规则表非空时整批跳过。** 第一次导入时远端 `rules` 已有 4 条旧规则，结果 `nodes` 与 `groups` 都进了，`rules` 一条没动——这是 H7 定下的"不覆盖用户已排好的顺序"，本轮验收时为了看到新规则，先把 `store.json` 的顶层 `rules` 清成 `[]` 再重启导入。
+
+## 21. 正常退出：`--quit` 与托盘图标真的被删除（2026-11-23，云电脑 cloudpc-test）
+
+起因是开发机的任务栏里积了 30 个 X-Matrix 图标。查下来单例锁没坏（`tauri-plugin-single-instance` 用命名互斥体 + `WM_COPYDATA` 转发，一次干净竞速 6 个进程只活下来 1 个），积的是**被 `taskkill /F` 强杀的进程留下的死图标**：进程被强杀时来不及调 `Shell_NotifyIcon(NIM_DELETE)`，Windows 就把按钮留在通知区，直到鼠标扫过才消失。所以真正要补的是**一个能正常退出的入口**，再让开发脚本不再强杀。
+
+改法（`src-tauri/src/lib.rs`）：单实例回调先看参数，带 `--quit` 就调 `quit_cleanly` 而不是唤醒窗口；`setup` 里也处理「本来就没实例、启动参数就是 `--quit`」——这种启动不能留下窗口或图标，隐藏窗口后走同一条退出路径；`quit_cleanly` 用 `AtomicBool` 保证只做一次，先还原系统代理、停内核，再**删除**托盘图标，停 150 ms 让 shell 处理 `NIM_DELETE`，最后 `app.exit(0)`；`RunEvent::ExitRequested|Exit` 再兜一次删除（注销、关窗这类不经过 `quit_cleanly` 的路径）。`build_tray` 每次构建打一行 `创建托盘图标 pid=… 第 N 次`，一个进程生命周期里出现两行就说明有东西建了第二个图标。
+
+验法：`bash /d/tmp/shots/run-quit-accept.sh`（scp 新 exe + `quit-accept.ps1`，用 `schtasks /it` 在**会话 1** 里跑，先 `--quit` 停旧实例、重启 explorer 清掉历史死图标，再跑 `C:\Users\Administrator\quit-accept.ps1`）。脚本跨进程读通知区工具条按钮（`TB_BUTTONCOUNT`/`TB_GETBUTTON`/`TB_GETBUTTEXTW`），统计文本含 `X-Matrix` 的按钮数。
+
+| 项 | 判据 | 结果 |
+| --- | --- | --- |
+| 连续启动 30 次 | 进程数始终 1、X-Matrix 图标数始终 1、只有一个 `Tauri Window` | **通过**。`P0 process=0 icons=0 windows=0` → `A1 process=1 icons=1 windows=1` → `A5/A10/A20/A30` 全是 `1/1/1`，`A-OK 1 process 1 icon` |
+| 30 次「启动 → `--quit`」 | 每轮结束进程 0，且图标数不比该轮开始时多 | **通过**。`B-END process=0 icons=0 maxIcons=0 leaks=0 quitFail=0`、`B-OK 30 clean cycles, no icon left`（第一轮 `base=1`，退出后归 0） |
+| 没有实例时 `--quit` | 不留进程、不留图标、不留窗口 | **通过**。`C process=0 icons=0 windows=0 before=0`、`C-OK nothing left behind` |
+| 参数只认整词 | `--quitter`、路径里含 `--quit` 都不触发退出 | **通过**。3 条单测（`wants_quit` 整词匹配），`cargo test --lib` 共 **270 passed** |
+| 单例语义没被改坏 | 第二个实例退出，第一个实例仍在 | **通过**。A 阶段 30 次启动后仍只有 1 个进程，且窗口被唤醒（`windows=1`） |
+
+**三个刻意的设计**：
+- **退出走 `--quit`，不走 `taskkill`。** Windows 上没有「礼貌地关掉窗口」这条路：点 X 只是隐藏到托盘，`taskkill` 不带 `/F` 也走不到 `quit_cleanly`。`--quit` 复用已经在跑的实例做退出，是唯一能保证「还原代理 → 停内核 → 删图标 → 退出」顺序的入口，开发脚本从此用它当常规停止手段。
+- **删除图标靠 `Drop`，不靠 `set_visible(false)`。** `tray-icon 0.25.1` 的 `set_visible(false)` 只是 `Shell_NotifyIcon(NIM_MODIFY)` + `NIS_HIDDEN`——图标在 shell 里仍然存在，只是不画；真正 `NIM_DELETE` 只在最后一个 `TrayIcon` 句柄被 drop 时发生。而 `TrayIcon` 是引用计数的，所以托盘的托管状态必须放成 `Mutex<Option<TrayIcon>>`，退出时 `take()` 出来丢掉，再 `remove_tray_by_id` 丢掉资源表那一份，两个句柄都放掉才轮得到删除。
+- **`--quit` 的整词匹配。** 用 `== "--quit"` 而不是 `contains`：节点名、路径、`--quit-later` 都不该让一个正常启动的进程退出。
+
+**四个坑**：
+1. **从 SSH（会话 0）直接跑 `X-Matrix.exe --quit` 会变成一个新的主实例。** 命名互斥体是按会话隔离的，会话 0 看不到会话 1 的互斥体，于是它自己建窗口、抢 WebView2 用户目录，报 `WebView2 error: WindowsError(0x800700AA)`「请求的资源在用中」然后 panic。单例相关的任何验证都必须在会话 1 里做（`schtasks /create … /it`），否则结论是假的。
+2. **「图标数没变」不等于「图标删掉了」。** 被测脚本最初把 `NIS_HIDDEN` 的按钮也算进图标数，第一次跑出来 `A1 icons=2`、`B20 icons=21`，看着像泄漏 30 个；实际上是隐藏态按钮还在工具条里。判据要写成「删除后计数归零」而不是「计数不增长」，否则修好之后仍然测不出来。
+3. **`COPYDATASTRUCT` 在 x64 上是 24 字节**（`IntPtr dwData; int cbData; IntPtr lpData`）。手搓消息验证转发时把 `dwData` 写成 `int`，结构体布局错位，处理函数当成未知数据直接丢弃、返回 1，看上去像「转发坏了」，其实消息格式就是错的。
+4. **验收脚本自己的 P/Invoke 也会错。** `OpenProcess`/`CloseHandle` 在 `kernel32`，写成 `user32` 时脚本一进 `Count-XmIcon` 就抛「无法在 DLL user32.dll 中找到入口点」，而 `trap` 之前没写，日志只有两行就断在半路——现在脚本把所有异常写进 `FATAL`/`STACK` 行并补一个 `DONE`，跑挂了也看得见。
+
+**为什么先修这条**：它挡着后面所有真机验收。每轮开发验收都要重启程序几十次，强杀一次多一个死图标，用户看到的就是「你们的程序开了好多份」，而实际上单例锁一直是好的——这种「看起来像崩溃」的假象比真崩溃更费时间。
