@@ -20,7 +20,8 @@ use crate::error::{AppError, AppResult};
 /// question we are asking, and it keeps the response small. A private or
 /// self-hosted feed can be swapped in later through settings; until then a
 /// constant keeps the surface honest.
-pub const FEED_URL: &str = "https://api.github.com/repos/x-matrix-client/x-matrix/releases/latest";
+pub const FEED_URL: &str =
+    "https://api.github.com/repos/linjunhao024-byte/X-Matrix-Client-pro/releases/latest";
 
 /// Same budget as a subscription fetch: this is a favour, not a page load.
 pub const FEED_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
