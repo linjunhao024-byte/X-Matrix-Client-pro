@@ -98,10 +98,26 @@ pub fn parse_release(json: &str, current: &str) -> AppResult<UpdateStatus> {
     })
 }
 
+/// What a non-2xx answer means when the question was a release feed.
+///
+/// 404 is the ordinary state of a project that has not published anything yet,
+/// and it is not an error worth alarming anyone about — it just needs a
+/// sentence that says so instead of a status code borrowed from the
+/// subscription screen.
+fn explain_status(status: u16) -> AppError {
+    match status {
+        404 => AppError::Engine("发布页还没有发布记录（HTTP 404）".into()),
+        other => AppError::Engine(format!("发布页返回 HTTP {other}")),
+    }
+}
+
 /// Ask the feed. Separate from `parse_release` so tests never open a socket.
 pub fn check(current: &str) -> AppResult<UpdateStatus> {
-    let body = crate::net::remote::fetch_text_with_timeout(FEED_URL, FEED_TIMEOUT)?;
-    parse_release(&body, current)
+    let answer = crate::net::remote::fetch_answer(FEED_URL, FEED_TIMEOUT, None, None, "发布页")?;
+    if !(200..300).contains(&answer.status) {
+        return Err(explain_status(answer.status));
+    }
+    parse_release(&answer.body, current)
 }
 
 #[cfg(test)]
@@ -165,5 +181,22 @@ mod tests {
             error.to_string().contains("JSON"),
             "the message should say what went wrong: {error}"
         );
+    }
+
+    #[test]
+    fn an_unpublished_repository_says_so_instead_of_quoting_a_status_code() {
+        // GitHub answers 404 for /releases/latest until the first release
+        // exists. "订阅返回 HTTP 404" was what the About page used to show,
+        // because the fetch helper only knew how to talk about subscriptions.
+        let message = explain_status(404).to_string();
+        assert!(message.contains("还没有发布记录"), "got {message}");
+        assert!(!message.contains("订阅"), "got {message}");
+    }
+
+    #[test]
+    fn other_statuses_still_name_the_feed_and_the_code() {
+        let message = explain_status(500).to_string();
+        assert!(message.contains("发布页"), "got {message}");
+        assert!(message.contains("500"), "got {message}");
     }
 }

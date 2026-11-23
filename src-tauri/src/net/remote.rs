@@ -58,8 +58,42 @@ pub fn fetch_through(
     user_agent: Option<&str>,
     proxy: Option<u16>,
 ) -> AppResult<Fetched> {
+    let answer = fetch_answer(url, timeout, user_agent, proxy, "订阅")?;
+    if !(200..300).contains(&answer.status) {
+        return Err(AppError::Engine(format!("订阅返回 HTTP {}", answer.status)));
+    }
+    Ok(Fetched {
+        body: answer.body,
+        subscription_userinfo: answer.subscription_userinfo,
+    })
+}
+
+/// A response whose status the caller words itself.
+///
+/// The release feed answers 404 until the project has published something, and
+/// "订阅返回 HTTP 404" is the wrong sentence on a screen that is not about
+/// subscriptions. Everything before the status — validation, client, request —
+/// stays shared with `fetch_through`, so one place still knows how to reach a
+/// remote host.
+pub struct Answer {
+    pub status: u16,
+    pub body: String,
+    pub subscription_userinfo: Option<String>,
+}
+
+/// `noun` names the thing being fetched in every failure this can produce
+/// ("订阅", "发布页"), so a caller never has to rewrite our error text.
+pub fn fetch_answer(
+    url: &str,
+    timeout: Duration,
+    user_agent: Option<&str>,
+    proxy: Option<u16>,
+    noun: &str,
+) -> AppResult<Answer> {
     if !(url.starts_with("http://") || url.starts_with("https://")) {
-        return Err(AppError::InvalidInput(format!("订阅地址必须是 http(s)：{url}")));
+        return Err(AppError::InvalidInput(format!(
+            "{noun}地址必须是 http(s)：{url}"
+        )));
     }
     let agent = match user_agent.map(str::trim) {
         Some(custom) if !custom.is_empty() => custom,
@@ -82,12 +116,9 @@ pub fn fetch_through(
     let response = client
         .get(url)
         .send()
-        .map_err(|error| AppError::Engine(format!("拉取订阅失败：{error}")))?;
+        .map_err(|error| AppError::Engine(format!("拉取{noun}失败：{error}")))?;
 
-    let status = response.status();
-    if !status.is_success() {
-        return Err(AppError::Engine(format!("订阅返回 HTTP {}", status.as_u16())));
-    }
+    let status = response.status().as_u16();
 
     // Read the header before consuming the body: `text()` takes the response.
     let subscription_userinfo = response
@@ -98,9 +129,10 @@ pub fn fetch_through(
 
     let body = response
         .text()
-        .map_err(|error| AppError::Engine(format!("订阅内容读取失败：{error}")))?;
+        .map_err(|error| AppError::Engine(format!("{noun}内容读取失败：{error}")))?;
 
-    Ok(Fetched {
+    Ok(Answer {
+        status,
         body,
         subscription_userinfo,
     })
