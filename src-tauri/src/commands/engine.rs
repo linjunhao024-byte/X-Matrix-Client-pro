@@ -10,7 +10,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
 
-use crate::domain::Node;
+use crate::domain::{Node, ProbeKind};
 use crate::engine::stats::{self, TrafficSample};
 use crate::engine::{TrafficLog, TrafficPoint};
 use crate::net::latency;
@@ -508,25 +508,49 @@ pub fn close_connections(runtime: Runtime<'_>, ids: Vec<String>) -> AppResult<()
     stats::close_connections(status.api_port, &ids)
 }
 
+/// What came back from one real-delay attempt, with the distinction that
+/// matters once results are remembered.
+///
+/// A refusal (no kernel running, or a kernel without a Clash API) says nothing
+/// about the node's latency — writing it down as "测不到" would replace a real
+/// measurement with a fact about the app's own state. A failure does say the
+/// node answered nothing, so it belongs in the record.
+enum DelayAttempt {
+    Measured(u32),
+    Failed(AppError),
+    Refused(AppError),
+}
+
 /// How long the kernel takes to reach the probe through one outbound.
 ///
 /// This goes through the Clash API instead of the mixed port, which is what
 /// makes a *group* measurable: the kernel dials through the group's own tag,
 /// so the number describes the path that group would take, not the path the
 /// running config happens to use. Only sing-box exposes the endpoint.
-fn delay_of(runtime: &EngineRuntime, tag: &str, url: &str) -> AppResult<u32> {
+fn probe_delay(runtime: &EngineRuntime, tag: &str, url: &str) -> DelayAttempt {
     let status = runtime.status();
     if !status.running {
-        return Err(AppError::Engine(
+        return DelayAttempt::Refused(AppError::Engine(
             "内核没在运行，测不到真实延迟；先启动内核".to_string(),
         ));
     }
     if status.kind != Some(EngineKind::SingBox) {
-        return Err(AppError::Engine(
+        return DelayAttempt::Refused(AppError::Engine(
             "Xray 没有 Clash API，分组延迟只能在 sing-box 内核下测".to_string(),
         ));
     }
-    stats::clash_delay(status.api_port, tag, url, DELAY_BUDGET_MS)
+    match stats::clash_delay(status.api_port, tag, url, DELAY_BUDGET_MS) {
+        Ok(ms) => DelayAttempt::Measured(ms),
+        Err(error) => DelayAttempt::Failed(error),
+    }
+}
+
+/// The same attempt, for callers that only care whether it worked.
+fn delay_of(runtime: &EngineRuntime, tag: &str, url: &str) -> AppResult<u32> {
+    match probe_delay(runtime, tag, url) {
+        DelayAttempt::Measured(ms) => Ok(ms),
+        DelayAttempt::Failed(error) | DelayAttempt::Refused(error) => Err(error),
+    }
 }
 
 /// The probe URL, or the built-in one when the setting is blank.
@@ -601,5 +625,28 @@ pub async fn node_delay(
     };
     let url = probe_url(&state);
     let runtime = Arc::clone(runtime.inner());
-    run_blocking(move || delay_of(&runtime, &tag, &url)).await
+    let node_id = node.id.clone();
+    let outcome = run_blocking(move || Ok(probe_delay(&runtime, &tag, &url))).await?;
+
+    let delay_ms = match outcome {
+        DelayAttempt::Measured(ms) => Some(ms),
+        // The attempt happened and produced nothing: that is exactly the
+        // "测不到" state, worth keeping until the next attempt replaces it.
+        DelayAttempt::Failed(error) => {
+            remember_real(&state, &node_id, None);
+            return Err(error);
+        }
+        // Not a measurement at all, so the stored number stays as it was.
+        DelayAttempt::Refused(error) => return Err(error),
+    };
+    remember_real(&state, &node_id, delay_ms);
+    Ok(delay_ms.unwrap_or_default())
+}
+
+/// Store a real-delay result without letting a disk problem hide the number the
+/// measurement already produced.
+fn remember_real(state: &AppState, id: &str, delay_ms: Option<u32>) {
+    if let Err(error) = state.record_probe(&id.to_string(), delay_ms, ProbeKind::Real) {
+        eprintln!("记不住真实延迟：{error}");
+    }
 }

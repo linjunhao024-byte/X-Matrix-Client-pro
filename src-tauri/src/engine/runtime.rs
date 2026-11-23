@@ -85,6 +85,15 @@ impl Spawner for SystemSpawner {
             .stdout(Stdio::from(log))
             .stderr(Stdio::from(log_err));
 
+        // Xray looks for geoip.dat / geosite.dat next to itself only when it is
+        // told to; without this it searches the directory the GUI happened to
+        // be started from, which is not a place a user can reason about. The
+        // engines directory is where the binaries live, so point it there and
+        // the status page describes the same files the kernel will load.
+        if let Some(dir) = exe.parent() {
+            command.env("XRAY_LOCATION_ASSET", dir);
+        }
+
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;

@@ -11,6 +11,7 @@
 //! Process lifecycle, readiness probing and the system proxy live in later
 //! milestones and are layered on top of this module, not inside it.
 
+pub mod geo;
 mod job;
 mod render;
 mod runtime;

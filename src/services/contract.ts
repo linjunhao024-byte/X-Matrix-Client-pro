@@ -23,9 +23,12 @@ import type {
   ImportPreview_Serialize,
   Language,
   LatencyProbe_Serialize,
+  GeoAssetStatus_Serialize,
   LogDelta,
   Node_Deserialize,
   Node_Serialize,
+  NodeProbe_Serialize,
+  ProbeKind,
   ProxyGroup_Deserialize,
   ProxyGroup_Serialize,
   ProxyMode,
@@ -111,6 +114,21 @@ export const api = {
   /** An empty list means every node: the backend reads its own list then. */
   testNodesLatency: (ids: string[]): Promise<LatencyProbe_Serialize[]> =>
     unwrap(commands.testNodesLatency(ids)),
+  /**
+   * The geo data files a `geoip:`/`geosite:` rule needs, and whether they are
+   * on disk. A missing file is reported, not thrown.
+   */
+  geoAssets: (): Promise<GeoAssetStatus_Serialize[]> => commands.geoAssets(),
+  /** Download both files; one line per file, failures included. */
+  updateGeoAssets: (): Promise<string[]> => unwrap(commands.updateGeoAssets()),
+
+  /** Every remembered latency result, keyed by node id; survives a restart.
+   *  A read that cannot fail: the backend hands back its own map, so this is
+   *  the one probe call that is not wrapped in `Result`. */
+  nodeProbes: (): Promise<Record<string, NodeProbe_Serialize>> => commands.nodeProbes(),
+  /** Forget remembered results for these ids; an empty list clears them all. */
+  clearNodeProbes: (ids: string[]): Promise<Record<string, NodeProbe_Serialize>> =>
+    unwrap(commands.clearNodeProbes(ids)),
 
   // The backend always answers with the full struct; the generated union only
   // exists because specta models both directions, so narrow it here.
@@ -247,9 +265,12 @@ export type {
   ImportOutcome_Serialize,
   ImportPreview_Serialize,
   Language,
+  GeoAssetStatus_Serialize,
   LatencyProbe_Serialize,
   Node_Deserialize,
   Node_Serialize,
+  NodeProbe_Serialize,
+  ProbeKind,
   ProxyGroup_Deserialize,
   ProxyGroup_Serialize,
   ProxyMode,

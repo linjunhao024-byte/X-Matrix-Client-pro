@@ -53,6 +53,48 @@ export function formatWhen(at: number | null | undefined, now = Date.now()): str
 }
 
 /**
+ * A remembered latency record, structurally.
+ *
+ * Declared here instead of imported from the contract so this module stays
+ * free of the IPC layer (`format.test.ts` runs without the Tauri bridge).
+ */
+export interface ProbeRecord {
+  delay_ms?: number | null
+  at?: number | null
+}
+
+/**
+ * Unix seconds to unix milliseconds.
+ *
+ * Probe records keep seconds — the number is one line of JSON and sub-second
+ * precision would be noise — while the rest of the UI counts milliseconds,
+ * so this is the one place the two units meet.
+ */
+export function probeTime(at: number | null | undefined): number | null {
+  if (typeof at !== 'number' || !Number.isFinite(at) || at <= 0) return null
+  return at * 1000
+}
+
+/** `120 ms`, or `测不到` when the probe ran and produced no number. */
+export function formatDelay(delayMs: number | null | undefined): string {
+  if (typeof delayMs !== 'number' || !Number.isFinite(delayMs) || delayMs <= 0) {
+    return t('nodes.probe.miss')
+  }
+  return t('nodes.latency.ms', { value: Math.round(delayMs) })
+}
+
+/**
+ * One remembered probe as the table shows it: `120 ms · 3 分钟前`, `测不到 · 昨天`.
+ *
+ * Returns an empty string when there is no record at all, so a caller can tell
+ * "never measured" (nothing to show) from "measured, no answer" (`测不到`).
+ */
+export function formatProbe(probe: ProbeRecord | null | undefined, now = Date.now()): string {
+  if (!probe) return ''
+  return `${formatDelay(probe.delay_ms)} · ${formatWhen(probeTime(probe.at), now)}`
+}
+
+/**
  * Clock time for a timestamp the kernel handed us as text.
  *
  * sing-box reports `2026-11-22T03:55:30.4070053+08:00`; printing that raw in a

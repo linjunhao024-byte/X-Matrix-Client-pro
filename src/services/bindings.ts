@@ -53,6 +53,15 @@ export const commands = {
 	 *  chance for the two lists to disagree.
 	 */
 	testNodesLatency: (ids: string[]) => typedError<LatencyProbe_Serialize[], AppError>(__TAURI_INVOKE("test_nodes_latency", { ids })),
+	/**  Every remembered latency result, keyed by node id. */
+	nodeProbes: () => __TAURI_INVOKE<{ [key in string]: NodeProbe_Serialize }>("node_probes"),
+	/**
+	 *  Forget remembered results for the given ids; an empty list clears them all.
+	 * 
+	 *  Clearing is cheap and honest: the next sweep fills the map again, and a user
+	 *  who moved to a different network does not want yesterday's numbers.
+	 */
+	clearNodeProbes: (ids: string[]) => typedError<{ [key in string]: NodeProbe_Serialize }, AppError>(__TAURI_INVOKE("clear_node_probes", { ids })),
 	/**
 	 *  Whether the launch-at-login entry is currently registered.
 	 * 
@@ -256,6 +265,21 @@ export const commands = {
 	setRuleSetText: (id: string, text: string) => typedError<RuleSet_Serialize, AppError>(__TAURI_INVOKE("set_rule_set_text", { id, text })),
 	/**  Fetch a remote set (or re-parse a local one) and store the result. */
 	refreshRuleSet: (id: string) => typedError<RuleSet_Serialize, AppError>(__TAURI_INVOKE("refresh_rule_set", { id })),
+	/**
+	 *  The two geo files a `geoip:`/`geosite:` rule depends on.
+	 * 
+	 *  Reported even when they are absent: a missing data file is the usual reason
+	 *  a geo rule looks broken, and the page has to be able to say so.
+	 */
+	geoAssets: () => __TAURI_INVOKE<GeoAssetStatus_Serialize[]>("geo_assets"),
+	/**
+	 *  Download both `geoip.dat` and `geosite.dat`, one line per file.
+	 * 
+	 *  A kernel without these files still starts, so nothing else in the app would
+	 *  notice: the rules just stop matching. Downloads go to a temp file and are
+	 *  renamed into place, so an interrupted update leaves the old data usable.
+	 */
+	updateGeoAssets: () => typedError<string[], AppError>(__TAURI_INVOKE("update_geo_assets")),
 	/**  What the system proxy looks like right now, and whether we are holding it. */
 	systemProxyStatus: () => typedError<SystemProxyStatus, AppError>(__TAURI_INVOKE("system_proxy_status")),
 	/**
@@ -386,6 +410,34 @@ export type EngineStatus_Serialize = {
 	 *  instead of silently flipping to "not running".
 	 */
 	last_exit_code: number | null,
+};
+
+export type GeoAssetStatus = GeoAssetStatus_Serialize | GeoAssetStatus_Deserialize;
+
+export type GeoAssetStatus_Deserialize = {
+	name: string,
+	path: string,
+	exists: boolean,
+	/**
+	 *  Numbers the UI reads are f64 in JavaScript; specta refuses to export
+	 *  u64/i64 because JSON cannot carry them without losing precision.
+	 */
+	bytes: number | null,
+	/**  Seconds since the epoch, or `None` when the file is missing. */
+	modified?: number | null,
+};
+
+export type GeoAssetStatus_Serialize = {
+	name: string,
+	path: string,
+	exists: boolean,
+	/**
+	 *  Numbers the UI reads are f64 in JavaScript; specta refuses to export
+	 *  u64/i64 because JSON cannot carry them without losing precision.
+	 */
+	bytes: number | null,
+	/**  Seconds since the epoch, or `None` when the file is missing. */
+	modified: number | null,
 };
 
 export type GroupKind = 
@@ -538,6 +590,41 @@ export type LogLevel = "warn" | "info" | "debug";
  */
 export type Node = Node_Serialize | Node_Deserialize;
 
+/**  The last latency measurement of one node, keyed by node id in the document. */
+export type NodeProbe = NodeProbe_Serialize | NodeProbe_Deserialize;
+
+/**  The last latency measurement of one node, keyed by node id in the document. */
+export type NodeProbe_Deserialize = {
+	/**  `None` means the probe ran and produced no number. */
+	delay_ms?: number | null,
+	/**
+	 *  Unix seconds, not milliseconds: the whole record is one line of JSON and
+	 *  sub-second precision would only be noise.
+	 * 
+	 *  Stored as `i64` because that is what a timestamp is; handed to the
+	 *  frontend as `f64` because a second count is exact in a double and the
+	 *  contract cannot carry 64-bit integers.
+	 */
+	at?: number | null,
+	kind?: ProbeKind,
+};
+
+/**  The last latency measurement of one node, keyed by node id in the document. */
+export type NodeProbe_Serialize = {
+	/**  `None` means the probe ran and produced no number. */
+	delay_ms: number | null,
+	/**
+	 *  Unix seconds, not milliseconds: the whole record is one line of JSON and
+	 *  sub-second precision would only be noise.
+	 * 
+	 *  Stored as `i64` because that is what a timestamp is; handed to the
+	 *  frontend as `f64` because a second count is exact in a double and the
+	 *  contract cannot carry 64-bit integers.
+	 */
+	at: number | null,
+	kind: ProbeKind,
+};
+
 /**
  *  A single proxy node. Tagged enums carry the per-protocol requirements,
  *  so a `Protocol::Trojan` can never be missing its password.
@@ -569,6 +656,16 @@ export type Node_Serialize = {
 	/**  Free-form grouping: subscription name, manual tag, etc. */
 	tags: string[],
 };
+
+/**
+ *  How a delay was measured. The number means different things, so the record
+ *  keeps the distinction even though the list prints only one figure.
+ */
+export type ProbeKind = 
+/**  TCP handshake straight to the node's own port: no kernel involved. */
+"tcp" | 
+/**  One request through the running kernel's Clash API for that outbound. */
+"real";
 
 export type Protocol = Protocol_Serialize | Protocol_Deserialize;
 

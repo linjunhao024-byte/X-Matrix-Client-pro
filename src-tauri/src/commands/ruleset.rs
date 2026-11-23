@@ -5,7 +5,12 @@
 //! a provider updates. Deleting a set must therefore not silently delete the
 //! rules that used it — they are disabled instead, and the UI says why.
 
+use std::sync::Arc;
+use std::time::Duration;
 use tauri::State;
+
+use crate::engine::geo;
+use crate::EngineRuntime;
 
 use crate::domain::ruleset::{parse_entries, RuleSet, RuleSetSource};
 use crate::domain::routing::RuleMatcher;
@@ -31,6 +36,86 @@ pub fn loaded_sets(state: &AppState) -> Vec<LoadedRuleSet> {
             LoadedRuleSet { set, entries }
         })
         .collect()
+}
+
+/// The two geo files a `geoip:`/`geosite:` rule depends on.
+///
+/// Reported even when they are absent: a missing data file is the usual reason
+/// a geo rule looks broken, and the page has to be able to say so.
+#[tauri::command]
+#[specta::specta]
+pub fn geo_assets(runtime: State<'_, Arc<EngineRuntime>>) -> Vec<geo::GeoAssetStatus> {
+    geo::status(&geo::asset_dir(runtime.engines_dir()))
+}
+
+/// Download both `geoip.dat` and `geosite.dat`, one line per file.
+///
+/// A kernel without these files still starts, so nothing else in the app would
+/// notice: the rules just stop matching. Downloads go to a temp file and are
+/// renamed into place, so an interrupted update leaves the old data usable.
+// Each asset has several interchangeable sources (`geo::candidates`): GitHub
+// itself is unreachable from some networks that still reach its mirrors, so a
+// failed attempt moves on to the next address instead of ending the update.
+// Only when every source failed does the line become a failure, and it names
+// each attempt's reason in address order so the UI can show something a user
+// can act on. (Kept as a plain comment: specta copies `///` text into the
+// generated IPC bindings, and changing a sentence there is not this task's.)
+#[tauri::command]
+#[specta::specta]
+pub fn update_geo_assets(runtime: State<'_, Arc<EngineRuntime>>) -> AppResult<Vec<String>> {
+    // Geo data is a few megabytes; the ordinary 10 s fetch timeout would cut
+    // off a slow but healthy link.
+    const GEO_TIMEOUT: Duration = Duration::from_secs(180);
+    let dir = geo::asset_dir(runtime.engines_dir());
+    let mut lines = Vec::with_capacity(geo::ASSET_NAMES.len());
+    let mut failures = Vec::new();
+
+    for name in geo::ASSET_NAMES {
+        let mut attempts = Vec::new();
+        let mut installed = false;
+
+        for url in geo::candidates(name) {
+            match crate::net::remote::fetch_bytes(url, GEO_TIMEOUT, name) {
+                Ok((status, body)) if (200..300).contains(&status) => {
+                    match geo::install(&dir, name, &body) {
+                        Ok(()) => {
+                            lines.push(format!(
+                                "{name} 已更新（{}）",
+                                geo::human_bytes(body.len() as u64)
+                            ));
+                            installed = true;
+                            break;
+                        }
+                        // The bytes arrived but the disk refused them; the next
+                        // source serves the same file, so it is worth one more try.
+                        Err(error) => attempts.push(format!("写入失败：{error}")),
+                    }
+                }
+                Ok((status, _)) => attempts.push(format!("HTTP {status}")),
+                Err(error) => attempts.push(error.to_string()),
+            }
+        }
+
+        if !installed {
+            let line = failures_line(name, &attempts);
+            failures.push(line.clone());
+            lines.push(line);
+        }
+    }
+
+    if failures.len() == geo::ASSET_NAMES.len() {
+        return Err(AppError::Engine(failures.join("；")));
+    }
+    Ok(lines)
+}
+
+/// The one line shown when every source for `name` failed.
+///
+/// Each attempt contributes its own short reason ("HTTP 403", a connection
+/// error), joined in the same order as the candidate list, so the reader can
+/// tell which mirrors were tried and how each one broke.
+fn failures_line(name: &str, attempts: &[String]) -> String {
+    format!("{name} 下载失败：{}", attempts.join("；"))
 }
 
 #[tauri::command]
@@ -332,6 +417,33 @@ mod tests {
 
         assert!(state.rule_sets.read().is_empty());
         assert!(!state.rules.read()[0].enabled);
+    }
+
+    #[test]
+    fn one_failed_attempt_is_reported_after_the_asset_name() {
+        let line = failures_line("geoip.dat", &["HTTP 404".to_string()]);
+        assert_eq!(line, "geoip.dat 下载失败：HTTP 404");
+    }
+
+    #[test]
+    fn every_failed_attempt_appears_in_candidate_order() {
+        let attempts = vec![
+            "error sending request for url (https://cdn.jsdelivr.net/…)：连接被拒绝".to_string(),
+            "HTTP 403".to_string(),
+            "HTTP 404".to_string(),
+        ];
+        let line = failures_line("geosite.dat", &attempts);
+        assert!(line.starts_with("geosite.dat 下载失败："), "{line}");
+        let body = line.trim_start_matches("geosite.dat 下载失败：");
+        let parts: Vec<&str> = body.split('；').collect();
+        assert_eq!(
+            parts,
+            vec![
+                "error sending request for url (https://cdn.jsdelivr.net/…)：连接被拒绝",
+                "HTTP 403",
+                "HTTP 404",
+            ]
+        );
     }
 
     #[test]

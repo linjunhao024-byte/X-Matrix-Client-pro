@@ -68,6 +68,58 @@ pub fn fetch_through(
     })
 }
 
+/// Flatten an error and its `source()` chain into one line.
+///
+/// reqwest's own `Display` is "error sending request for url (...)", which says
+/// nothing about *why*: DNS failure, TLS rejection and a timeout all read the
+/// same. The actual cause sits one or two `source()` steps down, so the chain
+/// is joined with `：` and the sentence the user sees names the real problem.
+///
+/// Repeated text is dropped: some layers re-wrap their cause with the same
+/// words, and "失败：x：x" reads like a bug rather than a diagnosis.
+pub fn describe_error(error: &(dyn std::error::Error + 'static)) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    let mut current: Option<&(dyn std::error::Error + 'static)> = Some(error);
+    while let Some(cause) = current {
+        let text = cause.to_string();
+        if !text.is_empty() && !parts.iter().any(|part| part == &text) {
+            parts.push(text);
+        }
+        current = cause.source();
+    }
+    parts.join("：")
+}
+
+/// Bytes, for the two binary payloads we fetch on purpose (geo data).
+///
+/// `Fetched` carries a `String` because a subscription is text; a `.dat` file
+/// decoded as UTF-8 would be silently mangled. Status handling stays the
+/// caller's job, and `noun` keeps the failure sentences honest.
+pub fn fetch_bytes(url: &str, timeout: Duration, noun: &str) -> AppResult<(u16, Vec<u8>)> {
+    if !(url.starts_with("http://") || url.starts_with("https://")) {
+        return Err(AppError::InvalidInput(format!(
+            "{noun}地址必须是 http(s)：{url}"
+        )));
+    }
+    let client = reqwest::blocking::Client::builder()
+        .timeout(timeout)
+        .user_agent(USER_AGENT)
+        .build()
+        .map_err(|error| AppError::Internal(format!("无法创建 HTTP 客户端：{error}")))?;
+    let response = client
+        .get(url)
+        .send()
+        // The cause chain is spelled out here on purpose: this error is the one
+        // shown for a failed geo download, and "error sending request" alone
+        // cannot be acted on.
+        .map_err(|error| AppError::Engine(format!("拉取{noun}失败：{}", describe_error(&error))))?;
+    let status = response.status().as_u16();
+    let body = response
+        .bytes()
+        .map_err(|error| AppError::Engine(format!("{noun}内容读取失败：{error}")))?;
+    Ok((status, body.to_vec()))
+}
+
 /// A response whose status the caller words itself.
 ///
 /// The release feed answers 404 until the project has published something, and
@@ -156,5 +208,47 @@ mod tests {
         let error = fetch_text_with_timeout("http://127.0.0.1:1/sub", Duration::from_millis(300))
             .expect_err("nothing listens on port 1");
         assert!(matches!(error, AppError::Engine(_)), "got {error:?}");
+    }
+
+    /// A TLS failure the way reqwest wraps one: the send error on top, the
+    /// real reason one `source()` step below.
+    #[derive(Debug)]
+    struct TlsRefused;
+
+    impl std::fmt::Display for TlsRefused {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "invalid peer certificate: UnknownIssuer")
+        }
+    }
+
+    impl std::error::Error for TlsRefused {}
+
+    #[derive(Debug)]
+    struct SendFailed;
+
+    impl std::fmt::Display for SendFailed {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(
+                f,
+                "error sending request for url (https://cdn.jsdelivr.net/gh/…)"
+            )
+        }
+    }
+
+    impl std::error::Error for SendFailed {
+        fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+            Some(&TlsRefused)
+        }
+    }
+
+    #[test]
+    fn a_send_failure_names_the_underlying_cause_too() {
+        let text = describe_error(&SendFailed);
+        assert_eq!(
+            text,
+            "error sending request for url (https://cdn.jsdelivr.net/gh/…)\
+             ：invalid peer certificate: UnknownIssuer"
+        );
+        assert_eq!(text.matches('：').count(), 1, "{text}");
     }
 }

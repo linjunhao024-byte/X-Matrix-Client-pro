@@ -81,8 +81,10 @@ KEY="-i C:/Users/83611/.ssh/id_ed25519_cpc -o StrictHostKeyChecking=no -o BatchM
 **开发实现一律委派**，主窗口不长时间连续写代码。派发时至少给全：目标、验收标准、可改的文件范围、验证命令、禁区（不许碰的文件/配置）。
 *Delegate all implementation to subagents or team members; the Lead never sits in a long coding loop.*
 
-**并发上限：同时最多 2 个子代理运行。** 第三个任务排队，等其中一个结束再派。
-*At most 2 subagents may run at the same time; queue the rest.*
+**并发上限：同时最多 1 个子代理运行（主窗口 + 子代理 = 2 个并发窗口）。** 其余任务排队，等这一个结束再派。
+*At most 1 subagent at a time — the Lead plus one worker is the whole budget; queue the rest.*
+
+2026-11-24 实测：两个子代理同时跑会连续触发平台 429（TPM/RPM 限流），整轮对话被打断；改为 1 个之后恢复。所以这条上限按「1 个」执行，别再加。
 
 **子代理用一次就丢掉，不复用。** 每个子代理只承载一个任务：拿到任务包、做完、交回结果，然后结束；不要给它追加第二个任务，也不要「接着问它一句」。同一件事需要继续做，就开一个新的子代理并把当前状态重新讲清楚。
 *One subagent = one task. Never hand a second task to the same subagent; start a fresh one and restate the state.*

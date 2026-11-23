@@ -8,22 +8,22 @@
 ## 0. 三句话现状
 
 1. 主体功能已追平 V2RayN / Clash 的日常面：双内核（Xray / sing-box）渲染与启停、系统代理接管与还原、订阅/整包导入、Clash 配置连同 **策略组与规则** 一起导入、运行中热切换节点与代理模式、托盘子菜单、日志页、hysteria2 / tuic、真实延迟（分组与节点）、流量历史落盘、一键断开全部 + 进程归属、测速预算与「选最快」、域名正则 / 域名分类匹配器、诊断包导出、全局快捷键。
-2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§20，共 20 节）。
-3. 当前有**一处未提交的工作**（N12 应用内更新检查，见 §5），代码已写完、测试全绿、还没构建进 exe，也没在真机上验过。
+2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§24）。
+3. 交接时那处未提交的工作（N12 应用内更新检查）已经构建、真机验收并提交；此后又合入三件事：`--quit` 正常退出并删除托盘图标（§21）、GEO 数据文件卡片与镜像回退下载（§23）、测速记录落盘（§24）。工作区现在是干净的。
 
 ### 0.1 进度快照（交接这一刻的硬数字）
 
 | 项 | 值 |
 |---|---|
 | 代码 HEAD | `5a44af3`「feat(routing): domain regex and geosite lists…」（= 最后一个**已验收**的功能） |
-| 未提交 | N12：9 个已改文件 + `src-tauri/src/update.rs`（新文件） |
+| 未提交 | 无（交接后已提交：`--quit`、N12、GEO 数据、测速落盘） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库（HEAD 上这一条） |
-| IPC 命令 | **73**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
-| Rust 单测 | **272 passed**（`ARCHITECTURE.md:278` 已同步） |
-| 前端检查 | `npm run check` 全绿：vue-tsc / architecture / contract / vitest **57**（8 文件） |
-| i18n | **666** 键（`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
+| IPC 命令 | **77**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
+| Rust 单测 | **291 passed**（`ARCHITECTURE.md:278` 已同步） |
+| 前端检查 | `npm run check` 全绿：vue-tsc / architecture / contract / vitest **65**（8 文件） |
+| i18n | **678** 键（`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
 | 桌面产物 | `X-Matrix.exe` **9,823,232 B @10:32**、`X-Matrix_0.1.0_x64-setup.exe` **3,181,050 B @10:32** —— 都是 **N9 版**，不含 N12 |
-| 验收文档 | `docs/ACCEPTANCE.md` §0–§20（§7 历史空缺，编号不连续但内容完整） |
+| 验收文档 | `docs/ACCEPTANCE.md` §0–§24（§7 历史空缺，编号不连续但内容完整） |
 | 云电脑 | 干净：`ProxyEnable=0x0`、无 X-Matrix/sing-box/xray 进程、无 `xm*` 计划任务 |
 
 **下一步的确定顺序**（做完一条打一个勾，别跳）：
@@ -53,8 +53,8 @@
 | 桌面产物 | `/c/Users/83611/Desktop/X-Matrix.exe`、`/c/Users/83611/Desktop/X-Matrix_0.1.0_x64-setup.exe` |
 | 当前桌面产物版本 | exe **9,823,232 B @10:32**、NSIS **3,181,050 B @10:32**（= N9 那一次构建，**不含 N12**） |
 
-**计数基线（改动后记得同步文档）**：命令 **73**、`cargo test --lib` **272**、vitest **57**（8 个文件）、i18n **666** 键。
-> `README.md:81` 与 `ARCHITECTURE.md:277` 已同步为 73 条命令 / 272 项测试。
+**计数基线（改动后记得同步文档）**：命令 **77**、`cargo test --lib` **291**、vitest **65**（8 个文件）、i18n **678** 键。
+> `README.md:81` 与 `ARCHITECTURE.md:277` 已同步为 77 条命令 / 291 项测试。
 
 命令数核算法：
 
@@ -249,7 +249,7 @@ scp -i /c/Users/83611/.ssh/id_ed25519_cpc 本地文件 Administrator@100.106.121
 
 1. `cd /d/GitHub-Warehouse/X-Matrix-Client-Pro && git status` —— 确认只有 N12 那批改动，没有别人在写。
 2. 读本文件的 §5 与 `docs/ACCEPTANCE.md` 的最后两节，对齐上下文。
-3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 272 passed）。
+3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 291 passed）。
 4. `cd .. && npm run check`（应为全绿）。
 5. 决定这一步要做哪一项（建议先把 N12 收尾：构建 + 真机 + 文档 + 提交），**一项一提交**，提交信息用英文 `feat(...)/fix(...)/docs: ...`。
 6. 真机验证前先跑 `bash /d/tmp/shots/deploy-tray.sh <exe>`；远端被 `cleanup.sh` 清过的话，先 `scp x-act.ps1 uia2.ps1 ocr.ps1` 上去。

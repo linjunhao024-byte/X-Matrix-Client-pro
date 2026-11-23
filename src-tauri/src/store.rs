@@ -13,11 +13,12 @@
 //! * a corrupt file is moved aside to `<file>.corrupt` instead of being silently
 //!   deleted, and the app starts with defaults rather than refusing to open.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::domain::{Node, ProxyGroup, RoutingRule, RuleSet, Settings, Subscription};
+use crate::domain::{Node, NodeId, NodeProbe, ProxyGroup, RoutingRule, RuleSet, Settings, Subscription};
 use crate::error::{AppError, AppResult};
 
 /// Bumped only when the on-disk shape changes incompatibly.
@@ -45,6 +46,11 @@ pub struct Document {
     /// enough to rewrite on every edit.
     #[serde(default)]
     pub rule_sets: Vec<RuleSet>,
+    /// Last latency measurement per node. Purely informational: the kernel
+    /// never reads it, so a stale or missing entry can only make the node list
+    /// say "未测", never change how traffic flows.
+    #[serde(default)]
+    pub probes: HashMap<NodeId, NodeProbe>,
 }
 
 impl Default for Document {
@@ -57,6 +63,7 @@ impl Default for Document {
             subscriptions: Vec::new(),
             groups: Vec::new(),
             rule_sets: Vec::new(),
+            probes: HashMap::new(),
         }
     }
 }
@@ -142,6 +149,7 @@ mod tests {
 
     use super::*;
     use crate::domain::node::{Protocol, Security, Transport};
+    use crate::domain::ProbeKind;
 
     fn scratch() -> PathBuf {
         static SEQ: AtomicUsize = AtomicUsize::new(0);
@@ -234,6 +242,53 @@ mod tests {
         let store = Store::new(dir.join("store.json"));
         store.save(&Document::default()).unwrap();
         assert!(!dir.join("store.tmp").exists());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_probe_record_survives_a_round_trip() {
+        let dir = scratch();
+        let store = Store::new(dir.join("store.json"));
+        let mut document = Document::default();
+        document.nodes.push(node("香港"));
+        document.probes.insert(
+            "id-香港".into(),
+            NodeProbe::measured(Some(120), ProbeKind::Tcp),
+        );
+        // A failed probe is a fact about the node, not a missing entry: the
+        // list must be able to say "测不到" instead of "未测".
+        document.probes.insert(
+            "id-东京".into(),
+            NodeProbe::measured(None, ProbeKind::Real),
+        );
+        store.save(&document).unwrap();
+
+        let back = store.load().unwrap();
+        assert_eq!(back.probes.len(), 2);
+        let fast = &back.probes["id-香港"];
+        assert_eq!(fast.delay_ms, Some(120));
+        assert_eq!(fast.kind, ProbeKind::Tcp);
+        assert!(fast.at > 0);
+        let failed = &back.probes["id-东京"];
+        assert_eq!(failed.delay_ms, None);
+        assert_eq!(failed.kind, ProbeKind::Real);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn an_older_document_without_probes_loads_with_an_empty_map() {
+        // Exactly what the previous version wrote: no `probes` key at all.
+        let dir = scratch();
+        let path = dir.join("store.json");
+        std::fs::write(
+            &path,
+            r#"{"version":1,"nodes":[],"settings":{},"rules":[],"subscriptions":[],"groups":[],"rule_sets":[]}"#,
+        )
+        .unwrap();
+
+        let document = Store::new(&path).load().expect("old file must still open");
+        assert!(document.probes.is_empty());
+        assert!(!path.with_extension("corrupt").exists());
         std::fs::remove_dir_all(&dir).ok();
     }
 

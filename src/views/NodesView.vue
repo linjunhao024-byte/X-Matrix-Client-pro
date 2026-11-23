@@ -13,8 +13,10 @@ import {
   type ImportOutcome_Serialize,
   type LatencyProbe_Serialize,
   type Node_Deserialize,
+  type NodeProbe_Serialize,
   type Node_Serialize,
 } from '../services/contract'
+import { formatProbe } from '../services/format'
 import { useEngineStore } from '../stores/engine'
 import { useNodesStore } from '../stores/nodes'
 import { useSettingsStore } from '../stores/settings'
@@ -49,6 +51,9 @@ const tagRemove = ref(false)
 const tagBusy = ref(false)
 /** id -> milliseconds, or 'timeout' when the handshake never completed. */
 const latency = ref<Record<string, number | 'timeout' | 'quic'>>({})
+/** id -> the last result the backend remembered; it outlives this session. */
+const probes = ref<Record<string, NodeProbe_Serialize>>({})
+const clearingProbes = ref(false)
 
 type SortKey = 'manual' | 'name' | 'latency' | 'protocol'
 const sortBy = ref<SortKey>('manual')
@@ -117,9 +122,10 @@ const sortedNodes = computed(() => {
   }
   if (sortBy.value === 'latency') {
     const rank = (node: Node_Serialize): number => {
-      const value = latency.value[node.id]
-      if (typeof value === 'number') return value
-      return Number.POSITIVE_INFINITY
+      // A remembered number ranks too: the sort is about what the user was
+      // last told, not about what this session happened to measure.
+      const value = probeDelay(node)
+      return typeof value === 'number' ? value : Number.POSITIVE_INFINITY
     }
     return items.sort((left, right) => {
       const delta = rank(left) - rank(right)
@@ -172,6 +178,9 @@ onMounted(() => {
   // Only for the tag labels: a node's `sub:` tag means nothing until we can
   // name the subscription it came from.
   void subscriptions.load()
+  // Latency is the one column the backend remembers, so a restart keeps
+  // showing what the last sweep measured instead of a wall of "未测速".
+  void loadProbes()
 })
 
 onUnmounted(stopAutoTest)
@@ -403,12 +412,27 @@ function applyProbe(probe: LatencyProbe_Serialize) {
   latency.value = next
 }
 
+/** Read every remembered result back from the store.
+ *
+ *  The test commands are the ones writing it, so re-reading after a sweep is
+ *  what keeps the age on the pill and the file in step; stamping a timestamp
+ *  here instead would drift from what a second window is being shown. */
+async function loadProbes() {
+  try {
+    probes.value = await api.nodeProbes()
+  } catch (cause) {
+    actionError.value = describeError(cause)
+  }
+}
+
 /** One call for the whole list: the backend walks it with `test_concurrency`
  *  workers, which is why "test all" no longer takes three seconds per node. */
 async function measureMany(nodes: Node_Serialize[]) {
   if (nodes.length === 0) return
-  const probes = await api.testNodesLatency(nodes.map((node) => node.id))
-  for (const probe of probes) applyProbe(probe)
+  const records = await api.testNodesLatency(nodes.map((node) => node.id))
+  for (const probe of records) applyProbe(probe)
+  // The same ids were just written to the store with the backend's own clock.
+  await loadProbes()
 }
 
 async function testLatency(node: Node_Serialize) {
@@ -450,7 +474,7 @@ function fastestNode(): Node_Serialize | null {
   let best: Node_Serialize | null = null
   let bestMs = Number.POSITIVE_INFINITY
   for (const node of store.items) {
-    const value = latency.value[node.id]
+    const value = probeDelay(node)
     if (typeof value !== 'number' || value >= bestMs) continue
     best = node
     bestMs = value
@@ -488,21 +512,75 @@ async function pickFastest() {
   }
 }
 
+/**
+ * The number to paint and sort by, in three states rather than two:
+ * a millisecond count, `null` for "measured and did not answer", and
+ * `undefined` for "never measured". Collapsing the last two would let an
+ * untested node look as bad as a dead one.
+ */
+function probeDelay(node: Node_Serialize): number | null | undefined {
+  const value = latency.value[node.id]
+  if (typeof value === 'number') return value
+  const stored = probes.value[node.id]
+  if (!stored) return value === 'timeout' ? null : undefined
+  const ms = stored.delay_ms
+  return typeof ms === 'number' && ms > 0 ? ms : null
+}
+
 function latencyLabel(node: Node_Serialize): string {
   const value = latency.value[node.id]
-  if (value === undefined) return t('nodes.latency.none')
   if (value === 'quic') return t('nodes.latency.quic')
+  // A remembered result outlives the session that measured it, so it is what
+  // the card shows until the next probe replaces it.
+  const stored = probes.value[node.id]
+  if (stored) return formatProbe(stored)
+  if (value === undefined) return t('nodes.latency.none')
   return value === 'timeout' ? t('common.timeout') : t('nodes.latency.ms', { value })
 }
 
+/** Which measurement the remembered line came from; no tooltip when there is
+ *  nothing remembered, because TCP-handshake and through-the-kernel delays are
+ *  not comparable and the line should say which one it is showing. */
+function latencyTitle(node: Node_Serialize): string {
+  const stored = probes.value[node.id]
+  if (!stored) return ''
+  return stored.kind === 'real' ? t('nodes.probe.kind.real') : t('nodes.probe.kind.tcp')
+}
+
 function latencyTone(node: Node_Serialize): string {
-  const value = latency.value[node.id]
+  const value = probeDelay(node)
   if (value === undefined) return 'latency-unknown'
-  if (value === 'timeout') return 'latency-bad'
-  if (value === 'quic') return 'latency-unknown'
+  if (value === null) return 'latency-bad'
   if (value < 150) return 'latency-good'
   if (value < 400) return 'latency-mid'
   return 'latency-bad'
+}
+
+/** Forget the remembered result of the selected nodes.
+ *
+ *  Without this the map could only grow: a node measured once against a server
+ *  that has since moved would keep showing that verdict for good, and there
+ *  would be no way to ask for a clean "未测速" again. */
+async function clearProbes() {
+  if (selected.value.length === 0) return
+  clearingProbes.value = true
+  actionError.value = null
+  const ids = [...selected.value]
+  try {
+    probes.value = await api.clearNodeProbes(ids)
+    const next = { ...latency.value }
+    for (const id of ids) delete next[id]
+    latency.value = next
+    actionNote.value = t('nodes.probe.cleared', { count: ids.length })
+    if (actionTimer) clearTimeout(actionTimer)
+    actionTimer = setTimeout(() => {
+      actionNote.value = null
+    }, 6000)
+  } catch (cause) {
+    actionError.value = describeError(cause)
+  } finally {
+    clearingProbes.value = false
+  }
 }
 
 function isRunning(node: Node_Serialize): boolean {
@@ -705,6 +783,15 @@ function securityLabel(node: Node_Serialize): string {
             {{ t('nodes.tag.action') }}
           </button>
           <button
+            class="btn btn-sm"
+            type="button"
+            :disabled="selected.length === 0 || clearingProbes"
+            @click="clearProbes"
+          >
+            <AppIcon name="refresh" :size="14" />
+            {{ t('nodes.probe.clear') }}
+          </button>
+          <button
             class="btn btn-sm btn-danger"
             type="button"
             :disabled="selected.length === 0"
@@ -763,7 +850,9 @@ function securityLabel(node: Node_Serialize): string {
           </div>
 
           <footer class="node-foot">
-            <span class="latency" :class="latencyTone(node)">{{ latencyLabel(node) }}</span>
+            <span class="latency" :class="latencyTone(node)" :title="latencyTitle(node)">{{
+              latencyLabel(node)
+            }}</span>
             <div class="row">
               <button
                 v-if="isRunning(node)"

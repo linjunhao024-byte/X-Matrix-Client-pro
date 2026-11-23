@@ -8,9 +8,13 @@
 //! Durable state lives here, and every mutation goes through [`AppState::persist`]
 //! so the file on disk can never drift from memory.
 
+use std::collections::HashMap;
+
 use parking_lot::RwLock;
 
-use crate::domain::{Node, ProxyGroup, RoutingRule, RuleSet, Settings, Subscription};
+use crate::domain::{
+    Node, NodeId, NodeProbe, ProbeKind, ProxyGroup, RoutingRule, RuleSet, Settings, Subscription,
+};
 use crate::error::AppResult;
 use crate::rulesets::RuleSetCache;
 use crate::store::{Document, Store, SCHEMA_VERSION};
@@ -22,6 +26,10 @@ pub struct AppState {
     pub subscriptions: RwLock<Vec<Subscription>>,
     pub groups: RwLock<Vec<ProxyGroup>>,
     pub rule_sets: RwLock<Vec<RuleSet>>,
+    /// Last latency measurement per node, keyed by node id. It is a note to
+    /// the user, not an input to routing: nothing here can change how traffic
+    /// flows, which is why a stale entry is harmless.
+    pub probes: RwLock<HashMap<NodeId, NodeProbe>>,
     /// Cached rule-set lists (one file per set, next to the document).
     pub rule_set_files: RuleSetCache,
     store: Store,
@@ -48,6 +56,7 @@ impl AppState {
             subscriptions: RwLock::new(document.subscriptions),
             groups: RwLock::new(document.groups),
             rule_sets: RwLock::new(document.rule_sets),
+            probes: RwLock::new(document.probes),
             rule_set_files: RuleSetCache::new(rule_sets_dir(&store)),
             store,
         }
@@ -68,12 +77,49 @@ impl AppState {
             subscriptions: self.subscriptions.read().clone(),
             groups: self.groups.read().clone(),
             rule_sets: self.rule_sets.read().clone(),
+            probes: self.probes.read().clone(),
         }
     }
 
     /// Write the current nodes, settings and rules to disk.
     pub fn persist(&self) -> AppResult<()> {
         self.store.save(&self.document())
+    }
+
+    /// Remember one latency result and write it out.
+    pub fn record_probe(
+        &self,
+        id: &NodeId,
+        delay_ms: Option<u32>,
+        kind: ProbeKind,
+    ) -> AppResult<()> {
+        self.record_probes(vec![(id.clone(), NodeProbe::measured(delay_ms, kind))])
+    }
+
+    /// Remember several results with a single write.
+    ///
+    /// A full sweep produces one record per node; rewriting the document per
+    /// node would turn one cheap operation into dozens of file replacements.
+    pub fn record_probes(&self, records: Vec<(NodeId, NodeProbe)>) -> AppResult<()> {
+        if records.is_empty() {
+            return Ok(());
+        }
+        {
+            let mut probes = self.probes.write();
+            for (id, probe) in records {
+                probes.insert(id, probe);
+            }
+        }
+        self.persist()
+    }
+
+    /// Drop records from memory only; the caller writes the document once it
+    /// has finished the rest of its change (node deletion, for example).
+    pub fn drop_probes(&self, ids: &[NodeId]) {
+        let mut probes = self.probes.write();
+        for id in ids {
+            probes.remove(id);
+        }
     }
 
     /// Replace everything in memory, then write it. Used by restore.
@@ -88,6 +134,7 @@ impl AppState {
         *self.subscriptions.write() = document.subscriptions;
         *self.groups.write() = document.groups;
         *self.rule_sets.write() = document.rule_sets;
+        *self.probes.write() = document.probes;
         self.persist()
     }
 
@@ -165,6 +212,52 @@ mod tests {
         assert_eq!(reloaded.nodes.read().len(), 1);
         assert_eq!(reloaded.nodes.read()[0].name, "东京");
         assert_eq!(reloaded.settings.read().mixed_port, 7999);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_probe_and_a_failed_probe_both_survive_a_restart() {
+        let dir = scratch();
+        let path = dir.join("store.json");
+        {
+            let state = AppState::load(Store::new(&path));
+            state.nodes.write().push(node());
+            state
+                .record_probe(&"n1".to_string(), Some(120), ProbeKind::Tcp)
+                .unwrap();
+            // A failure is recorded as `None`, never as an absent entry.
+            state
+                .record_probe(&"n2".to_string(), None, ProbeKind::Real)
+                .unwrap();
+        }
+
+        let reloaded = AppState::load(Store::new(&path));
+        let probes = reloaded.probes.read();
+        assert_eq!(probes.len(), 2);
+        assert_eq!(probes["n1"].delay_ms, Some(120));
+        assert_eq!(probes["n1"].kind, ProbeKind::Tcp);
+        assert_eq!(probes["n2"].delay_ms, None);
+        assert_eq!(probes["n2"].kind, ProbeKind::Real);
+        drop(probes);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn dropping_a_probe_removes_it_from_memory_and_disk() {
+        let dir = scratch();
+        let path = dir.join("store.json");
+        let state = AppState::load(Store::new(&path));
+        state.nodes.write().push(node());
+        state
+            .record_probe(&"n1".to_string(), Some(80), ProbeKind::Tcp)
+            .unwrap();
+
+        state.drop_probes(&["n1".to_string()]);
+        state.persist().unwrap();
+        assert!(state.probes.read().is_empty());
+
+        let reloaded = AppState::load(Store::new(&path));
+        assert!(reloaded.probes.read().is_empty());
         std::fs::remove_dir_all(&dir).ok();
     }
 

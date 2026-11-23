@@ -125,7 +125,22 @@ pub fn delete_subscription(
             return Err(AppError::NotFound(format!("订阅 {id} 不存在")));
         }
     }
-    state.nodes.write().retain(|node| !node.tags.iter().any(|t| t == &tag));
+    // Nodes that came from this source go with it, and so do the latency
+    // records that describe them: a record for a node nobody can click is
+    // dead weight in every future document write.
+    let dropped = {
+        let mut nodes = state.nodes.write();
+        let mut dropped: Vec<String> = Vec::new();
+        nodes.retain(|node| {
+            let stale = node.tags.iter().any(|t| t == &tag);
+            if stale {
+                dropped.push(node.id.clone());
+            }
+            !stale
+        });
+        dropped
+    };
+    state.drop_probes(&dropped);
     let snapshot = state.subscriptions.read().clone();
     state.persist()?;
     crate::refresh_tray(&app);
@@ -263,14 +278,22 @@ pub fn apply_document(
         }
     });
 
-    let removed = {
+    let (removed, dropped) = {
         let mut nodes = state.nodes.write();
         let before = nodes.len();
-        nodes.retain(|node| !node.tags.iter().any(|t| t == &tag));
+        let mut dropped: Vec<String> = Vec::new();
+        nodes.retain(|node| {
+            let stale = node.tags.iter().any(|t| t == &tag);
+            if stale {
+                dropped.push(node.id.clone());
+            }
+            !stale
+        });
         let removed = before - nodes.len();
         nodes.extend(imported_nodes.iter().cloned());
-        removed
+        (removed, dropped)
     };
+    state.drop_probes(&dropped);
 
     subscription.node_count = imported_nodes.len() as u32;
     subscription.updated_at_ms = Some(now_ms());

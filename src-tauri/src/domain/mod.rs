@@ -6,6 +6,7 @@
 
 pub mod group;
 pub mod node;
+pub mod probe;
 pub mod routing;
 pub mod ruleset;
 pub mod subscription;
@@ -15,6 +16,8 @@ pub mod settings;
 pub use group::{GroupKind, ProxyGroup};
 #[allow(unused_imports)]
 pub use node::{Node, NodeId, Protocol, Security, Transport};
+#[allow(unused_imports)]
+pub use probe::{NodeProbe, ProbeKind};
 #[allow(unused_imports)]
 pub use routing::{RoutingRule, RuleAction, RuleMatcher};
 #[allow(unused_imports)]

@@ -6,8 +6,14 @@ import EmptyState from '../components/EmptyState.vue'
 import ModalDialog from '../components/ModalDialog.vue'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
 import { t } from '../i18n'
-import { describeError, type RuleSet_Serialize, type RuleSetSource } from '../services/contract'
-import { formatWhen } from '../services/format'
+import {
+  api,
+  describeError,
+  type GeoAssetStatus_Serialize,
+  type RuleSet_Serialize,
+  type RuleSetSource,
+} from '../services/contract'
+import { formatBytes, formatWhen } from '../services/format'
 import { useRuleSetsStore } from '../stores/rulesets'
 
 const store = useRuleSetsStore()
@@ -40,6 +46,15 @@ const saving = ref(false)
 const pasteText = ref('')
 const pasteError = ref<string | null>(null)
 const note = ref<string | null>(null)
+
+/**
+ * The geo data files. A `geoip:`/`geosite:` rule silently matches nothing when
+ * they are absent, so the page states whether they exist instead of letting
+ * the rule look broken.
+ */
+const geo = ref<GeoAssetStatus_Serialize[]>([])
+const geoBusy = ref(false)
+const geoNote = ref<string | null>(null)
 
 const isEmpty = computed(() => store.loaded && store.items.length === 0)
 
@@ -156,8 +171,33 @@ async function confirmDelete(): Promise<void> {
   }
 }
 
+async function loadGeo(): Promise<void> {
+  try {
+    geo.value = await api.geoAssets()
+  } catch {
+    // A missing directory is the normal "not downloaded yet" state; the rows
+    // simply stay empty rather than putting an error on the page.
+    geo.value = []
+  }
+}
+
+async function updateGeo(): Promise<void> {
+  geoBusy.value = true
+  geoNote.value = null
+  try {
+    const lines = await api.updateGeoAssets()
+    geoNote.value = t('rs.geo.done') + (lines.length ? ` · ${lines.join(' · ')}` : '')
+  } catch (cause) {
+    geoNote.value = t('rs.geo.failed', { reason: describeError(cause) })
+  } finally {
+    geoBusy.value = false
+    await loadGeo()
+  }
+}
+
 onMounted(() => {
   void store.load()
+  void loadGeo()
 })
 </script>
 
@@ -178,6 +218,28 @@ onMounted(() => {
 
     <p v-if="store.error" class="alert">{{ store.error }}</p>
     <p v-if="note" class="notice">{{ note }}</p>
+
+    <section class="surface-plain geo-card">
+      <div class="geo-head">
+        <div>
+          <h2 class="section-title">{{ t('rs.geo.title') }}</h2>
+          <p class="field-hint">{{ t('rs.geo.hint') }}</p>
+        </div>
+        <button type="button" class="btn btn-sm" :disabled="geoBusy" @click="updateGeo">
+          {{ geoBusy ? t('rs.geo.busy') : t('rs.geo.update') }}
+        </button>
+      </div>
+      <p v-if="geoNote" class="notice">{{ geoNote }}</p>
+      <ul class="geo-list">
+        <li v-for="asset in geo" :key="asset.name">
+          <span class="geo-name">{{ asset.name }}</span>
+          <span v-if="asset.exists" class="muted small">
+            {{ formatBytes(asset.bytes) }} · {{ formatWhen((asset.modified ?? 0) * 1000) }}
+          </span>
+          <span v-else class="badge">{{ t('rs.geo.missing') }}</span>
+        </li>
+      </ul>
+    </section>
 
     <p v-if="store.loading && !store.loaded" class="muted small">
       {{ t('common.loading') }}
@@ -375,6 +437,46 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.geo-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+}
+
+.geo-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.geo-head .field-hint {
+  margin-top: 4px;
+  max-width: 72ch;
+}
+
+.geo-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.geo-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.geo-name {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+
 .form-body {
   display: flex;
   flex-direction: column;

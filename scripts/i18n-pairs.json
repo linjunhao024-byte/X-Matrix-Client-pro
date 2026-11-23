@@ -1835,6 +1835,31 @@
     "Switched to {name}"
   ],
   [
+    "nodes.probe.clear",
+    "清除测速记录",
+    "Clear latency records"
+  ],
+  [
+    "nodes.probe.cleared",
+    "已清除 {count} 条测速记录",
+    "Cleared {count} latency records"
+  ],
+  [
+    "nodes.probe.kind.real",
+    "真实延迟（经内核）",
+    "Real delay (through the kernel)"
+  ],
+  [
+    "nodes.probe.kind.tcp",
+    "TCP 握手延迟",
+    "TCP handshake delay"
+  ],
+  [
+    "nodes.probe.miss",
+    "测不到",
+    "No result"
+  ],
+  [
     "nodes.new",
     "新增节点",
     "New node"
@@ -2348,6 +2373,41 @@
     "rs.hint",
     "规则集是一份域名 / IP 列表，路由规则可以整份引用它。Xray 会把列表内联进配置，sing-box 会生成独立的 rule-set 文件。",
     "A rule set is a list of domains or IPs that a routing rule can reference as a whole. Xray inlines the list into the config; sing-box gets a separate rule-set file."
+  ],
+  [
+    "rs.geo.title",
+    "geo 数据文件",
+    "Geo data files"
+  ],
+  [
+    "rs.geo.hint",
+    "规则里的 geoip: 与 geosite: 依赖这两个文件。缺了它们，规则不会报错，只是永远匹配不到，所以这里要能看见文件在不在。",
+    "Rules that use geoip: or geosite: depend on these two files. Without them a rule does not fail — it simply never matches, which is why the files are listed here."
+  ],
+  [
+    "rs.geo.missing",
+    "还没有",
+    "Missing"
+  ],
+  [
+    "rs.geo.update",
+    "更新 geo 数据",
+    "Update geo data"
+  ],
+  [
+    "rs.geo.busy",
+    "正在下载…",
+    "Downloading…"
+  ],
+  [
+    "rs.geo.done",
+    "geo 数据已更新",
+    "Geo data updated"
+  ],
+  [
+    "rs.geo.failed",
+    "更新失败：{reason}",
+    "Update failed: {reason}"
   ],
   [
     "rs.interval.12h",

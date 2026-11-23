@@ -1,10 +1,11 @@
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
 use tauri::{AppHandle, State};
 
-use crate::domain::{Node, NodeId};
+use crate::domain::{Node, NodeId, NodeProbe, ProbeKind};
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 
@@ -146,30 +147,53 @@ pub fn delete_node(
     state: State<'_, AppState>,
     id: NodeId,
 ) -> AppResult<Vec<Node>> {
+    let snapshot = apply_delete(&state, std::slice::from_ref(&id))?;
+    crate::refresh_tray(&app);
+    Ok(snapshot)
+}
+
+/// Delete nodes and everything that points at them.
+///
+/// The command wrappers exist to fetch the `AppHandle` for the tray; the part
+/// worth testing is here. Groups keep member ids, and a group that keeps a
+/// deleted id would render an outbound pointing at nothing, so the node is
+/// pruned from them rather than at render time. The remembered latency result
+/// goes too: it would be a record nobody can see or clear.
+pub fn apply_delete(state: &AppState, ids: &[NodeId]) -> AppResult<Vec<Node>> {
+    if ids.is_empty() {
+        return Err(AppError::InvalidInput("没有选中任何节点".into()));
+    }
+
     let snapshot = {
         let mut nodes = state.nodes.write();
         let before = nodes.len();
-        nodes.retain(|n| n.id != id);
+        nodes.retain(|node| !ids.contains(&node.id));
         if nodes.len() == before {
-            return Err(AppError::NotFound(format!("node {id}")));
+            // One id gets the message the single-node button can show verbatim;
+            // a selection just says none of them were there.
+            return Err(if ids.len() == 1 {
+                AppError::NotFound(format!("node {}", ids[0]))
+            } else {
+                AppError::NotFound("选中的节点都不存在".into())
+            });
         }
         nodes.clone()
     };
 
-    // A group that keeps a deleted member id would render an outbound that
-    // points at nothing, so the node is pruned here rather than at render time.
     {
         let mut groups = state.groups.write();
         for group in groups.iter_mut() {
-            group.members.retain(|member| member != &id);
-            if group.selected.as_deref() == Some(id.as_str()) {
-                group.selected = None;
+            group.members.retain(|member| !ids.contains(member));
+            if let Some(selected) = group.selected.as_deref() {
+                if ids.iter().any(|id| id == selected) {
+                    group.selected = None;
+                }
             }
         }
     }
 
+    state.drop_probes(ids);
     state.persist()?;
-    crate::refresh_tray(&app);
     Ok(snapshot)
 }
 
@@ -207,12 +231,19 @@ pub async fn test_node_latency(state: State<'_, AppState>, id: NodeId) -> AppRes
     }
 
     let timeout = Duration::from_millis(u64::from(state.settings.read().test_timeout_ms));
+    let target = node.id.clone();
 
-    tauri::async_runtime::spawn_blocking(move || {
+    let outcome = tauri::async_runtime::spawn_blocking(move || {
         crate::net::latency::tcp_latency_with_timeout(&node.server, node.port, timeout)
     })
     .await
-    .map_err(|error| AppError::Internal(format!("后台任务失败：{error}")))?
+    .map_err(|error| AppError::Internal(format!("后台任务失败：{error}")))?;
+
+    // Success and failure are both worth remembering: "测不到" is a fact the
+    // user asked for, and dropping it would make a restart look as if nothing
+    // had ever been tried.
+    remember(state.inner(), &target, outcome.as_ref().ok().copied());
+    outcome
 }
 
 /// One row of a batch latency run.
@@ -271,6 +302,78 @@ fn probe_all(nodes: &[Node], timeout_ms: u32, workers: usize) -> Vec<LatencyProb
         .collect()
 }
 
+/// Store one measured delay — or its absence — for a node.
+///
+/// A disk problem must not turn a finished measurement into a failed command:
+/// the number is already correct in memory, so the write error is logged rather
+/// than handed to a user who cannot act on it.
+fn remember(state: &AppState, id: &NodeId, delay_ms: Option<u32>) {
+    if let Err(error) = state.record_probe(id, delay_ms, ProbeKind::Tcp) {
+        eprintln!("记不住测速结果：{error}");
+    }
+}
+
+/// Store a whole batch with one write.
+///
+/// Rows refused by the TCP handshake (QUIC nodes) never measured anything, so
+/// they are skipped: writing "测不到" over an older real number would destroy a
+/// fact to record a refusal.
+fn remember_batch(state: &AppState, probes: &[LatencyProbe]) {
+    let records = {
+        let nodes = state.nodes.read();
+        probes
+            .iter()
+            .filter(|probe| {
+                nodes
+                    .iter()
+                    .find(|node| node.id == probe.id)
+                    .map(|node| tcp_handshake_refusal(node).is_none())
+                    .unwrap_or(false)
+            })
+            .map(|probe| {
+                (
+                    probe.id.clone(),
+                    NodeProbe::measured(probe.ms, ProbeKind::Tcp),
+                )
+            })
+            .collect()
+    };
+    if let Err(error) = state.record_probes(records) {
+        eprintln!("记不住测速结果：{error}");
+    }
+}
+
+/// Every remembered latency result, keyed by node id.
+#[tauri::command]
+#[specta::specta]
+pub fn node_probes(state: State<'_, AppState>) -> HashMap<NodeId, NodeProbe> {
+    state.probes.read().clone()
+}
+
+/// Forget remembered results for the given ids; an empty list clears them all.
+///
+/// Clearing is cheap and honest: the next sweep fills the map again, and a user
+/// who moved to a different network does not want yesterday's numbers.
+#[tauri::command]
+#[specta::specta]
+pub fn clear_node_probes(
+    state: State<'_, AppState>,
+    ids: Vec<NodeId>,
+) -> AppResult<HashMap<NodeId, NodeProbe>> {
+    {
+        let mut probes = state.probes.write();
+        if ids.is_empty() {
+            probes.clear();
+        } else {
+            for id in &ids {
+                probes.remove(id);
+            }
+        }
+    }
+    state.persist()?;
+    Ok(state.probes.read().clone())
+}
+
 /// TCP handshake latency for a list of nodes, in milliseconds.
 ///
 /// An empty list means every node: that is what "test all" wants, and asking the
@@ -306,9 +409,14 @@ pub async fn test_nodes_latency(
         return Ok(Vec::new());
     }
 
-    tauri::async_runtime::spawn_blocking(move || probe_all(&targets, timeout_ms, workers))
-        .await
-        .map_err(|error| AppError::Internal(format!("后台任务失败：{error}")))
+    let probes = tauri::async_runtime::spawn_blocking(move || {
+        probe_all(&targets, timeout_ms, workers)
+    })
+    .await
+    .map_err(|error| AppError::Internal(format!("后台任务失败：{error}")))?;
+
+    remember_batch(state.inner(), &probes);
+    Ok(probes)
 }
 
 /// Delete several nodes in one call.
@@ -323,33 +431,7 @@ pub fn delete_nodes(
     state: State<'_, AppState>,
     ids: Vec<NodeId>,
 ) -> AppResult<Vec<Node>> {
-    if ids.is_empty() {
-        return Err(AppError::InvalidInput("没有选中任何节点".into()));
-    }
-
-    let snapshot = {
-        let mut nodes = state.nodes.write();
-        let before = nodes.len();
-        nodes.retain(|node| !ids.contains(&node.id));
-        if nodes.len() == before {
-            return Err(AppError::NotFound("选中的节点都不存在".into()));
-        }
-        nodes.clone()
-    };
-
-    {
-        let mut groups = state.groups.write();
-        for group in groups.iter_mut() {
-            group.members.retain(|member| !ids.contains(member));
-            if let Some(selected) = group.selected.as_deref() {
-                if ids.iter().any(|id| id == selected) {
-                    group.selected = None;
-                }
-            }
-        }
-    }
-
-    state.persist()?;
+    let snapshot = apply_delete(&state, &ids)?;
     crate::refresh_tray(&app);
     Ok(snapshot)
 }
@@ -530,6 +612,75 @@ mod tests {
 
         assert_eq!(probe_all(&nodes, 100, 0).len(), 3);
         assert_eq!(probe_all(&nodes, 100, 64).len(), 3);
+    }
+
+    #[test]
+    fn deleting_a_node_forgets_its_probe() {
+        let state = state_with(vec![node("a", &[]), node("b", &[])]);
+        state
+            .record_probe(&"a".to_string(), Some(90), ProbeKind::Tcp)
+            .unwrap();
+        state
+            .record_probe(&"b".to_string(), None, ProbeKind::Tcp)
+            .unwrap();
+
+        let left = apply_delete(&state, &["a".to_string()]).unwrap();
+
+        assert_eq!(
+            left.iter().map(|item| item.id.as_str()).collect::<Vec<_>>(),
+            vec!["b"]
+        );
+        // A record for a node nobody can see or clear would live on forever.
+        let probes = state.probes.read();
+        assert!(!probes.contains_key("a"));
+        assert!(probes.contains_key("b"));
+        drop(probes);
+
+        assert!(apply_delete(&state, &[]).is_err());
+        assert!(matches!(
+            apply_delete(&state, &["nope".to_string()]),
+            Err(AppError::NotFound(_))
+        ));
+    }
+
+    #[test]
+    fn a_failed_probe_is_stored_as_no_result() {
+        // "测不到" has to be a stored fact, not a missing entry: otherwise a
+        // restart cannot tell a failed sweep from a node that was never tested.
+        let state = state_with(vec![node("a", &[])]);
+
+        remember(&state, &"a".to_string(), None);
+
+        let probes = state.probes.read();
+        let probe = probes.get("a").expect("a failed probe still leaves a record");
+        assert_eq!(probe.delay_ms, None);
+        assert_eq!(probe.kind, ProbeKind::Tcp);
+        assert!(probe.at > 0);
+    }
+
+    #[test]
+    fn a_quic_refusal_does_not_overwrite_a_measurement() {
+        // The refusal row exists so the card can explain itself; it must not be
+        // written back as if the node had just been measured and failed.
+        let mut quic = node("q", &[]);
+        quic.protocol = Protocol::Hysteria2 {
+            password: "p".into(),
+            obfs_password: None,
+            up_mbps: None,
+            down_mbps: None,
+        };
+        let state = state_with(vec![quic.clone()]);
+        state
+            .record_probe(&"q".to_string(), Some(55), ProbeKind::Real)
+            .unwrap();
+
+        let rows = probe_all(std::slice::from_ref(&quic), 100, 1);
+        remember_batch(&state, &rows);
+
+        let probes = state.probes.read();
+        let stored = probes.get("q").expect("old record survives");
+        assert_eq!(stored.delay_ms, Some(55));
+        assert_eq!(stored.kind, ProbeKind::Real);
     }
 
     #[test]
