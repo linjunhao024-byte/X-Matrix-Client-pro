@@ -228,6 +228,11 @@ struct Running {
     endpoints: Endpoints,
     config_path: PathBuf,
     started_at_ms: u64,
+    /// True once [`EngineRuntime::stop`] asked this kernel to go away. Set
+    /// before the kill because a kill that reports an error can still have
+    /// taken the process down: either way the exit was the user's decision, not
+    /// a crash worth a notification.
+    expected: bool,
 }
 
 /// Owns at most one running kernel.
@@ -239,6 +244,10 @@ pub struct EngineRuntime {
     log_dir: PathBuf,
     running: Mutex<Option<Running>>,
     last_exit_code: Mutex<Option<i32>>,
+    /// Exit code of a kernel that died on its own, waiting to be announced.
+    /// [`EngineRuntime::take_unexpected_exit`] drains it, so one crash is one
+    /// notification no matter how often the status is polled.
+    unexpected_exit: Mutex<Option<i32>>,
     /// Created on the first start; see [`crate::engine::job`] for why the kernel
     /// is adopted into it.
     job: OnceLock<Option<KillOnCloseJob>>,
@@ -270,6 +279,7 @@ impl EngineRuntime {
             log_dir,
             running: Mutex::new(None),
             last_exit_code: Mutex::new(None),
+            unexpected_exit: Mutex::new(None),
             job: OnceLock::new(),
         }
     }
@@ -357,8 +367,13 @@ impl EngineRuntime {
             endpoints,
             config_path: config_path.clone(),
             started_at_ms,
+            expected: false,
         });
         *self.last_exit_code.lock() = None;
+        // A report left over from the previous kernel must not be announced
+        // now: the user already restarted, and a notification for a dead
+        // process would contradict the "running" badge.
+        *self.unexpected_exit.lock() = None;
 
         Ok(EngineStatus {
             running: true,
@@ -374,11 +389,32 @@ impl EngineRuntime {
     }
 
     pub fn stop(&self) -> AppResult<()> {
-        let Some(mut running) = self.running.lock().take() else {
+        let mut guard = self.running.lock();
+        let Some(running) = guard.as_mut() else {
             return Ok(());
         };
+        // Mark first, kill second: the user asked for this stop, so whatever
+        // the process does on the way out is expected and must never be
+        // announced as a crash — not even if `kill` returns an error after
+        // having taken the process down.
+        running.expected = true;
         running.handle.kill()?;
+        *guard = None;
         Ok(())
+    }
+
+    /// The exit code of a kernel that died on its own, drained on read.
+    ///
+    /// `status()` is what notices the death; this is how the rest of the app
+    /// hears about it without polling the badge. Taking the code is
+    /// deliberately destructive: one exit is reported exactly once, so a
+    /// watcher that ticks every second does not repeat itself.
+    ///
+    /// A kernel stopped through [`Self::stop`] never lands here, and neither
+    /// does one that was killed because it never became ready — those exits
+    /// are ours, not the kernel's.
+    pub fn take_unexpected_exit(&self) -> Option<i32> {
+        self.unexpected_exit.lock().take()
     }
 
     pub fn status(&self) -> EngineStatus {
@@ -389,12 +425,16 @@ impl EngineRuntime {
         if let Some(running) = guard.as_mut() {
             match running.handle.try_wait() {
                 Ok(Some(code)) => {
+                    let unexpected = !running.expected;
+                    *guard = None;
                     *self.last_exit_code.lock() = Some(code);
+                    if unexpected {
+                        *self.unexpected_exit.lock() = Some(code);
+                    }
                     let status = EngineStatus {
                         last_exit_code: Some(code),
                         ..Default::default()
                     };
-                    *guard = None;
                     return status;
                 }
                 Ok(None) => {}
@@ -985,6 +1025,41 @@ four"
         let status = h.runtime.status();
         assert!(!status.running);
         assert_eq!(status.last_exit_code, Some(1));
+
+        std::fs::remove_dir_all(&h.dir).ok();
+    }
+
+    #[test]
+    fn stop_on_purpose_is_never_an_unexpected_exit() {
+        let h = harness(true, false);
+        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        h.runtime
+            .start(EngineKind::Xray, &node(), endpoints, RunOptions::new())
+            .unwrap();
+
+        h.runtime.stop().unwrap();
+        // The kill marks the fake handle as exited, so this status sees the
+        // same thing it would see on a real machine: a process that is gone.
+        assert!(!h.runtime.status().running);
+        assert_eq!(h.runtime.take_unexpected_exit(), None);
+
+        std::fs::remove_dir_all(&h.dir).ok();
+    }
+
+    #[test]
+    fn a_kernel_that_dies_on_its_own_is_announced_exactly_once() {
+        let h = harness(true, false);
+        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        h.runtime
+            .start(EngineKind::Xray, &node(), endpoints, RunOptions::new())
+            .unwrap();
+
+        h.crash(7);
+        assert_eq!(h.runtime.status().last_exit_code, Some(7));
+        // First read hands the code over, second read has nothing left: the
+        // watcher and the UI can both poll, only one gets the news.
+        assert_eq!(h.runtime.take_unexpected_exit(), Some(7));
+        assert_eq!(h.runtime.take_unexpected_exit(), None);
 
         std::fs::remove_dir_all(&h.dir).ok();
     }

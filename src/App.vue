@@ -7,12 +7,20 @@ import { useEngineStore } from './stores/engine'
 import { useUiStore } from './stores/ui'
 
 // One poller for the whole app: the status badge, the home cards and the
-// connection list all read the same mirror of the Rust runtime.
+// connection list all read the same mirror of the Rust runtime. The crash
+// subscription is registered here, once, because the shell mounts once — it
+// only makes the *next* read happen immediately instead of a second later.
 const engine = useEngineStore()
 const ui = useUiStore()
 
-onMounted(() => engine.startPolling())
-onBeforeUnmount(() => engine.stopPolling())
+onMounted(() => {
+  engine.startPolling()
+  void engine.watchExits()
+})
+onBeforeUnmount(() => {
+  engine.unwatchExits()
+  engine.stopPolling()
+})
 </script>
 
 <template>

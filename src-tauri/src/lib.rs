@@ -22,7 +22,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 
 use engine::{EngineKind, EngineRuntime};
 use state::AppState;
@@ -56,6 +56,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_notification::init())
         // Remember where the user put the window. Only the three flags that
         // describe geometry: `visible` is ours (the "start hidden" setting),
         // and restoring a hidden/decorated state from disk would fight it.
@@ -135,6 +136,10 @@ pub fn run() {
             // fetches sources that are due, and a source with
             // `update_interval_minutes = 0` is never touched automatically.
             start_subscription_sweep(app.handle().clone());
+            // The kernel can die at any moment, and nothing else in the app is
+            // looking for that: the badge only learns on the next status poll.
+            // This thread is the one that notices first.
+            watch_engine_exits(app.handle().clone());
             auto_connect(app.handle().clone());
 
             // Both chords are fixed for now. A shortcut the user cannot find is
@@ -292,6 +297,74 @@ fn start_subscription_sweep(app: AppHandle) {
             }
         }
     });
+}
+
+/// Watch the kernel for a death nobody asked for, once a second.
+///
+/// `status()` is the only place that can see a kernel exit — the process handle
+/// lives behind the runtime's mutex — so polling is the discovery mechanism.
+/// What this thread changes is *who* polls: without it, a dead kernel waits for
+/// the window to ask, and a minimized app never does.
+///
+/// It runs for the life of the process on purpose: a kernel can be started,
+/// crash, be restarted, and crash again, and each death is news.
+fn watch_engine_exits(app: AppHandle) {
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+        let Some(runtime) = app.try_state::<Arc<EngineRuntime>>() else {
+            // Managed state is gone, so the app is on its way out; this thread
+            // must die with it instead of holding the handle forever.
+            return;
+        };
+        // One status call does both jobs: it reaps the dead kernel and records
+        // the exit code it just saw.
+        let _ = runtime.status();
+        let Some(code) = runtime.take_unexpected_exit() else {
+            continue;
+        };
+        // `--quit` and the X button go through `stop()` first, and a stop marks
+        // the exit as expected — so this branch is never reached on those
+        // paths, rather than suppressed with a flag here.
+        if let Err(error) = app.emit("engine://exited", code) {
+            eprintln!("x-matrix: 内核退出事件推送失败：{error}");
+        }
+        notify_engine_exit(&app, code);
+    });
+}
+
+/// Tell the user the kernel died without waiting for them to open the window.
+///
+/// A notification is a courtesy, not part of the lifecycle: a denied permission
+/// or a platform without a notification service prints one line and the watcher
+/// carries on. It must never panic, and never be the reason a start/stop fails.
+fn notify_engine_exit(app: &AppHandle, code: i32) {
+    use tauri_plugin_notification::NotificationExt;
+
+    // Assembled here, so it cannot reuse `src/i18n/*`: the backend has no
+    // access to the webview bundle. Two languages ship, so two branches; any
+    // other value reads as Chinese, which is the product's default.
+    let english = app
+        .try_state::<AppState>()
+        .map(|state| state.settings.read().language == crate::domain::settings::Language::En)
+        .unwrap_or(false);
+    let (title, body) = if english {
+        (
+            "X-Matrix · kernel exited",
+            format!("A kernel died on its own (code {code}). Open Logs to see what it said."),
+        )
+    } else {
+        (
+            "X-Matrix · 内核已退出",
+            format!("内核意外退出（代码 {code}），点「日志」看它最后说了什么。"),
+        )
+    };
+
+    // Log both outcomes: without the success line a silent toast setting on the
+    // machine looks exactly like a notification that was never attempted.
+    match app.notification().builder().title(title).body(body).show() {
+        Ok(()) => eprintln!("x-matrix: 内核退出通知已发送（退出码 {code}）"),
+        Err(error) => eprintln!("x-matrix: 内核退出通知发送失败（不影响主流程）：{error}"),
+    }
 }
 
 /// Whether a tray icon exists, so closing the window can hide instead of quit.

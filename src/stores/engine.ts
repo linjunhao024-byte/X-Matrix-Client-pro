@@ -17,6 +17,7 @@ import {
   type EngineStatus_Serialize,
   type TrafficSample,
 } from '../services/contract'
+import { onEngineExit, type Unlisten } from '../services/events'
 import { bytes } from '../services/format'
 
 const POLL_INTERVAL_MS = 1000
@@ -68,6 +69,13 @@ export const useEngineStore = defineStore('engine', () => {
 
   let timer: ReturnType<typeof setInterval> | undefined
   let previous: { at: number; up: number; down: number } | null = null
+  /**
+   * The crash subscription, once registered.
+   *
+   * Remounting the shell must not stack listeners: one copy of this variable is
+   * one channel, so `watchExits` is a no-op after the first call.
+   */
+  let unlistenExit: Unlisten | undefined
 
   function resetRates() {
     previous = null
@@ -192,6 +200,30 @@ export const useEngineStore = defineStore('engine', () => {
     timer = undefined
   }
 
+  /**
+   * React the moment a kernel dies on its own.
+   *
+   * The poller notices too — a second later, and only while the window is
+   * alive to tick. This subscription is what makes a crash visible while the
+   * app sits idle in the tray. The backend stays the truth: the event only
+   * prompts a re-read of the status it has already corrected.
+   */
+  async function watchExits() {
+    if (unlistenExit) return
+    try {
+      unlistenExit = await onEngineExit(() => void refreshStatus())
+    } catch {
+      // No event bridge (unit tests, a browser preview) is not a broken app:
+      // the poller is still there as the fallback.
+    }
+  }
+
+  /** Drop the crash subscription, e.g. when the shell unmounts. */
+  function unwatchExits() {
+    unlistenExit?.()
+    unlistenExit = undefined
+  }
+
   async function start(nodeId: string) {
     busy.value = true
     error.value = null
@@ -269,6 +301,8 @@ export const useEngineStore = defineStore('engine', () => {
     openEnginesDir,
     startPolling,
     stopPolling,
+    watchExits,
+    unwatchExits,
     refreshStatus,
     refreshTraffic,
     start,

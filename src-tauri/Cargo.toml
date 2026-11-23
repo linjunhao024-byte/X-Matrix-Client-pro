@@ -21,6 +21,9 @@ tauri-plugin-single-instance = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-clipboard-manager = "2"
+# A kernel that dies by itself has to reach the user while the window is
+# minimized; the backend watcher fires this and nothing else would.
+tauri-plugin-notification = "2"
 tauri-plugin-window-state = "2"
 
 serde = { version = "1", features = ["derive"] }
