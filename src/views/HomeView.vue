@@ -5,7 +5,7 @@
  * Every number here comes from the Rust runtime; nothing is derived locally
  * except the transfer rates, which are a difference between two samples.
  */
-import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 
@@ -35,6 +35,74 @@ const realSpeed = ref<number | null>(null)
 const speedPending = ref(false)
 const delayPending = ref(false)
 const delayError = ref<string | null>(null)
+
+/**
+ * Per-minute history that survives restarts. The live chart above is a
+ * 60-second ring buffer, so "how much did I use today" needs its own record —
+ * Rust keeps one on disk and this is only a view of it.
+ */
+type HistoryPoint = { minute: number | null; up: number | null; down: number | null }
+const history = ref<HistoryPoint[]>([])
+/** 60 or 1440: the panel only offers the two windows people actually ask for. */
+const historyWindow = ref<number>(60)
+let historyTimer: ReturnType<typeof setInterval> | null = null
+
+async function loadHistory(): Promise<void> {
+  try {
+    history.value = await api.trafficHistory(historyWindow.value)
+  } catch {
+    // History is a convenience: a broken read must not put an error banner on
+    // the screen that the user cannot act on.
+    history.value = []
+  }
+}
+
+function setHistoryWindow(minutes: number): void {
+  if (historyWindow.value === minutes) return
+  historyWindow.value = minutes
+  void loadHistory()
+}
+
+async function clearHistory(): Promise<void> {
+  try {
+    await api.trafficClearHistory()
+    history.value = []
+  } catch {
+    history.value = []
+  }
+}
+
+/** Bars normalised against the busiest minute in the window. */
+const historyBars = computed(() => {
+  const points = history.value
+  const peak = Math.max(1, ...points.map((point) => (point.up ?? 0) + (point.down ?? 0)))
+  return points.map((point) => {
+    const up = point.up ?? 0
+    const down = point.down ?? 0
+    const total = up + down
+    const at = (point.minute ?? 0) * 60_000
+    return {
+      key: point.minute ?? 0,
+      height: Math.max(2, Math.round((total / peak) * 100)),
+      tip: t('home.history.tip', {
+        time: new Date(at).toLocaleTimeString(),
+        down: formatBytes(down),
+        up: formatBytes(up),
+      }),
+    }
+  })
+})
+
+/** Totals for the window on screen, so the bars have a caption. */
+const historyTotals = computed(() => {
+  let up = 0
+  let down = 0
+  for (const point of history.value) {
+    up += point.up ?? 0
+    down += point.down ?? 0
+  }
+  return { up, down }
+})
 
 const router = useRouter()
 
@@ -188,6 +256,17 @@ async function setMode(mode: ProxyMode): Promise<void> {
     modeSaving.value = false
   }
 }
+
+onMounted(() => {
+  void loadHistory()
+  // Once a minute is enough: the record itself is per-minute.
+  historyTimer = setInterval(() => void loadHistory(), 60_000)
+})
+
+onUnmounted(() => {
+  if (historyTimer) clearInterval(historyTimer)
+  historyTimer = null
+})
 
 onMounted(async () => {
   try {
@@ -548,6 +627,50 @@ async function stopEngine() {
       </div>
     </section>
 
+    <section class="surface-plain panel">
+      <div class="row">
+        <h2 class="section-title">{{ t('home.history.title') }}</h2>
+        <span class="spacer" />
+        <div class="segmented">
+          <button
+            type="button"
+            :class="{ active: historyWindow === 60 }"
+            @click="setHistoryWindow(60)"
+          >
+            {{ t('home.history.hour') }}
+          </button>
+          <button
+            type="button"
+            :class="{ active: historyWindow === 1440 }"
+            @click="setHistoryWindow(1440)"
+          >
+            {{ t('home.history.day') }}
+          </button>
+        </div>
+        <button
+          class="btn btn-sm"
+          type="button"
+          :disabled="!history.length"
+          @click="clearHistory"
+        >
+          {{ t('home.history.clear') }}
+        </button>
+      </div>
+      <ul v-if="historyBars.length" class="history-bars" role="img" :aria-label="t('home.history.title')">
+        <li v-for="bar in historyBars" :key="bar.key" :title="bar.tip">
+          <span class="history-bar" :style="{ height: bar.height + '%' }" />
+        </li>
+      </ul>
+      <p v-else class="muted small history-empty">{{ t('home.history.empty') }}</p>
+      <div v-if="historyBars.length" class="muted small mono history-totals">
+        {{
+          t('home.history.totals', {
+            down: formatBytes(historyTotals.down),
+            up: formatBytes(historyTotals.up),
+          })
+        }}
+      </div>
+    </section>
 
     <section v-if="showProgress" class="surface-plain panel">
       <h2 class="section-title">{{ t('home.progress.title') }}</h2>
@@ -831,4 +954,41 @@ async function stopEngine() {
 .kernel-version {
   margin: 0;
 }
+
+/* History: one bar per minute, normalised to the busiest minute in the window.
+   With 1440 bars the gap has to shrink or the bars become hairlines. */
+.history-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 64px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+}
+
+.history-bars li {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+
+.history-bar {
+  display: block;
+  width: 100%;
+  border-radius: 2px 2px 0 0;
+  background: color-mix(in srgb, var(--accent) 78%, transparent);
+}
+
+.history-empty {
+  margin: 0;
+}
+
+.history-totals {
+  margin-top: 8px;
+}
+
 </style>

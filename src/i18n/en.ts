@@ -287,6 +287,13 @@ export const en: Record<string, string> = {
   "home.stat.nodes": "Nodes",
   "home.stat.up": "Upload",
   "home.total": "Total {value}",
+  "home.history.title": "Traffic history",
+  "home.history.empty": "Nothing recorded yet: every minute the kernel runs adds a bar here.",
+  "home.history.clear": "Clear",
+  "home.history.totals": "This window ↓{down} · ↑{up}",
+  "home.history.hour": "1 hour",
+  "home.history.day": "24 hours",
+  "home.history.tip": "{time} · ↓{down} · ↑{up}",
   // import
   "import.andMore": "and {count} more.",
   "import.apply": "Import",

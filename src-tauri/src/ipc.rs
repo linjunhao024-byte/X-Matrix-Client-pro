@@ -50,6 +50,8 @@ pub fn builder() -> Builder<tauri::Wry> {
         commands::engine::engine_apply,
         commands::engine::engine_stop,
         commands::engine::traffic_sample,
+        commands::engine::traffic_history,
+        commands::engine::traffic_clear_history,
         commands::engine::engine_config_preview,
         commands::import::import_preview,
         commands::import::import_nodes,

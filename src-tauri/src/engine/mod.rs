@@ -16,9 +16,11 @@ mod render;
 mod runtime;
 mod singbox;
 pub mod stats;
+pub mod traffic_log;
 mod xray;
 
 pub use runtime::{EngineBinary, EngineRuntime, EngineStatus, LogDelta};
+pub use traffic_log::{TrafficLog, TrafficPoint};
 pub use singbox::SingBoxEngine;
 pub use xray::XrayEngine;
 

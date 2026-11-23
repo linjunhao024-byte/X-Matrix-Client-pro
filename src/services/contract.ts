@@ -40,6 +40,7 @@ import type {
   Subscription_Deserialize,
   Subscription_Serialize,
   SystemProxyStatus,
+  TrafficPoint,
   TrafficSample,
   RuleSet_Deserialize,
   RuleSet_Serialize,
@@ -182,6 +183,12 @@ export const api = {
     unwrap(commands.engineApply(kind, nodeId)),
   engineStop: (): Promise<EngineStatus_Serialize> => unwrap(commands.engineStop()),
   trafficSample: (): Promise<TrafficSample | null> => unwrap(commands.trafficSample()),
+  // No Result envelope: this command cannot fail, so the binding returns the
+  // list directly (unlike the ones whose Rust side is `AppResult<…>`).
+  trafficHistory: (minutes: number): Promise<TrafficPoint[]> =>
+    commands.trafficHistory(minutes),
+  trafficClearHistory: (): Promise<void> =>
+    unwrap(commands.trafficClearHistory()).then(() => undefined),
   engineConfigPreview: (kind: EngineKind, nodeId: string): Promise<string> =>
     unwrap(commands.engineConfigPreview(kind, nodeId)),
 

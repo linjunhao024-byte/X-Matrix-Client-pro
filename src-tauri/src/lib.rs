@@ -70,6 +70,11 @@ pub fn run() {
                 std::fs::create_dir_all(dir)?;
             }
             app.manage(AppState::load(Store::new(base.join("store.json"))));
+            // One line per minute, kept for a week: the live chart forgets
+            // everything on restart, this does not.
+            app.manage(std::sync::Arc::new(crate::engine::TrafficLog::new(
+                base.join("traffic.jsonl"),
+            )));
             app.manage(Arc::new(EngineRuntime::new(
                 engines_dir,
                 config_dir,

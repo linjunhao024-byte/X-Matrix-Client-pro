@@ -287,6 +287,13 @@ export const zh: Record<string, string> = {
   "home.stat.nodes": "节点",
   "home.stat.up": "上传速率",
   "home.total": "累计 {value}",
+  "home.history.title": "流量历史",
+  "home.history.empty": "还没有历史：内核跑满一分钟，这里就会多一根柱子。",
+  "home.history.clear": "清空",
+  "home.history.totals": "这段时间 ↓{down} · ↑{up}",
+  "home.history.hour": "1 小时",
+  "home.history.day": "24 小时",
+  "home.history.tip": "{time} · ↓{down} · ↑{up}",
   // import
   "import.andMore": "还有 {count} 个。",
   "import.apply": "导入",

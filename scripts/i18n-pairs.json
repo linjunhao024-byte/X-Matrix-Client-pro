@@ -3243,5 +3243,40 @@
     "common.working",
     "处理中…",
     "Working…"
+  ],
+  [
+    "home.history.title",
+    "流量历史",
+    "Traffic history"
+  ],
+  [
+    "home.history.empty",
+    "还没有历史：内核跑满一分钟，这里就会多一根柱子。",
+    "Nothing recorded yet: every minute the kernel runs adds a bar here."
+  ],
+  [
+    "home.history.clear",
+    "清空",
+    "Clear"
+  ],
+  [
+    "home.history.totals",
+    "这段时间 ↓{down} · ↑{up}",
+    "This window ↓{down} · ↑{up}"
+  ],
+  [
+    "home.history.hour",
+    "1 小时",
+    "1 hour"
+  ],
+  [
+    "home.history.day",
+    "24 小时",
+    "24 hours"
+  ],
+  [
+    "home.history.tip",
+    "{time} · ↓{down} · ↑{up}",
+    "{time} · ↓{down} · ↑{up}"
   ]
 ]

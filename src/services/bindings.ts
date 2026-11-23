@@ -182,6 +182,12 @@ export const commands = {
 	 */
 	trafficSample: () => typedError<TrafficSample | null, AppError>(__TAURI_INVOKE("traffic_sample")),
 	/**
+	 *  Per-minute history, oldest first. `minutes <= 0` returns everything kept
+	 *  (seven days at most).
+	 */
+	trafficHistory: (minutes: number | null) => __TAURI_INVOKE<TrafficPoint[]>("traffic_history", { minutes }),
+	trafficClearHistory: () => typedError<null, AppError>(__TAURI_INVOKE("traffic_clear_history")),
+	/**
 	 *  The exact document that *would* be handed to the kernel.
 	 * 
 	 *  Rendering is pure, so this is safe to call with nothing installed and
@@ -1071,6 +1077,16 @@ export type SystemProxyStatus = {
 	server: string,
 	/**  A leftover snapshot means the previous run died while holding it. */
 	snapshot_present: boolean,
+};
+
+/**
+ *  One minute of proxied traffic. `minute` is unix minutes (`unix_seconds / 60`),
+ *  so the value is timezone-free and the UI can format it however it likes.
+ */
+export type TrafficPoint = {
+	minute: number | null,
+	up: number | null,
+	down: number | null,
 };
 
 /**  Cumulative traffic counters, plus (when available) the live connection list. */

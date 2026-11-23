@@ -12,6 +12,7 @@ use tauri_plugin_opener::OpenerExt;
 
 use crate::domain::Node;
 use crate::engine::stats::{self, TrafficSample};
+use crate::engine::{traffic_log, TrafficLog, TrafficPoint};
 use crate::net::latency;
 use crate::engine::{
     Endpoints, EngineBinary, EngineKind, EngineRuntime, EngineStatus, RenderInput, RunOptions,
@@ -23,6 +24,16 @@ use crate::sysproxy::ProxyGuard;
 
 type Runtime<'a> = State<'a, Arc<EngineRuntime>>;
 type Proxy<'a> = State<'a, Arc<ProxyGuard>>;
+type Traffic<'a> = State<'a, Arc<TrafficLog>>;
+
+/// Wall clock in unix seconds. The minute buckets are the user's minutes, so
+/// they come from the same clock the UI formats.
+fn now_seconds() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs() as i64)
+        .unwrap_or(0)
+}
 
 /// Resolve a node by id, or fail with a message the UI can show verbatim.
 fn lookup_node(state: &AppState, node_id: &str) -> AppResult<Node> {
@@ -320,8 +331,12 @@ pub async fn engine_stop(
 /// as an empty state rather than an error.
 #[tauri::command]
 #[specta::specta]
-pub async fn traffic_sample(runtime: Runtime<'_>) -> AppResult<Option<TrafficSample>> {
+pub async fn traffic_sample(
+    runtime: Runtime<'_>,
+    log: Traffic<'_>,
+) -> AppResult<Option<TrafficSample>> {
     let runtime = Arc::clone(runtime.inner());
+    let log = Arc::clone(log.inner());
     run_blocking(move || {
         let Some(channel) = runtime.stats_channel() else {
             return Ok(None);
@@ -330,9 +345,27 @@ pub async fn traffic_sample(runtime: Runtime<'_>) -> AppResult<Option<TrafficSam
             StatsChannel::XrayExpVar { port } => stats::read_xray(port)?,
             StatsChannel::ClashApi { port } => stats::read_clash(port)?,
         };
+        // Every live sample is also history in the making. Doing it here means
+        // the record is exactly as complete as the chart the user is watching —
+        // there is no second timer that could miss minutes.
+        log.observe(sample.up_total, sample.down_total, now_seconds());
         Ok(Some(sample))
     })
     .await
+}
+
+/// Per-minute history, oldest first. `minutes <= 0` returns everything kept
+/// (seven days at most).
+#[tauri::command]
+#[specta::specta]
+pub fn traffic_history(log: Traffic<'_>, minutes: f64) -> Vec<TrafficPoint> {
+    log.points(minutes as i64, now_seconds())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn traffic_clear_history(log: Traffic<'_>) -> AppResult<()> {
+    log.clear()
 }
 
 /// The exact document that *would* be handed to the kernel.
