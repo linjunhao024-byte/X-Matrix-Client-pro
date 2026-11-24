@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import StaleConfig from '../components/StaleConfig.vue'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
 import { availableLocales, locale, setLocale, t } from '../i18n'
+import { comboFromKeyPress } from '../services/hotkey'
 import {
   api,
   describeError,
@@ -29,13 +30,54 @@ const backupBusy = ref(false)
 /**
  * Compare resolver lists by content, not spelling: the kernel gets the parsed
  * list, so "1.1.1.1, 8.8.8.8" and "1.1.1.1 ,8.8.8.8" are the same setting.
- */
-function dnsList(raw: string): string {
+ */function dnsList(raw: string): string {
   return raw
     .split(',')
     .map((entry) => entry.trim())
     .filter((entry) => entry !== '')
     .join(',')
+}
+
+/**
+ * Which chord row is waiting for a key press, if any.
+ *
+ * The row turns into a recorder on click: the next real key press becomes the
+ * chord. That is how every shortcut editor behaves, and it removes the need to
+ * spell "Ctrl+Shift+X" by hand (or to guess whether it is case sensitive).
+ */
+const recording = ref<'hotkey_toggle' | 'hotkey_window' | null>(null)
+
+/**
+ * Take the next press as a chord.
+ *
+ * `preventDefault` matters: without it the press also reaches the page, where
+ * Ctrl+W would close the window and Space would scroll. A press that is only a
+ * modifier keeps waiting, so typing "Ctrl+…" does not end the recording early.
+ */
+function captureKey(field: 'hotkey_toggle' | 'hotkey_window', event: KeyboardEvent): void {
+  event.preventDefault()
+  const combo = comboFromKeyPress(event)
+  if (combo === null || !draft.value) return
+  draft.value = { ...draft.value, [field]: combo }
+  recording.value = null
+  saved.value = false
+}
+
+/** Put one row back to the chord the app ships with. */
+function resetChord(field: 'hotkey_toggle' | 'hotkey_window'): void {
+  if (!draft.value) return
+  const fallback = field === 'hotkey_toggle' ? 'Ctrl+Shift+X' : 'Ctrl+Shift+W'
+  draft.value = { ...draft.value, [field]: fallback }
+  recording.value = null
+  saved.value = false
+}
+
+/** Release one chord without giving it another: the action stays reachable from the UI. */
+function clearChord(field: 'hotkey_toggle' | 'hotkey_window'): void {
+  if (!draft.value) return
+  draft.value = { ...draft.value, [field]: '' }
+  recording.value = null
+  saved.value = false
 }
 
 /**
@@ -661,14 +703,51 @@ async function save() {
       <section class="surface-plain panel">
         <h2 class="section-title">{{ t('settings.hotkeysTitle') }}</h2>
         <p class="field-hint">{{ t('settings.hotkeysHint') }}</p>
-        <div class="hotkey-row">
-          <kbd>Ctrl+Shift+X</kbd>
+        <div class="hotkey-row" v-if="draft">
+          <button
+            type="button"
+            class="hotkey-chip"
+            :class="{ 'hotkey-recording': recording === 'hotkey_toggle' }"
+            :title="t('settings.hotkeyCapture')"
+            @click="recording = 'hotkey_toggle'"
+            @blur="recording = null"
+            @keydown="captureKey('hotkey_toggle', $event)"
+          >
+            {{ draft.hotkey_toggle || t('settings.hotkeyEmpty') }}
+          </button>
           <span>{{ t('settings.hotkeyToggleHint') }}</span>
+          <span class="hotkey-actions">
+            <button class="btn btn-sm" type="button" @click="resetChord('hotkey_toggle')">
+              {{ t('settings.hotkeyReset') }}
+            </button>
+            <button class="btn btn-sm" type="button" @click="clearChord('hotkey_toggle')">
+              {{ t('settings.hotkeyClear') }}
+            </button>
+          </span>
         </div>
-        <div class="hotkey-row">
-          <kbd>Ctrl+Shift+W</kbd>
+        <div class="hotkey-row" v-if="draft">
+          <button
+            type="button"
+            class="hotkey-chip"
+            :class="{ 'hotkey-recording': recording === 'hotkey_window' }"
+            :title="t('settings.hotkeyCapture')"
+            @click="recording = 'hotkey_window'"
+            @blur="recording = null"
+            @keydown="captureKey('hotkey_window', $event)"
+          >
+            {{ draft.hotkey_window || t('settings.hotkeyEmpty') }}
+          </button>
           <span>{{ t('settings.hotkeyWindowHint') }}</span>
+          <span class="hotkey-actions">
+            <button class="btn btn-sm" type="button" @click="resetChord('hotkey_window')">
+              {{ t('settings.hotkeyReset') }}
+            </button>
+            <button class="btn btn-sm" type="button" @click="clearChord('hotkey_window')">
+              {{ t('settings.hotkeyClear') }}
+            </button>
+          </span>
         </div>
+        <p class="field-hint">{{ t('settings.hotkeySaveHint') }}</p>
       </section>
 
       <section class="surface-plain panel">
@@ -727,6 +806,41 @@ async function save() {
   gap: 10px;
   font-size: 13px;
   color: var(--text-secondary);
+}
+
+/* The chip is a button because clicking it starts recording; it has to look
+   like the <kbd> it replaced, or the row reads as a different control. */
+.hotkey-chip {
+  flex: none;
+  min-width: 108px;
+  padding: 3px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.hotkey-chip:hover {
+  border-color: var(--accent);
+}
+
+/* Recording state has to be visible while the eye is on the keyboard. */
+.hotkey-recording,
+.hotkey-recording:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 1px;
+}
+
+.hotkey-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
 }
 
 kbd {

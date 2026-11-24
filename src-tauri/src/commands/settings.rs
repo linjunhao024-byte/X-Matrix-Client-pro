@@ -145,6 +145,14 @@ pub fn save_settings(
         }
     }
 
+    // A chord is a machine-side registration, like the proxy key: saving a new
+    // one has to take effect now, and saving an empty one has to release the old
+    // combination, or the page would claim a shortcut the desktop no longer has.
+    crate::hotkeys::apply(
+        crate::hotkeys::parse_optional(&settings.hotkey_toggle).ok().flatten(),
+        crate::hotkeys::parse_optional(&settings.hotkey_window).ok().flatten(),
+    );
+
     // The tray lists the node names and checks the current mode, so a saved
     // setting is a reason to rebuild it.
     crate::refresh_tray(&app);

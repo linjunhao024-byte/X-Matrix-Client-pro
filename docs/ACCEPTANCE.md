@@ -981,3 +981,44 @@ bash /d/tmp/shots/nodestale-accept.sh
 3. **`configs/xray.json` 是多行缩进的 JSON。** 用 `"address": "..." ... "port": N` 这样的正则去核对时，`.{0,120}?` 跨不过换行，必须加 `(?s)`，否则永远读到 `absent`，看起来像功能没生效。
 
 **一句实话**：本节证明的是「改的是正在跑的那个节点 → 界面说实话 → 按钮真的按新值重启」，不证明新端口上的节点连得通——云电脑上只有一个故意连不通的测试节点。
+
+---
+
+## 41. 全局快捷键可以改、可以关，改完立刻生效（2026-11-24，云电脑 cloudpc-test）
+
+**要证明的事**：设置页里那两个快捷键不再是写死的 `Ctrl+Shift+X` / `Ctrl+Shift+W`——能被重新录制、能点「关掉这一项」取消、保存后**不用重启应用**就换过来，重启之后仍然是新的，两个键不能相同，写错了要当场拒绝。
+
+**验法**：
+```bash
+bash /d/tmp/shots/hotkey-accept.sh
+```
+脚本先把云电脑 `store.json` 里的两个键归位成出厂值（`prep-store.ps1`），再启动应用：点一下录制按钮 → 用 `keybd_event` 按下 `Ctrl+Alt+F9` → 保存 → 记录内核 pid → 再分别按新键、旧键、新键（第二次是停）→ `--quit` 重启 → 按新键 → 清空窗口快捷键 → 按旧窗口键 → 两个「恢复默认」→ 保存 → 按出厂键启停。
+
+| 判据 | 证据（`hotkey-accept.txt`） | 结果 |
+|---|---|---|
+| 出厂状态下两个键是 `Ctrl+Shift+X` / `Ctrl+Shift+W` | `store before: toggle='Ctrl+Shift+X' window='Ctrl+Shift+W'`、`chips before: Ctrl+Shift+X , Ctrl+Shift+W` | **通过** |
+| 录制按钮吃下真按键 | `click toggle chip: Ctrl+Shift+X` → `sent new chord: True` → `chips after record: Ctrl+Alt+F9 , Ctrl+Shift+W` | **通过** |
+| 保存落库 | `store after save: toggle='Ctrl+Alt+F9' window='Ctrl+Shift+W'` | **通过** |
+| **不重启就生效** | 保存后直接按新键：`kernels after new chord: xray#3652` | **通过** |
+| 旧键立刻失效 | `kernels after old chord: xray#3652 (was xray#3652)`（pid 没变=没被按到） | **通过** |
+| 同一个键能停 | `kernels after second new chord: none` | **通过** |
+| 重启后仍是新键 | `relaunched: True` → `kernels after restart chord: xray#5940` | **通过** |
+| 窗口快捷键照常藏/显 | `window chord: visible before=True hidden=False shown=True iconic=False` | **通过** |
+| 关掉窗口键后它彻底无效 | `store after clear window: window=''` → 按旧键 `window visible after old window chord: True`（窗口没被藏） | **通过** |
+| 恢复默认把两行都还原 | `chips after reset 0: Ctrl+Shift+X , 未设置` → `chips after reset 1: Ctrl+Shift+X , Ctrl+Shift+W` | **通过** |
+| 出厂键又能用 | `kernels after default chord: xray#5168` → `kernels after stopping by default chord: none` | **通过** |
+
+后端 stderr 也证明注册发生在保存那一刻，而不是下次启动：启动时两行 `全局快捷键 Ctrl+Shift+X 已就绪` / `Ctrl+Shift+W 已就绪`；点保存后立刻多出 `全局快捷键 Ctrl+Alt+F9 已就绪` + `Ctrl+Shift+W 已就绪`。
+
+**三个设计理由**：
+- **快捷键以纯文本存。** `Settings.hotkey_toggle` / `hotkey_window` 就是 `Ctrl+Alt+F9` 这种字符串，人能读、能手抄、能进备份文件；`Combo::parse()` 接受宽松写法（`ctrl+shift+x`、`meta+space`）但落库和日志里统一成一种写法（`Ctrl+Alt+Shift+Win+<键>` 顺序），所以设置页、日志、文档说的是同一个字符串。
+- **用「按一下」录，而不是让人手打。** 大小写、修饰键顺序、`F1–F24` 这些最容易写错的地方交给键盘本身；`comboFromKeyPress()` 只做翻译，真正能不能用由 Rust 端 `parse_optional()` 说了算，写错了保存就被拒绝并指出是哪个词。
+- **注册是尽力而为。** `RegisterHotKey` 失败（这个键被别的程序占着）只写一行日志，不拦保存——能不能保存设置，不该取决于当时有没有别的软件占着这个键。重注册通过 `WM_APP_REREGISTER` 投递给热键消息线程，在 `GetMessageW` 那一边做，所以保存后立刻生效。
+
+**四个坑**：
+1. **同一个 `Mutex` 自锁。** 第一版 `window_proc` 在 `WM_APP_REREGISTER` 分支里先 `let guard = BINDINGS.lock()` 再调 `register_all()`，而 `register_all()` 里又 `BINDINGS.lock()`——非可重入锁当场死锁，偏偏这是唯一能注册热键的线程。现象极具迷惑性：旧键已经被 `UnregisterHotKey` 掉，新键没注册上，重启应用又恢复正常。现在 `register_all()` 只取一次快照再注册，锁不跨 `RegisterHotKey`。
+2. **`aria-label` 会把按钮的可访问名顶掉。** chip 上写了 `aria-label="点一下，再按下新的组合键"`，UIA 树里两个 chip 都叫这句提示，读不到真正的快捷键；改成 `:title` 后 Name 就是快捷键本身（对读屏用户也更有用）。
+3. **`恢复默认` 在设置页有四个。** 前两个属于内核二进制那两行，按名字点会点到它们；验收脚本按文档顺序取第 3、4 个，并且每一步都回读 chip 文本确认改的是快捷键。
+4. **被快捷键藏起来的窗口会从 UIA 树里消失。** `Get-Win` 返回 null，后面每一步都报「找不到」；要用 `ShowWindow(hwnd, SW_RESTORE)` + `SetForegroundWindow` 把窗口拉回来再继续。另外注册时必须带 `MOD_NOREPEAT`（0x4000），否则按住不放会连发。
+
+**一句实话**：本节证明「录进去的键真的注册上了、旧键真的失效、重启后仍然是新键、关掉就真的没有」，不证明所有键盘布局下都能录——验收只用过 `Ctrl+Alt+F9` 这种 ASCII 组合。

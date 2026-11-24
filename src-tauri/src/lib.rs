@@ -145,8 +145,10 @@ pub fn run() {
             watch_engine_exits(app.handle().clone());
             auto_connect(app.handle().clone());
 
-            // Both chords are fixed for now. A shortcut the user cannot find is
-            // the same as no shortcut, so the settings page lists them.
+            // Both chords come from the settings, so they can be rebound (and
+            // switched off by clearing the text). A shortcut the user cannot
+            // find is the same as no shortcut, which is why the settings page
+            // shows what is actually registered.
             // The chords live on their own message thread (see `hotkeys`):
             // the plugin route registered them but never received the events.
             install_hotkeys(app.handle());
@@ -594,11 +596,24 @@ fn ensure_window_reachable(window: &tauri::WebviewWindow) {
 /// combination, and an app that refuses to start over a shortcut would be
 /// worse than one without them. The failure is only logged.
 fn install_hotkeys(app: &AppHandle) {
-    let app = app.clone();
-    hotkeys::install(move |chord| match chord {
-        hotkeys::Chord::Toggle => toggle_kernel(&app),
-        hotkeys::Chord::Window => toggle_window(&app),
-    });
+    let app_handle = app.clone();
+    // Read the saved chords under the same lock the save path takes, so a
+    // startup racing a save still registers one coherent pair.
+    let (toggle, window) = {
+        let settings = app.state::<AppState>().settings.read().clone();
+        (
+            hotkeys::parse_optional(&settings.hotkey_toggle).ok().flatten(),
+            hotkeys::parse_optional(&settings.hotkey_window).ok().flatten(),
+        )
+    };
+    hotkeys::install(
+        move |chord| match chord {
+            hotkeys::Chord::Toggle => toggle_kernel(&app_handle),
+            hotkeys::Chord::Window => toggle_window(&app_handle),
+        },
+        toggle,
+        window,
+    );
 }
 
 /// Bring the window back from the tray (or from minimised).

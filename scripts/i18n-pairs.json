@@ -2890,24 +2890,39 @@
     "Fragment length"
   ],
   [
-    "settings.hotkeyToggle",
-    "Ctrl+Shift+X",
-    "Ctrl+Shift+X"
-  ],
-  [
     "settings.hotkeyToggleHint",
     "启动 / 停止内核",
     "Start / stop the kernel"
   ],
   [
-    "settings.hotkeyWindow",
-    "Ctrl+Shift+W",
-    "Ctrl+Shift+W"
-  ],
-  [
     "settings.hotkeyWindowHint",
     "显示 / 隐藏窗口（内核继续跑）",
     "Show / hide the window (the kernel keeps running)"
+  ],
+  [
+    "settings.hotkeyCapture",
+    "点一下，再按下新的组合键",
+    "Click, then press the new chord"
+  ],
+  [
+    "settings.hotkeyClear",
+    "关掉这一项",
+    "Turn it off"
+  ],
+  [
+    "settings.hotkeyEmpty",
+    "未设置",
+    "Not set"
+  ],
+  [
+    "settings.hotkeyReset",
+    "恢复默认",
+    "Default"
+  ],
+  [
+    "settings.hotkeySaveHint",
+    "改完记得点上面的「保存」，保存后立刻生效",
+    "Press Save above; a new chord takes effect immediately"
   ],
   [
     "settings.hotkeysHint",

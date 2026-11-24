@@ -119,6 +119,25 @@ pub struct Settings {
     /// keeps the tunnel up; `false` quits and restores the system proxy, which
     /// is what someone who thinks of X as "close the program" expects.
     pub close_to_tray: bool,
+    /// Chord that starts or stops the tunnel from anywhere on the desktop,
+    /// spelled the way the app spells it back (`Ctrl+Shift+X`). Empty switches
+    /// the shortcut off: a chord nobody can press still looks registered in the
+    /// settings page, which is worse than saying "off".
+    #[serde(default = "default_hotkey_toggle")]
+    pub hotkey_toggle: String,
+    /// Chord that shows or hides the window, same spelling and same rule.
+    #[serde(default = "default_hotkey_window")]
+    pub hotkey_window: String,
+}
+
+/// The chords a fresh install starts with — the ones the app shipped since the
+/// first build, so an existing user sees no change after upgrading.
+fn default_hotkey_toggle() -> String {
+    crate::hotkeys::DEFAULT_TOGGLE.to_string()
+}
+
+fn default_hotkey_window() -> String {
+    crate::hotkeys::DEFAULT_WINDOW.to_string()
 }
 
 /// The probe used by every "is this node actually reachable" check. Kept in the
@@ -311,6 +330,8 @@ impl Default for Settings {
             fragment_interval: default_fragment_interval(),
             start_minimized: false,
             close_to_tray: true,
+            hotkey_toggle: default_hotkey_toggle(),
+            hotkey_window: default_hotkey_window(),
         }
     }
 }
@@ -367,6 +388,22 @@ impl Settings {
             }
         }
         self.dns_entries()?;
+        // Both chords are parsed here so a typo is refused at save time instead
+        // of turning into a shortcut that silently does nothing. Empty text is
+        // meaningful (switched off), which is why `parse_optional` exists.
+        let toggle = crate::hotkeys::parse_optional(&self.hotkey_toggle)?;
+        let window = crate::hotkeys::parse_optional(&self.hotkey_window)?;
+        // Windows keys ids per combination: registering the same chord twice
+        // leaves one action unreachable, and the settings page would show two
+        // rows that claim to work.
+        if let (Some(toggle), Some(window)) = (toggle, window) {
+            if toggle == window {
+                return Err(format!(
+                    "两个快捷键不能相同（都是 {}）",
+                    toggle.label()
+                ));
+            }
+        }
         Ok(())
     }
 
@@ -495,6 +532,55 @@ mod tests {
     }
 
     #[test]
+    fn the_default_chords_are_the_shipped_ones() {
+        // An existing user must not notice anything after upgrading: the chords
+        // the app has always registered are still what a fresh store holds.
+        let defaults = Settings::default();
+        assert_eq!(defaults.hotkey_toggle, "Ctrl+Shift+X");
+        assert_eq!(defaults.hotkey_window, "Ctrl+Shift+W");
+        assert!(defaults.validate().is_ok());
+    }
+
+    #[test]
+    fn chords_are_validated_at_save_time() {
+        // A typo has to be refused here rather than reach `RegisterHotKey`, where
+        // the only symptom would be a chord that never fires.
+        let s = Settings { hotkey_toggle: "Ctrl+Shift+Hyper".into(), ..Default::default() };
+        let error = s.validate().unwrap_err();
+        assert!(error.contains("Hyper"), "error: {error}");
+
+        let s = Settings { hotkey_window: "Ctrl+Shift".into(), ..Default::default() };
+        let error = s.validate().unwrap_err();
+        assert!(error.contains("修饰键"), "error: {error}");
+
+        // Both blank is a legitimate state: two shortcuts, both switched off.
+        let s = Settings {
+            hotkey_toggle: String::new(),
+            hotkey_window: "  ".into(),
+            ..Default::default()
+        };
+        assert!(s.validate().is_ok());
+    }
+
+    #[test]
+    fn one_chord_cannot_own_two_actions() {
+        let s = Settings {
+            hotkey_toggle: "ctrl+shift+w".into(),
+            hotkey_window: "Ctrl+Shift+W".into(),
+            ..Default::default()
+        };
+        let error = s.validate().unwrap_err();
+        assert!(error.contains("不能相同"), "error: {error}");
+        // Different spelling of the same chord is still the same chord.
+        let s = Settings {
+            hotkey_toggle: "Alt+F5".into(),
+            hotkey_window: "F5".into(),
+            ..Default::default()
+        };
+        assert!(s.validate().is_ok());
+    }
+
+    #[test]
     fn an_older_store_without_the_kernel_overrides_still_loads() {
         // A store.json written before N11 has neither field. Both must fall
         // back to "use the engines folder" instead of making the file
@@ -509,6 +595,9 @@ mod tests {
         let loaded: Settings = serde_json::from_str(old).expect("old store must still load");
         assert!(loaded.xray_binary.is_empty());
         assert!(loaded.singbox_binary.is_empty());
+        // Added later still: an old document keeps the chords it effectively had.
+        assert_eq!(loaded.hotkey_toggle, "Ctrl+Shift+X");
+        assert_eq!(loaded.hotkey_window, "Ctrl+Shift+W");
     }
 
     #[test]

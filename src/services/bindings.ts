@@ -1242,6 +1242,15 @@ export type Settings_Deserialize = {
 	 *  is what someone who thinks of X as "close the program" expects.
 	 */
 	close_to_tray?: boolean,
+	/**
+	 *  Chord that starts or stops the tunnel from anywhere on the desktop,
+	 *  spelled the way the app spells it back (`Ctrl+Shift+X`). Empty switches
+	 *  the shortcut off: a chord nobody can press still looks registered in the
+	 *  settings page, which is worse than saying "off".
+	 */
+	hotkey_toggle?: string,
+	/**  Chord that shows or hides the window, same spelling and same rule. */
+	hotkey_window?: string,
 };
 
 /**
@@ -1395,6 +1404,15 @@ export type Settings_Serialize = {
 	 *  is what someone who thinks of X as "close the program" expects.
 	 */
 	close_to_tray: boolean,
+	/**
+	 *  Chord that starts or stops the tunnel from anywhere on the desktop,
+	 *  spelled the way the app spells it back (`Ctrl+Shift+X`). Empty switches
+	 *  the shortcut off: a chord nobody can press still looks registered in the
+	 *  settings page, which is worse than saying "off".
+	 */
+	hotkey_toggle: string,
+	/**  Chord that shows or hides the window, same spelling and same rule. */
+	hotkey_window: string,
 };
 
 export type Subscription = Subscription_Serialize | Subscription_Deserialize;
