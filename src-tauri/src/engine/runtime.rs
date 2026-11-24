@@ -224,6 +224,17 @@ pub struct EngineStatus {
     /// while [`EngineStatus::mux_enabled`]; a stopped kernel reports the
     /// default instead of the last used value.
     pub mux_concurrency: u16,
+    /// Whether the running kernel was started with TLS fragmentation. Xray
+    /// bakes it into `tlsSettings`, so the settings page needs it for the same
+    /// reason as [`EngineStatus::mux_enabled`]: to tell a saved change from an
+    /// applied one.
+    pub fragment_enabled: bool,
+    /// The piece-size range the running kernel was started with, verbatim from
+    /// the settings; only meaningful while [`EngineStatus::fragment_enabled`].
+    pub fragment_length: String,
+    /// The delay range the running kernel was started with, verbatim from the
+    /// settings; only meaningful while [`EngineStatus::fragment_enabled`].
+    pub fragment_interval: String,
 }
 
 impl Default for EngineStatus {
@@ -244,6 +255,9 @@ impl Default for EngineStatus {
             dns_servers: String::new(),
             mux_enabled: false,
             mux_concurrency: 8,
+            fragment_enabled: false,
+            fragment_length: "100-200".to_string(),
+            fragment_interval: "10-20".to_string(),
         }
     }
 }
@@ -298,6 +312,15 @@ struct Running {
     /// The stream cap this kernel was started with; see
     /// [`EngineStatus::mux_concurrency`].
     mux_concurrency: u16,
+    /// The TLS fragmentation opt-in this kernel was started with; see
+    /// [`EngineStatus::fragment_enabled`].
+    fragment_enabled: bool,
+    /// The piece-size range this kernel was started with; see
+    /// [`EngineStatus::fragment_length`].
+    fragment_length: String,
+    /// The delay range this kernel was started with; see
+    /// [`EngineStatus::fragment_interval`].
+    fragment_interval: String,
     /// True once [`EngineRuntime::stop`] asked this kernel to go away. Set
     /// before the kill because a kill that reports an error can still have
     /// taken the process down: either way the exit was the user's decision, not
@@ -404,14 +427,17 @@ impl EngineRuntime {
 
         // The log level is rendered into the config, so the options are the
         // only place it exists before the config is written — read it before
-        // `with_options` consumes them. Same for the DNS/LAN/mux settings: the
-        // UI compares them with the saved ones, and the rendered config cannot
-        // give the original text back.
+        // `with_options` consumes them. Same for the DNS/LAN/mux/fragment
+        // settings: the UI compares them with the saved ones, and the rendered
+        // config cannot give the original text back.
         let log_level = options.log_level;
         let allow_lan = options.allow_lan;
         let dns_servers = options.dns_servers_raw.clone();
         let mux_enabled = options.mux_enabled;
         let mux_concurrency = options.mux_concurrency;
+        let fragment_enabled = options.fragment_enabled;
+        let fragment_length = options.fragment_length.clone();
+        let fragment_interval = options.fragment_interval.clone();
         let mut input = RenderInput::new(node, endpoints).with_options(options);
         if kind == EngineKind::SingBox {
             input = input.with_rule_set_dir(&rule_set_dir);
@@ -459,6 +485,9 @@ impl EngineRuntime {
             dns_servers: dns_servers.clone(),
             mux_enabled,
             mux_concurrency,
+            fragment_enabled,
+            fragment_length: fragment_length.clone(),
+            fragment_interval: fragment_interval.clone(),
             expected: false,
         });
         *self.last_exit_code.lock() = None;
@@ -483,6 +512,9 @@ impl EngineRuntime {
             dns_servers,
             mux_enabled,
             mux_concurrency,
+            fragment_enabled,
+            fragment_length,
+            fragment_interval,
         })
     }
 
@@ -581,6 +613,9 @@ impl EngineRuntime {
                 dns_servers: running.dns_servers.clone(),
                 mux_enabled: running.mux_enabled,
                 mux_concurrency: running.mux_concurrency,
+                fragment_enabled: running.fragment_enabled,
+                fragment_length: running.fragment_length.clone(),
+                fragment_interval: running.fragment_interval.clone(),
             },
         }
     }
@@ -1487,6 +1522,65 @@ four"
         assert_eq!(status.mux_concurrency, 8);
         assert!(!EngineStatus::default().mux_enabled);
         assert_eq!(EngineStatus::default().mux_concurrency, 8);
+
+        std::fs::remove_dir_all(&h.dir).ok();
+    }
+
+    #[test]
+    fn status_reports_the_fragment_the_kernel_was_started_with() {
+        let h = harness(true, false);
+        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let options = RunOptions {
+            fragment_enabled: true,
+            fragment_length: "120-240".into(),
+            fragment_interval: "15-30".into(),
+            ..RunOptions::new()
+        };
+        let started = h
+            .runtime
+            .start(EngineKind::Xray, &node(), endpoints, options)
+            .unwrap();
+
+        // The fragment text is baked into the rendered config, so only the
+        // runtime's own copy can tell the page what the kernel actually got.
+        assert!(started.fragment_enabled);
+        assert_eq!(started.fragment_length, "120-240");
+        assert_eq!(started.fragment_interval, "15-30");
+        let status = h.runtime.status();
+        assert!(status.fragment_enabled);
+        assert_eq!(status.fragment_length, "120-240");
+        assert_eq!(status.fragment_interval, "15-30");
+
+        std::fs::remove_dir_all(&h.dir).ok();
+    }
+
+    #[test]
+    fn a_stopped_kernel_reports_no_fragment() {
+        let h = harness(true, false);
+        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let options = RunOptions {
+            fragment_enabled: true,
+            fragment_length: "80-160".into(),
+            fragment_interval: "5-10".into(),
+            ..RunOptions::new()
+        };
+        h.runtime
+            .start(EngineKind::Xray, &node(), endpoints, options)
+            .unwrap();
+
+        h.runtime.stop().unwrap();
+        // Nothing runs, so nothing is being fragmented: every field falls back
+        // to the default rather than the last used value, which the UI would
+        // otherwise read as a live setting the kernel never received.
+        let status = h.runtime.status();
+        assert!(!status.running);
+        assert!(!status.fragment_enabled);
+        assert_eq!(status.fragment_length, "100-200");
+        assert_eq!(status.fragment_interval, "10-20");
+        let defaults = EngineStatus::default();
+        assert!(!defaults.fragment_enabled);
+        assert_eq!(defaults.fragment_length, "100-200");
+        assert_eq!(defaults.fragment_interval, "10-20");
 
         std::fs::remove_dir_all(&h.dir).ok();
     }

@@ -440,6 +440,23 @@ export type EngineStatus_Deserialize = {
 	 *  default instead of the last used value.
 	 */
 	mux_concurrency: number,
+	/**
+	 *  Whether the running kernel was started with TLS fragmentation. Xray
+	 *  bakes it into `tlsSettings`, so the settings page needs it for the same
+	 *  reason as [`EngineStatus::mux_enabled`]: to tell a saved change from an
+	 *  applied one.
+	 */
+	fragment_enabled: boolean,
+	/**
+	 *  The piece-size range the running kernel was started with, verbatim from
+	 *  the settings; only meaningful while [`EngineStatus::fragment_enabled`].
+	 */
+	fragment_length: string,
+	/**
+	 *  The delay range the running kernel was started with, verbatim from the
+	 *  settings; only meaningful while [`EngineStatus::fragment_enabled`].
+	 */
+	fragment_interval: string,
 };
 
 /**  What the UI shows about the runtime. */
@@ -492,6 +509,23 @@ export type EngineStatus_Serialize = {
 	 *  default instead of the last used value.
 	 */
 	mux_concurrency: number,
+	/**
+	 *  Whether the running kernel was started with TLS fragmentation. Xray
+	 *  bakes it into `tlsSettings`, so the settings page needs it for the same
+	 *  reason as [`EngineStatus::mux_enabled`]: to tell a saved change from an
+	 *  applied one.
+	 */
+	fragment_enabled: boolean,
+	/**
+	 *  The piece-size range the running kernel was started with, verbatim from
+	 *  the settings; only meaningful while [`EngineStatus::fragment_enabled`].
+	 */
+	fragment_length: string,
+	/**
+	 *  The delay range the running kernel was started with, verbatim from the
+	 *  settings; only meaningful while [`EngineStatus::fragment_enabled`].
+	 */
+	fragment_interval: string,
 };
 
 /**
@@ -1178,6 +1212,26 @@ export type Settings_Deserialize = {
 	 */
 	mux_concurrency?: number,
 	/**
+	 *  Split the TLS ClientHello into small pieces before it leaves the machine.
+	 *  Xray renders this as `tlsSettings.fragment`; sing-box has no equivalent,
+	 *  so the setting is advertised as Xray-only. Off by default: it adds a
+	 *  little latency and is only useful against a middlebox that fingerprints
+	 *  the handshake.
+	 */
+	fragment_enabled?: boolean,
+	/**
+	 *  Piece size for [`Settings::fragment_enabled`], written as an `a-b` range
+	 *  of bytes such as `100-200` — Xray's `tlsSettings.fragment.length` takes
+	 *  exactly this text. Only meaningful while the feature is enabled.
+	 */
+	fragment_length?: string,
+	/**
+	 *  Delay between pieces for [`Settings::fragment_enabled`], written as an
+	 *  `a-b` range of milliseconds such as `10-20` — Xray's
+	 *  `tlsSettings.fragment.interval`. Only meaningful while enabled.
+	 */
+	fragment_interval?: string,
+	/**
 	 *  Come up with the window hidden, tray only. For people who launch this at
 	 *  login and never want to see it.
 	 */
@@ -1310,6 +1364,26 @@ export type Settings_Serialize = {
 	 *  `mux_enabled`; both kernels treat it as an upper bound, not a promise.
 	 */
 	mux_concurrency: number,
+	/**
+	 *  Split the TLS ClientHello into small pieces before it leaves the machine.
+	 *  Xray renders this as `tlsSettings.fragment`; sing-box has no equivalent,
+	 *  so the setting is advertised as Xray-only. Off by default: it adds a
+	 *  little latency and is only useful against a middlebox that fingerprints
+	 *  the handshake.
+	 */
+	fragment_enabled: boolean,
+	/**
+	 *  Piece size for [`Settings::fragment_enabled`], written as an `a-b` range
+	 *  of bytes such as `100-200` — Xray's `tlsSettings.fragment.length` takes
+	 *  exactly this text. Only meaningful while the feature is enabled.
+	 */
+	fragment_length: string,
+	/**
+	 *  Delay between pieces for [`Settings::fragment_enabled`], written as an
+	 *  `a-b` range of milliseconds such as `10-20` — Xray's
+	 *  `tlsSettings.fragment.interval`. Only meaningful while enabled.
+	 */
+	fragment_interval: string,
 	/**
 	 *  Come up with the window hidden, tray only. For people who launch this at
 	 *  login and never want to see it.

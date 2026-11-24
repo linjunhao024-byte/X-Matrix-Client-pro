@@ -911,3 +911,37 @@ V2rayN 和 Clash 都把 mux 当普通开关放在设置里；本项目此前完�
 2. **连接数输入框在开关关闭时是 `disabled`。** 先设数字再开开关会报「对于未启用的元素，不允许执行此操作」，正确的顺序是「开开关 → 再 SetValue」；反过来关的时候也一样，先关再改数字不会自动保存。
 
 **一句实话**：本节证明的是「开关 → 渲染配置 → 重启后生效」这条链路，不证明 mux 真的让连接更快——那要看线路，云电脑上只有一个跑不通的测试节点，测不出来。
+
+## 39. 分片（TLS fragmentation）：让 ClientHello 拆成几块走出去（2026-11-24，云电脑 cloudpc-test）
+
+V2rayN 有「分片」，Clash 侧靠内核插件做同类事；本项目的 `Security::Tls` 一直只写 sni/alpn/证书钉，配置里根本没有 `fragment` 这一块。做了全局开关而不是逐节点参数，因为它和端口、日志级别、多路复用一样属于「内核怎么说话」这一层，也顺带接进了 §37 的那一条提示（`settings.stale.itemFragment`）。
+
+**验法**：`bash /d/tmp/shots/fragment-accept.sh`（前置脚本 `fragment-patch.ps1` 把 `last_node_id` 指到 TLS 节点 `Clip-Test`，并把开关先摆成关）
+
+**判据**（真机日志 `C:\Users\Administrator\fragment-accept.txt`）：
+
+| 判据 | 真机证据 | 结果 |
+| --- | --- | --- |
+| 开关默认关时配置里没有分片块 | `render fragment keys before: 0` | **通过** |
+| 打开开关能改长度和间隔 | `set length 120-220: True`、`set interval 20-40: True` | **通过** |
+| 保存后落盘的是用户写的范围 | `store after save: fragment=true length=120-220 interval=20-40` | **通过** |
+| 提示里点名分片 | `stale: 内核还在用旧设置：分片`（`item fragment: True`） | **通过** |
+| 提示带一键重启 | `restart button: True` | **通过** |
+| 重启真的换了进程 | `pids before=4672 after=1464` | **通过** |
+| 渲染出的就是 Xray 认的形状 | `render fragment key: 1`、`render length 120-220: 1`、`render interval 20-40: 1`、`render packets tlshello: 1` | **通过** |
+| 带着分片块也能起来（即 schema 合法） | `kernel alive after fragment restart: 1` | **通过** |
+| 重启后提示自己消失 | `stale after restart: 0` | **通过** |
+| 关掉保存后同样要先重启 | `stale back: 1` → 重启后 `render fragment keys restored: 0` | **通过** |
+| 系统代理不受影响 | `proxy now: ProxyEnable=1 ProxyServer=127.0.0.1:7890` | **通过** |
+| 停止后一切归零 | `after stop: ProxyEnable=0 ProxyServer=`，`kernels after stop:`（空） | **通过** |
+
+**三个设计理由**：
+- **只在 `Security::Tls` 里写。** Xray 的 `RealityObject` 没有 `fragment` 字段，写进去整份配置会被内核判为非法；`Security::None` 连 `tlsSettings` 都不存在，更谈不上分片。渲染器只改 Tls 那一个分支，Reality/None 各有测试断言「这个键必须不在」。
+- **`packets` 钉死 `tlshello`。** 这个值是「拆 ClientHello」的唯一语义，其余拼法在内核里没有定义；把它写成常量而不是设置项，避免用户把功能改成什么都不做。
+- **范围在设置层就校验，不在渲染时兜底。** `parse_positive_range` 要求 `a-b` 且 `a<=b`、都不为 0，`validate()` 直接在保存时拒绝（`分片长度要写成 a-b 这样的范围，例如 100-200`）。渲染器拿到的永远是用户写的那串字面量，配置和界面不会背地里变成两个值。
+
+**两个坑**：
+1. **开关的 UIA Name 是整句标签，不是那两个字。** `分片（TLS fragment）` 这样的名字意味着 `Buttons-Named` 的精确匹配找不到它；要么按子串找，要么把标签写在 `AutomationProperties.Name` 上。本节第一次跑就死在 `toggle found: False`。
+2. **旧 store 里不会自动长出这三个键。** `#[serde(default)]` 只在反序列化时补默认值，存回去要等用户真的按一次「保存」；所以验收脚本得先跑一次保存，或者像这里一样显式 patch 后再比对，否则 `fragment=absent` 会被误读成「功能没生效」。
+
+**一句实话**：本节证明的是「开关 → 渲染配置 → 内核接受这份配置并起来」，不证明分片真的能绕过谁的封锁——那要看对面是谁，云电脑上只有一个连不通的测试节点，测不出来。

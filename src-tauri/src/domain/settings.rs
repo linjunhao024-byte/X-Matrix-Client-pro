@@ -95,6 +95,23 @@ pub struct Settings {
     /// `mux_enabled`; both kernels treat it as an upper bound, not a promise.
     #[serde(default = "default_mux_concurrency")]
     pub mux_concurrency: u16,
+    /// Split the TLS ClientHello into small pieces before it leaves the machine.
+    /// Xray renders this as `tlsSettings.fragment`; sing-box has no equivalent,
+    /// so the setting is advertised as Xray-only. Off by default: it adds a
+    /// little latency and is only useful against a middlebox that fingerprints
+    /// the handshake.
+    #[serde(default)]
+    pub fragment_enabled: bool,
+    /// Piece size for [`Settings::fragment_enabled`], written as an `a-b` range
+    /// of bytes such as `100-200` — Xray's `tlsSettings.fragment.length` takes
+    /// exactly this text. Only meaningful while the feature is enabled.
+    #[serde(default = "default_fragment_length")]
+    pub fragment_length: String,
+    /// Delay between pieces for [`Settings::fragment_enabled`], written as an
+    /// `a-b` range of milliseconds such as `10-20` — Xray's
+    /// `tlsSettings.fragment.interval`. Only meaningful while enabled.
+    #[serde(default = "default_fragment_interval")]
+    pub fragment_interval: String,
     /// Come up with the window hidden, tray only. For people who launch this at
     /// login and never want to see it.
     pub start_minimized: bool,
@@ -123,6 +140,34 @@ pub const DEFAULT_TEST_CONCURRENCY: u32 = 2;
 /// too many lets one lossy link stall every stream at once.
 fn default_mux_concurrency() -> u16 {
     8
+}
+
+/// V2rayN's classic piece size. Xray expects this `a-b` text unchanged in
+/// `tlsSettings.fragment.length`; the range is parsed (not normalised) at save
+/// time so the kernel and the settings page see the same string.
+fn default_fragment_length() -> String {
+    "100-200".to_string()
+}
+
+/// Ten to twenty milliseconds between pieces, matching the usual client
+/// default. Parsed like [`default_fragment_length`].
+fn default_fragment_interval() -> String {
+    "10-20".to_string()
+}
+
+/// Parse one `a-b` fragment range: two positive integers separated by a single
+/// dash, surrounding whitespace allowed.
+///
+/// Xray rejects the whole config when a fragment range does not parse, so this
+/// is the one parser both `validate()` and the tests rely on.
+fn parse_positive_range(raw: &str) -> Option<(u32, u32)> {
+    let (low, high) = raw.split_once('-')?;
+    let low = low.trim().parse::<u32>().ok()?;
+    let high = high.trim().parse::<u32>().ok()?;
+    if low == 0 || high == 0 || low > high {
+        return None;
+    }
+    Some((low, high))
 }
 
 /// One resolver the user asked for.
@@ -261,6 +306,9 @@ impl Default for Settings {
             dns_servers: String::new(),
             mux_enabled: false,
             mux_concurrency: default_mux_concurrency(),
+            fragment_enabled: false,
+            fragment_length: default_fragment_length(),
+            fragment_interval: default_fragment_interval(),
             start_minimized: false,
             close_to_tray: true,
         }
@@ -304,6 +352,19 @@ impl Settings {
         // switched on, so it is refused instead of reinterpreted.
         if !(1..=128).contains(&self.mux_concurrency) {
             return Err("mux_concurrency must be between 1 and 128".into());
+        }
+        // Xray refuses the entire config when a fragment range does not parse,
+        // so a switched-on fragment with a typo has to block the save instead of
+        // reaching the kernel on the next start. An empty string is refused by
+        // the same parse: "enabled but blank" would otherwise silently disable
+        // the feature the user just turned on.
+        if self.fragment_enabled {
+            if parse_positive_range(&self.fragment_length).is_none() {
+                return Err("分片长度要写成 a-b 这样的范围，例如 100-200".to_string());
+            }
+            if parse_positive_range(&self.fragment_interval).is_none() {
+                return Err("分片间隔要写成 a-b 这样的范围，例如 10-20".to_string());
+            }
         }
         self.dns_entries()?;
         Ok(())
@@ -481,6 +542,77 @@ mod tests {
         let s = Settings { mux_enabled: true, mux_concurrency: 8, ..Default::default() };
         assert!(s.validate().is_ok());
         let s = Settings { mux_concurrency: 128, ..Default::default() };
+        assert!(s.validate().is_ok());
+    }
+
+    #[test]
+    fn an_older_store_without_fragment_still_loads() {
+        // Fragmenting arrived in the same build as the settings page for it, so
+        // an older store has none of the three fields. The feature must read as
+        // "off with the classic range", and the document must stay readable.
+        let old = r#"{"mixed_port":7890,"api_port":9090,"allow_lan":false,
+            "mode":"rule","system_proxy":false,"auto_start":false,"language":"zh",
+            "auto_connect":false,"log_level":"warn","auto_test_minutes":0,
+            "test_timeout_ms":3000,"test_concurrency":2,"proxy_bypass":"",
+            "test_url":"http://www.gstatic.com/generate_204",
+            "subscription_user_agent":"","subscription_via_proxy":false,
+            "dns_servers":"","start_minimized":false,"close_to_tray":true}"#;
+        let loaded: Settings = serde_json::from_str(old).expect("old store must still load");
+        assert!(!loaded.fragment_enabled);
+        assert_eq!(loaded.fragment_length, "100-200");
+        assert_eq!(loaded.fragment_interval, "10-20");
+        let defaults = Settings::default();
+        assert!(!defaults.fragment_enabled);
+        assert_eq!(defaults.fragment_length, "100-200");
+        assert_eq!(defaults.fragment_interval, "10-20");
+    }
+
+    #[test]
+    fn fragment_ranges_must_be_a_forward_range() {
+        // "100" has no dash and "300-100" runs backwards — both are what a
+        // half-remembered format produces, and Xray refuses the whole config
+        // rather than just this node when a fragment range will not parse.
+        let bad = |length: &str, interval: &str| Settings {
+            fragment_enabled: true,
+            fragment_length: length.into(),
+            fragment_interval: interval.into(),
+            ..Default::default()
+        };
+        assert_eq!(
+            bad("100", "10-20").validate().unwrap_err(),
+            "分片长度要写成 a-b 这样的范围，例如 100-200"
+        );
+        assert_eq!(
+            bad("300-100", "10-20").validate().unwrap_err(),
+            "分片长度要写成 a-b 这样的范围，例如 100-200"
+        );
+        assert_eq!(
+            bad("100-200", "10").validate().unwrap_err(),
+            "分片间隔要写成 a-b 这样的范围，例如 10-20"
+        );
+        assert_eq!(
+            bad("100-200", "20-10").validate().unwrap_err(),
+            "分片间隔要写成 a-b 这样的范围，例如 10-20"
+        );
+        // Blank values are the other half of "the switch is on but nothing is
+        // set"; enabling must not be a way to silently turn the feature off.
+        assert!(bad("", "10-20").validate().is_err());
+        assert!(bad("100-200", "").validate().is_err());
+        // Spaces around the numbers are what people actually type.
+        assert!(bad(" 100 - 200 ", " 10 - 20 ").validate().is_ok());
+        assert!(bad("0-200", "10-20").validate().is_err());
+    }
+
+    #[test]
+    fn fragment_values_are_ignored_while_the_switch_is_off() {
+        // The fields stay in the document, so garbage saved before the switch
+        // was turned off must not block saving while nothing emits it.
+        let s = Settings {
+            fragment_enabled: false,
+            fragment_length: "garbage".into(),
+            fragment_interval: "-".into(),
+            ..Default::default()
+        };
         assert!(s.validate().is_ok());
     }
 }

@@ -192,6 +192,13 @@ pub struct RenderInput<'a> {
     pub mux_enabled: bool,
     /// Streams per multiplexed link; only read when [`RenderInput::mux_enabled`].
     pub mux_concurrency: u16,
+    /// Fragment the TLS ClientHello into small pieces. Only Xray renders it,
+    /// and only for TLS nodes; see [`RenderInput::fragment`].
+    pub fragment_enabled: bool,
+    /// Piece-size range (`a-b` bytes) for [`RenderInput::fragment`].
+    pub fragment_length: String,
+    /// Delay range (`a-b` milliseconds) for [`RenderInput::fragment`].
+    pub fragment_interval: String,
 }
 
 impl<'a> RenderInput<'a> {
@@ -211,6 +218,9 @@ impl<'a> RenderInput<'a> {
             dns_servers: Vec::new(),
             mux_enabled: false,
             mux_concurrency: 8,
+            fragment_enabled: false,
+            fragment_length: "100-200".to_string(),
+            fragment_interval: "10-20".to_string(),
         }
     }
 
@@ -227,6 +237,9 @@ impl<'a> RenderInput<'a> {
         self.dns_servers = options.dns_servers;
         self.mux_enabled = options.mux_enabled;
         self.mux_concurrency = options.mux_concurrency;
+        self.fragment_enabled = options.fragment_enabled;
+        self.fragment_length = options.fragment_length;
+        self.fragment_interval = options.fragment_interval;
         self
     }
 
@@ -267,6 +280,22 @@ impl<'a> RenderInput<'a> {
     pub fn mux_streams(&self) -> Option<u16> {
         if self.mux_enabled { Some(self.mux_concurrency) } else { None }
     }
+
+    /// The fragment `(length, interval)` the Xray renderer should emit, or
+    /// `None` when the user left the switch off.
+    ///
+    /// This is the single place that decides whether the feature is on: the
+    /// renderer takes this value instead of testing `fragment_enabled` itself,
+    /// so the settings page and the emitted config cannot disagree. The values
+    /// are returned as the user wrote them (`a-b`) because that is exactly the
+    /// text Xray's `tlsSettings.fragment` expects.
+    pub fn fragment(&self) -> Option<(String, String)> {
+        if self.fragment_enabled {
+            Some((self.fragment_length.clone(), self.fragment_interval.clone()))
+        } else {
+            None
+        }
+    }
 }
 
 /// Everything besides the node itself that shapes a rendered config.
@@ -296,6 +325,13 @@ pub struct RunOptions<'a> {
     pub mux_enabled: bool,
     /// Streams per multiplexed link; only read when [`RunOptions::mux_enabled`].
     pub mux_concurrency: u16,
+    /// Fragment the TLS ClientHello. Only Xray renders it; see
+    /// [`RenderInput::fragment`].
+    pub fragment_enabled: bool,
+    /// Piece-size range (`a-b` bytes) for [`RenderInput::fragment`].
+    pub fragment_length: String,
+    /// Delay range (`a-b` milliseconds) for [`RenderInput::fragment`].
+    pub fragment_interval: String,
 }
 
 impl<'a> RunOptions<'a> {
@@ -313,6 +349,9 @@ impl<'a> RunOptions<'a> {
             dns_servers_raw: String::new(),
             mux_enabled: false,
             mux_concurrency: 8,
+            fragment_enabled: false,
+            fragment_length: "100-200".to_string(),
+            fragment_interval: "10-20".to_string(),
         }
     }
 
@@ -331,6 +370,9 @@ impl<'a> RunOptions<'a> {
             dns_servers_raw: settings.dns_servers.clone(),
             mux_enabled: settings.mux_enabled,
             mux_concurrency: settings.mux_concurrency,
+            fragment_enabled: settings.fragment_enabled,
+            fragment_length: settings.fragment_length.clone(),
+            fragment_interval: settings.fragment_interval.clone(),
         }
     }
 

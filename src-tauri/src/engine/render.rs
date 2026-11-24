@@ -18,7 +18,16 @@ use crate::domain::settings::ProxyMode;
 const DEFAULT_WS_PATH: &str = "/";
 
 /// Xray `streamSettings` block for an outbound.
-pub fn xray_stream_settings(transport: &Transport, security: &Security) -> Value {
+///
+/// `fragment` is `Some((length, interval))` only when the user turned TLS
+/// fragmentation on. It is applied inside the TLS arm alone: Xray's Reality
+/// object has no fragment key, and a guessed one makes the kernel refuse the
+/// whole config.
+pub fn xray_stream_settings(
+    transport: &Transport,
+    security: &Security,
+    fragment: Option<(&str, &str)>,
+) -> Value {
     let mut stream = Map::new();
 
     match transport {
@@ -72,6 +81,22 @@ pub fn xray_stream_settings(transport: &Transport, security: &Security) -> Value
                 tls.insert(
                     "pinnedPeerCertSha256".into(),
                     json!(pinned_cert_sha256.join(",")),
+                );
+            }
+            // Xray's `tlsSettings.fragment` is the V2rayN "分片" feature: the
+            // ClientHello leaves in pieces of `length` bytes, `interval`
+            // milliseconds apart, which defeats blocklists that recognise the
+            // handshake by its shape. `packets` is pinned to `tlshello` (the
+            // documented default and the only value that means "fragment the
+            // hello"); guessing another spelling would change the feature.
+            if let Some((length, interval)) = fragment {
+                tls.insert(
+                    "fragment".into(),
+                    json!({
+                        "packets": "tlshello",
+                        "length": length,
+                        "interval": interval,
+                    }),
                 );
             }
             stream.insert("tlsSettings".into(), Value::Object(tls));
@@ -479,9 +504,19 @@ fn split_singbox_entries(entries: &[SetEntry]) -> (Vec<String>, Vec<String>) {
 mod tests {
     use super::*;
 
+    /// A plain TLS node, enough to exercise `tlsSettings`.
+    fn tls() -> Security {
+        Security::Tls {
+            sni: Some("a.example.com".into()),
+            alpn: vec![],
+            allow_insecure: false,
+            pinned_cert_sha256: vec![],
+        }
+    }
+
     #[test]
     fn xray_tcp_without_tls_has_no_transport_blocks() {
-        let v = xray_stream_settings(&Transport::Tcp, &Security::None);
+        let v = xray_stream_settings(&Transport::Tcp, &Security::None, None);
         assert_eq!(v["network"], json!("tcp"));
         assert_eq!(v["security"], json!("none"));
         assert!(v.get("wsSettings").is_none());
@@ -496,6 +531,7 @@ mod tests {
                 host: Some("cdn.example.com".into()),
             },
             &Security::None,
+            None,
         );
         assert_eq!(v["network"], json!("ws"));
         assert_eq!(v["wsSettings"]["path"], json!("/"));
@@ -515,12 +551,62 @@ mod tests {
                 fingerprint: "firefox".into(),
                 spider_x: "/spider".into(),
             },
+            None,
         );
         assert_eq!(v["security"], json!("reality"));
         assert_eq!(v["grpcSettings"]["serviceName"], json!("svc"));
         assert_eq!(v["realitySettings"]["publicKey"], json!("pk"));
         assert_eq!(v["realitySettings"]["fingerprint"], json!("firefox"));
         assert_eq!(v["realitySettings"]["spiderX"], json!("/spider"));
+    }
+
+    #[test]
+    fn xray_tls_fragment_is_rendered_inside_tls_settings() {
+        let stream =
+            xray_stream_settings(&Transport::Tcp, &tls(), Some(("100-200", "10-20")));
+        assert_eq!(
+            stream["tlsSettings"]["fragment"],
+            json!({ "packets": "tlshello", "length": "100-200", "interval": "10-20" })
+        );
+        // Fragmenting belongs to `tlsSettings`; Xray has no top-level key.
+        assert!(stream.get("fragment").is_none());
+    }
+
+    #[test]
+    fn xray_tls_without_fragment_has_no_fragment_key() {
+        let stream = xray_stream_settings(&Transport::Tcp, &tls(), None);
+        assert!(stream["tlsSettings"].get("fragment").is_none());
+    }
+
+    #[test]
+    fn xray_non_tls_never_gets_a_fragment_key() {
+        // A non-TLS node has no `tlsSettings` at all, so an enabled switch must
+        // not leak a fragment key anywhere: Xray would reject the config.
+        let stream =
+            xray_stream_settings(&Transport::Tcp, &Security::None, Some(("100-200", "10-20")));
+        assert!(stream.get("fragment").is_none());
+        assert!(stream.get("tlsSettings").is_none());
+    }
+
+    #[test]
+    fn xray_reality_never_gets_a_fragment_key() {
+        // Xray's Reality object has no fragment field, so the switch is
+        // deliberately ignored here; a guessed key refuses the whole config.
+        let stream = xray_stream_settings(
+            &Transport::Grpc {
+                service_name: "svc".into(),
+            },
+            &Security::Reality {
+                public_key: "pk".into(),
+                short_id: "ab".into(),
+                server_name: "sni.example.com".into(),
+                fingerprint: "firefox".into(),
+                spider_x: "/spider".into(),
+            },
+            Some(("100-200", "10-20")),
+        );
+        assert!(stream.get("fragment").is_none());
+        assert!(stream["realitySettings"].get("fragment").is_none());
     }
 
     #[test]
@@ -961,18 +1047,18 @@ mod insecure_tests {
     fn xray_never_emits_allow_insecure() {
         // Xray 26 removed the key and refuses to start when it appears, so the
         // whole config dies — not just this node.
-        let stream = xray_stream_settings(&Transport::Tcp, &insecure());
+        let stream = xray_stream_settings(&Transport::Tcp, &insecure(), None);
         assert!(stream["tlsSettings"].get("allowInsecure").is_none());
     }
 
     #[test]
     fn xray_pins_the_certificate_when_one_is_given() {
-        let stream = xray_stream_settings(&Transport::Tcp, &pinned());
+        let stream = xray_stream_settings(&Transport::Tcp, &pinned(), None);
         assert_eq!(
             stream["tlsSettings"]["pinnedPeerCertSha256"],
             serde_json::json!("93c559a5d6605453")
         );
-        let plain = xray_stream_settings(&Transport::Tcp, &insecure());
+        let plain = xray_stream_settings(&Transport::Tcp, &insecure(), None);
         assert!(plain["tlsSettings"].get("pinnedPeerCertSha256").is_none());
     }
 

@@ -69,6 +69,14 @@ const staleItems = computed<string[]>(() => {
   ) {
     items.push('settings.stale.itemMux')
   }
+  if (
+    saved.fragment_enabled !== status.fragment_enabled ||
+    (saved.fragment_enabled &&
+      (saved.fragment_length !== status.fragment_length ||
+        saved.fragment_interval !== status.fragment_interval))
+  ) {
+    items.push('settings.stale.itemFragment')
+  }
   if (dnsList(saved.dns_servers) !== dnsList(status.dns_servers)) {
     items.push('settings.stale.itemDns')
   }
@@ -460,6 +468,33 @@ async function save() {
           />
         </label>
         <p class="field-hint">{{ t('settings.muxHint') }}</p>
+      </section>
+
+      <section class="surface-plain panel">
+        <h2 class="section-title">{{ t('settings.fragment') }}</h2>
+        <ToggleSwitch v-model="draft.fragment_enabled" :label="t('settings.fragment')" />
+        <div class="divider" />
+        <label class="field">
+          <span class="field-label">{{ t('settings.fragmentLength') }}</span>
+          <input
+            v-model="draft.fragment_length"
+            class="input input-narrow"
+            type="text"
+            placeholder="100-200"
+            :disabled="!draft.fragment_enabled"
+          />
+        </label>
+        <label class="field">
+          <span class="field-label">{{ t('settings.fragmentInterval') }}</span>
+          <input
+            v-model="draft.fragment_interval"
+            class="input input-narrow"
+            type="text"
+            placeholder="10-20"
+            :disabled="!draft.fragment_enabled"
+          />
+        </label>
+        <p class="field-hint">{{ t('settings.fragmentHint') }}</p>
       </section>
 
       <section class="surface-plain panel">

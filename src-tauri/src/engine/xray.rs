@@ -131,12 +131,19 @@ impl Engine for XrayEngine {
 /// the UI says so.
 fn xray_outbounds(input: &RenderInput<'_>) -> AppResult<Vec<Value>> {
     let mux = input.mux_streams();
-    let mut outbounds = vec![xray_outbound(input.node, "proxy", mux)?];
+    // One decision, taken by `RenderInput::fragment`, shared by the active node
+    // and every group copy: two call sites testing the switch themselves could
+    // drift apart.
+    let fragment = input.fragment();
+    let fragment = fragment
+        .as_ref()
+        .map(|(length, interval)| (length.as_str(), interval.as_str()));
+    let mut outbounds = vec![xray_outbound(input.node, "proxy", mux, fragment)?];
     for group in input.active_groups() {
         // A group whose nodes were all deleted is skipped rather than emitted
         // pointing at nothing — the kernel would refuse the whole config.
         if let Some(node) = input.member_node(group) {
-            outbounds.push(xray_outbound(node, &group.tag(), mux)?);
+            outbounds.push(xray_outbound(node, &group.tag(), mux, fragment)?);
         }
     }
     outbounds.push(json!({ "protocol": "freedom", "tag": "direct" }));
@@ -150,7 +157,15 @@ fn xray_outbounds(input: &RenderInput<'_>) -> AppResult<Vec<Value>> {
 /// `mux_streams` is `Some(n)` only when the user turned multiplexing on; Xray
 /// treats a missing `mux` block and `"mux": {"enabled": false}` differently
 /// enough in the logs that emitting nothing is the honest "off".
-fn xray_outbound(node: &Node, tag: &str, mux_streams: Option<u16>) -> AppResult<Value> {
+///
+/// `fragment` is the TLS fragmentation range, or `None` when it is off; it is
+/// only forwarded to `streamSettings`, never to the `mux` block.
+fn xray_outbound(
+    node: &Node,
+    tag: &str,
+    mux_streams: Option<u16>,
+    fragment: Option<(&str, &str)>,
+) -> AppResult<Value> {
     let (protocol, settings) = match &node.protocol {
         Protocol::Vless { uuid, flow } => {
             let mut user = json!({ "id": uuid, "encryption": "none" });
@@ -218,7 +233,7 @@ fn xray_outbound(node: &Node, tag: &str, mux_streams: Option<u16>) -> AppResult<
         "tag": tag,
         "protocol": protocol,
         "settings": settings,
-        "streamSettings": xray_stream_settings(&node.transport, &node.security),
+        "streamSettings": xray_stream_settings(&node.transport, &node.security, fragment),
     });
     // `mux` sits beside `settings`, not inside it: Xray's outbound schema puts
     // the multiplexing policy at the same level as the protocol payload.
