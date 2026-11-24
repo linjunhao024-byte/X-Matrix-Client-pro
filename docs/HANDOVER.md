@@ -15,8 +15,9 @@
 
 | 项 | 值 |
 |---|---|
-| 代码 HEAD | `09692ae`「feat(engine): a kernel stops when its node is deleted and follows an id change on refresh」（= 最后一个**已提交**的功能，含 §34 与 §35） |
-| 未提交 | `src-tauri/src/commands/settings.rs`、`src-tauri/src/commands/sysproxy.rs`、`src/stores/sysproxy.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`、`docs/ACCEPTANCE.md`（§36 系统代理即时生效） |
+| 代码 HEAD | `38d6a64`「fix(settings): a proxy switch that bites the moment it is saved」（= 最后一个**已提交**的功能，含 §36） |
+| 未提交 | 无（§36 的改动已提交为 `38d6a64`） |
+| 上一版未提交清单（留档） | `src-tauri/src/commands/settings.rs`、`src-tauri/src/commands/sysproxy.rs`、`src/stores/sysproxy.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`、`docs/ACCEPTANCE.md`（§36 系统代理即时生效） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库（HEAD 上这一条） |
 | IPC 命令 | **77**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
 | Rust 单测 | **342 passed**（`ARCHITECTURE.md:278` 已同步） |
