@@ -2020,6 +2020,16 @@
     "When sorting by latency, untested nodes go last"
   ],
   [
+    "nodes.staleNode",
+    "节点改好了，内核还在用旧的一份",
+    "Saved, but the kernel is still using the old node settings"
+  ],
+  [
+    "nodes.staleNodeApply",
+    "用新配置重启内核",
+    "Restart the kernel with the new settings"
+  ],
+  [
     "nodes.stoppedNodeGone",
     "删掉的节点正在被内核使用，内核已停止并交还系统代理",
     "The kernel was using that node, so it has been stopped and the system proxy handed back"

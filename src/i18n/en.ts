@@ -443,6 +443,8 @@ export const en: Record<string, string> = {
   "nodes.sort.name": "By name",
   "nodes.sort.protocol": "By protocol",
   "nodes.sortHint": "When sorting by latency, untested nodes go last",
+  "nodes.staleNode": "Saved, but the kernel is still using the old node settings",
+  "nodes.staleNodeApply": "Restart the kernel with the new settings",
   "nodes.stoppedNodeGone": "The kernel was using that node, so it has been stopped and the system proxy handed back",
   "nodes.tag.action": "Tag",
   "nodes.tag.add": "Add",

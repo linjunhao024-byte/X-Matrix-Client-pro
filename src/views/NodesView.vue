@@ -6,6 +6,7 @@ import ImportDialog from '../components/ImportDialog.vue'
 import ModalDialog from '../components/ModalDialog.vue'
 import NodeEditor from '../components/NodeEditor.vue'
 import QrDialog from '../components/QrDialog.vue'
+import StaleConfig from '../components/StaleConfig.vue'
 import { t } from '../i18n'
 import {
   api,
@@ -18,6 +19,7 @@ import {
   type Node_Serialize,
 } from '../services/contract'
 import { formatProbe } from '../services/format'
+import { rendersDifferently } from '../services/node-stale'
 import { useEngineStore } from '../stores/engine'
 import { useNodesStore } from '../stores/nodes'
 import { useSettingsStore } from '../stores/settings'
@@ -44,6 +46,13 @@ const actionNote = ref<string | null>(null)
  * node that cannot be rendered looking like the running one.
  */
 const stoppedNodeGone = ref(false)
+/**
+ * True after saving a node the running kernel is using, when the saved values
+ * are no longer the ones it started with: the card shows the new settings and
+ * the kernel keeps proxying with the old ones. Scoped to this page's saves
+ * only — the routing, group and rule-set pages have their own notices.
+ */
+const staleNode = ref(false)
 const pendingDelete = ref<Node_Serialize | null>(null)
 const deleting = ref(false)
 const startingId = ref<string | null>(null)
@@ -188,6 +197,18 @@ watch(
   () => engine.running,
   (running) => {
     if (running) stoppedNodeGone.value = false
+  },
+)
+
+// Any restart re-renders the node, so a new start timestamp retires the notice
+// whatever started the kernel: the notice's own button, the tray, or a switch
+// to another node. Watching the timestamp rather than the status object
+// matters — the poller replaces that object every second.
+watch(
+  () => engine.status?.started_at_ms,
+  (next, previous) => {
+    if (next === undefined || previous === undefined || next === previous) return
+    staleNode.value = false
   },
 )
 
@@ -426,8 +447,26 @@ function openEdit(node: Node_Serialize) {
   editorOpen.value = true
 }
 
+/**
+ * Say the running kernel is still on the previous version of this node.
+ *
+ * Only a save that changed what the kernel renders matters: `name` is display
+ * only and `tags` only group the card, so renaming or tagging the running node
+ * must not offer a restart. `editing` is the version the kernel was started
+ * with — the node as the editor opened it, before this save replaced it in the
+ * store.
+ */
+function markStaleNode(saved: Node_Deserialize): void {
+  const before = editing.value
+  if (!engine.running || !before) return
+  if (engine.status?.node_id !== saved.id) return
+  if (!rendersDifferently(before, saved)) return
+  staleNode.value = true
+}
+
 async function submit(node: Node_Deserialize) {
   await store.save(node)
+  markStaleNode(node)
   editorOpen.value = false
 }
 
@@ -729,6 +768,13 @@ function securityLabel(node: Node_Serialize): string {
     <p v-else-if="actionNote" class="notice">{{ actionNote }}</p>
     <p v-if="stoppedNodeGone" class="notice">{{ t('nodes.stoppedNodeGone') }}</p>
     <p v-if="importNote" class="notice">{{ importNote }}</p>
+
+    <StaleConfig
+      :show="staleNode"
+      :message="t('nodes.staleNode')"
+      :apply-label="t('nodes.staleNodeApply')"
+      @applied="staleNode = false"
+    />
 
     <div v-if="store.loading && !store.loaded" class="empty-state">
       <div class="empty-state-title">{{ t('common.loading') }}</div>

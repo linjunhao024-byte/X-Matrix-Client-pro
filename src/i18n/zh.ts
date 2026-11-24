@@ -443,6 +443,8 @@ export const zh: Record<string, string> = {
   "nodes.sort.name": "按名称",
   "nodes.sort.protocol": "按协议",
   "nodes.sortHint": "按延迟排序时，未测速的节点排在最后",
+  "nodes.staleNode": "节点改好了，内核还在用旧的一份",
+  "nodes.staleNodeApply": "用新配置重启内核",
   "nodes.stoppedNodeGone": "删掉的节点正在被内核使用，内核已停止并交还系统代理",
   "nodes.tag.action": "打标签",
   "nodes.tag.add": "添加",

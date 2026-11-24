@@ -945,3 +945,39 @@ V2rayN 有「分片」，Clash 侧靠内核插件做同类事；本项目的 `Se
 2. **旧 store 里不会自动长出这三个键。** `#[serde(default)]` 只在反序列化时补默认值，存回去要等用户真的按一次「保存」；所以验收脚本得先跑一次保存，或者像这里一样显式 patch 后再比对，否则 `fragment=absent` 会被误读成「功能没生效」。
 
 **一句实话**：本节证明的是「开关 → 渲染配置 → 内核接受这份配置并起来」，不证明分片真的能绕过谁的封锁——那要看对面是谁，云电脑上只有一个连不通的测试节点，测不出来。
+
+## 40. 改节点改的是正在跑的那个：先说出来，再重启（2026-11-24，云电脑 cloudpc-test）
+
+**这一节证明什么**：编辑「内核正在用的那个节点」的服务器/端口/传输/安全参数并保存，界面会明说「内核还在用旧的一份」，并且那个按钮真的用新配置把内核重启了；改名、改标签这类不影响渲染的改动则不该惊动内核。
+
+**验收方法**：把 `settings.last_node_id` 钉到 TLS 测试节点 `Clip-Test`（`example.org:443`，vless + TLS），然后
+
+```bash
+bash /d/tmp/shots/nodestale-accept.sh
+```
+
+脚本流程：首页「启动」→ 节点页找到 `Clip-Test` 行 → 「编辑」→ 端口 443 改成 8443 → 「保存」→ 读提示 → 点「用新配置重启内核」→ 核对 pids、系统代理、`configs/xray.json` 里的端口 → 端口改回 443 → 「停止」。
+
+| 判断什么 | 看到什么 | 结论 |
+| --- | --- | --- |
+| 存下去的是新端口 | `store after save: port=8443` | **通过** |
+| 界面明说内核在跑旧的 | `notice present: True`，`notice text: 节点改好了…内核…用旧的一份` | **通过** |
+| 提示带一键重启 | `buttons after save` 里有 `[用新配置重启内核]`，`apply button: True` | **通过** |
+| 重启真的换了进程 | `kernels after restart: xray#1008 before=xray#1992` | **通过** |
+| 渲染出的端口就是新的 | `rendered server port: 8443` | **通过** |
+| 重启后提示自己消失 | `notice gone: True` | **通过** |
+| 系统代理不断 | `proxy after restart: ProxyEnable=1 ProxyServer=127.0.0.1:7890` | **通过** |
+| 改回旧值同样要先重启 | `store restored: port=443` → `rendered server port same: 8443`（内核仍是上一次渲染） | **通过** |
+| 停止后一切归零 | `stop invoked on try 0`，`after stop: ProxyEnable=0 ProxyServer=` | **通过** |
+
+**三个设计理由**：
+- **只比「渲染得出来」的字段。** `src/services/node-stale.ts` 的 `rendersDifferently()` 只看 `server`/`port`/`protocol`/`transport`/`security`；`name` 和 `tags` 不参与。理由是改名、打标签属于整理工作，不该因为用户顺手改个名字就把所有连接断掉一次。
+- **判断依据是内核自己报的 node id。** `NodesView.vue` 里 `markStaleNode()` 要求 `engine.status?.node_id === saved.id` 才提示：改一个没在跑的节点当然不用重启，提示只在「改的正好是内核在用的那个」时出现。
+- **复用同一块提示组件。** `StaleConfig` 的 `message`/`applyLabel` 两个可选 prop 让节点页说出自己的话（`节点改好了，内核还在用旧的一份` + `用新配置重启内核`），但清除逻辑仍然只有一份：`started_at_ms` 一变就消失，任何来源的重启都算数。
+
+**三个坑**：
+1. **节点表格的行名是 `ControlType.Text`，不是 `DataItem`。** 行内的按钮（`启动`/`编辑`/`删除`…）在名字下方约 164px 处，所以按「最近的按钮」找会命中上一行；要么用 `Top >= 行首` 里最小的那个，要么先滚动到行再点。
+2. **编辑窗口不是独立窗口。** `Get-Dialog`（找 `#32770`）在 Tauri 这里一无所获，整个对话框都是 `Tauri Window | X-Matrix` 的子树；`保存` 按钮的 UIA 名字是完整的 `保存`，早先看到的 `�存` 只是控制台编码把中文啃掉了，不要据此改用子串匹配。
+3. **`configs/xray.json` 是多行缩进的 JSON。** 用 `"address": "..." ... "port": N` 这样的正则去核对时，`.{0,120}?` 跨不过换行，必须加 `(?s)`，否则永远读到 `absent`，看起来像功能没生效。
+
+**一句实话**：本节证明的是「改的是正在跑的那个节点 → 界面说实话 → 按钮真的按新值重启」，不证明新端口上的节点连得通——云电脑上只有一个故意连不通的测试节点。
