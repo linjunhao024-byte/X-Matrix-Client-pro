@@ -4666,5 +4666,41 @@
     "没能问到发布页：{reason}",
     "Could not ask the release feed: {reason}",
     "沒能問到發布頁：{reason}"
+  ],
+  [
+    "process.pick",
+    "选择进程",
+    "Pick a process",
+    "選擇進程"
+  ],
+  [
+    "process.search",
+    "按名字过滤，例如 chrome.exe",
+    "Filter by name, e.g. chrome.exe",
+    "按名字過濾，例如 chrome.exe"
+  ],
+  [
+    "process.loading",
+    "正在读进程列表…",
+    "Reading the process list…",
+    "正在讀進程列表…"
+  ],
+  [
+    "process.empty",
+    "没有匹配的进程",
+    "No matching process",
+    "沒有匹配的進程"
+  ],
+  [
+    "process.refresh",
+    "刷新",
+    "Refresh",
+    "重新整理"
+  ],
+  [
+    "process.hint",
+    "按进程分流在 sing-box 上走 `process_name` 字段；Xray 的 `process` 匹配取决于内核版本与平台，本项目没在真机上验过",
+    "sing-box matches this through its `process_name` field; Xray's `process` matching depends on the kernel version and platform, and this project has not verified it on a real machine",
+    "按進程分流在 sing-box 上走 `process_name` 欄位；Xray 的 `process` 匹配取決於內核版本與平台，本項目沒在真機上驗過"
   ]
 ]

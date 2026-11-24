@@ -804,4 +804,11 @@ export const en: Record<string, string> = {
   "time.never": "never",
   "time.now": "just now",
   "time.yesterday": "yesterday",
+  // process
+  "process.pick": "Pick a process",
+  "process.search": "Filter by name, e.g. chrome.exe",
+  "process.loading": "Reading the process list…",
+  "process.empty": "No matching process",
+  "process.refresh": "Refresh",
+  "process.hint": "sing-box matches this through its `process_name` field; Xray's `process` matching depends on the kernel version and platform, and this project has not verified it on a real machine",
 }

@@ -274,11 +274,12 @@ pub enum StatsChannel {
 
 | 层 | 状态 | 证据 |
 |---|---|---|
-| 契约层 | 完成 | `tauri-specta` 生成 `src/services/bindings.ts`，81 个命令；`npm run check:contract` 校验不过期 |
-| 引擎层 | Xray + sing-box 配置渲染、启停、就绪探测、统计读取、日志尾部、启动前端口预检 | `cargo test --lib`（全库 402 项）；渲染是纯函数，测试不需要任何内核二进制 |
+| 契约层 | 完成 | `tauri-specta` 生成 `src/services/bindings.ts`，82 个命令；`npm run check:contract` 校验不过期 |
+| 引擎层 | Xray + sing-box 配置渲染、启停、就绪探测、统计读取、日志尾部、启动前端口预检 | `cargo test --lib`（全库 405 项）；渲染是纯函数，测试不需要任何内核二进制 |
 | 数据层 | 单文件 JSON 原子替换 + 坏文件留证 | `store.rs`，重启后节点/设置/规则都在 |
 | 导入 | vless / vmess / trojan / ss + 整包 base64 | `import.rs`，不支持的行进 `skipped` 而不是报错 |
 | 路由 | 7 种匹配器 × 4 种动作（代理/直连/拦截/策略组），双内核各自渲染 | `domain/routing.rs` + `render.rs`（唯一的内核差异点） |
+| 进程表 | 规则编辑器里的「选择进程」列出本机正在运行的可执行名（一个名字一行，pid 只做计数与 tooltip）：Windows Toolhelp32 快照，句柄 `Drop` 关闭，快照失败报错而不是返回空表；非 Windows 明确报「只有 Windows 实现」。归并是纯函数（大小写不敏感、保留首次拼写、pid 升序去重），界面三态 = loading / 后端原文错误 / 空 | `src-tauri/src/sysproc.rs`（3 项单测）、`commands/process.rs` 的 `list_processes`、`src/services/processlist.ts`、`RuleEditor.vue` |
 | DNS | 设置页填自定义解析器（逗号分隔），三种写法：`1.1.1.1` / `tls://1.1.1.1`（DoT）/ `https://1.1.1.1/dns-query`（DoH）。`DnsEntry::parse` 解析成带标签的枚举，两个渲染器各说各的方言：Xray 拼回 `tls://`/`https://` 字符串，sing-box 用 `{type:"udp"|"tls"|"https", tag:"dns-N"}` + `final`。留空完全不生成 `dns` 键。主机部分只接受 IP 字面量（域名要先被解析，那正是解析器的活） | `domain/settings.rs` 的 `DnsEntry`、`engine/xray.rs`、`engine/singbox.rs`，含 4 项解析校验 + 3 项渲染测试；`xray -test` 与 `sing-box check` 真二进制验过 |
 | 系统代理 | 快照 → 接管 → 还原，异常退出可恢复。接管有两种写法：固定 `ProxyServer`，或生成 `x-matrix.pac` 并写 `AutoConfigURL`（`settings.pac_enabled`，两者不并用），关闭时按同一份快照还原 | `sysproxy/mod.rs`、`sysproxy/pac.rs`，全部测试跑在假后端上 |
 | 启动行为 | 「启动时隐藏窗口」「关闭窗口时最小化到托盘」两个设置：前者在 setup 末尾 `window.hide()`（先创建再隐藏，避免闪一下）；后者决定 × 是 hide 还是 `quit_cleanly`（还原系统代理 + 杀内核 + 退出）。没有托盘时 × 一律退出——否则窗口既看不见又关不掉 | `src-tauri/src/lib.rs`、`domain/settings.rs`（2 项测试） |
@@ -289,7 +290,7 @@ pub enum StatsChannel {
 | 文件导入导出 | 完成 | 导入会先按分享链接解析，一条都不认得时再按整份文档（Clash YAML / sing-box JSON）解析——粘贴一份配置不该静默得到零个节点； 节点链接可「保存为文件」（`save_text_file`），导入对话框可「从文件读取」（`open_text_file`，4 MB 上限）——订阅、Clash 配置、链接列表都只是文本，所以导入只有一条代码路径 |
 | 内核版本 | 完成 | 首页显示已装内核自报的版本（`engine_version` 跑 `version`，不读配置、不开端口）；关于页列出与 V2RayN / Clash Verge 的能力对照，TUN / PAC / 在线更新内核明确写「不支持」并给原因 |
 | 托盘 | 关窗隐藏、左键唤回、菜单退出（退出前先还原代理再停内核） | `lib.rs` 的 `build_tray` / `quit_cleanly` |
-| 前端 | 9 个视图 + 组件库 + 单一轮询器 | `vue-tsc` / `vite build` / `check:arch`（63 文件）/ `vitest`（113 项，含 store → IPC 接线测试）全绿 |
+| 前端 | 9 个视图 + 组件库 + 单一轮询器 | `vue-tsc` / `vite build` / `check:arch`（65 文件）/ `vitest`（116 项，含 store → IPC 接线测试）全绿 |
 | 套餐提醒 | 后端只如实存「已用 / 总量 / 到期」，判断留给前端一处：`quotaReport` 按「已过期 > 用尽 > 用掉九成 > 一周内到期」出结论，`quotaAlerts` 过滤掉停用的源并按严重度排序；首页在启动控制卡里以 `alert-warn` 提示「快用完 / 已用尽 / 快到期 / 已过期」并给出订阅页入口。停用源不提醒——用户已经说了不用它，再唠叨就是噪音 | `src/services/quota.ts`（8 项测试）、`HomeView` 的 `quotaNotices` |
 | 订阅 | 拉取（HTTP，UA 可配置）、整包解析（Clash YAML / sing-box / Xray / 分享链接）、只替换自己那批节点、**跨订阅按 `kind|server|port|credential` 去重**（手工节点不参与比较）、后台每 60 秒扫一次到期项、`subscription-userinfo` 头 → 已用/总量/到期 | `commands/subscription.rs`、`documents.rs`、`net/remote.rs`（`Fetched` 带响应头），含配额解析 3 项测试、去重 2 项测试 |
 | 策略组 | `select` / `url-test`；sing-box 渲染成原生 selector/urltest，Xray 渲染成选中成员的静态副本（Xray 没有 selector，UI 会说出来）；删组时指向它的规则自动回落到「代理」，删节点时从各组里摘掉 | `domain/group.rs`、`commands/group.rs`、`engine/{xray,singbox}.rs` |

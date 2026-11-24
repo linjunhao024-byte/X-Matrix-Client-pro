@@ -317,6 +317,13 @@ export const commands = {
 	 *  "update all" button.
 	 */
 	refreshDue: () => typedError<RefreshOutcome_Serialize[], AppError>(__TAURI_INVOKE("refresh_due")),
+	/**
+	 *  Every running process, merged by executable name.
+	 * 
+	 *  Async so the snapshot walk is dispatched on the async runtime instead of
+	 *  blocking the thread that would otherwise deliver the next command.
+	 */
+	listProcesses: () => typedError<ProcessInfo[], AppError>(__TAURI_INVOKE("list_processes")),
 };
 
 /* Types */
@@ -873,6 +880,13 @@ export type ProbeKind =
 "tcp" | 
 /**  One request through the running kernel's Clash API for that outbound. */
 "real";
+
+export type ProcessInfo = {
+	/**  Executable name without a path, e.g. `chrome.exe`. */
+	name: string,
+	/**  Every pid currently running under that name, ascending. */
+	pids: number[],
+};
 
 export type Protocol = Protocol_Serialize | Protocol_Deserialize;
 

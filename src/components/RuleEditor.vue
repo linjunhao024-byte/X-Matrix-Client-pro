@@ -5,7 +5,9 @@ import ToggleSwitch from './ToggleSwitch.vue'
 import { t } from '../i18n'
 import { useGroupsStore } from '../stores/groups'
 import { useRuleSetsStore } from '../stores/rulesets'
-import type { RoutingRule, RuleAction, RuleMatcher } from '../services/contract'
+import { api, describeError } from '../services/contract'
+import type { ProcessInfo, RoutingRule, RuleAction, RuleMatcher } from '../services/contract'
+import { filterProcesses } from '../services/processlist'
 
 const props = defineProps<{ open: boolean; rule: RoutingRule | null }>()
 const emit = defineEmits<{ close: []; submit: [RoutingRule] }>()
@@ -49,6 +51,61 @@ const draft = reactive({
 
 const error = ref<string | null>(null)
 
+// --- Process picker ---------------------------------------------------------
+// The matcher keys on executable names, so the list shows one row per name
+// with how many pids currently run under it instead of one row per pid.
+const pickerOpen = ref(false)
+const processItems = ref<ProcessInfo[]>([])
+const processQuery = ref('')
+const processLoading = ref(false)
+const processError = ref<string | null>(null)
+
+const filteredProcesses = computed(() =>
+  filterProcesses(processItems.value, processQuery.value),
+)
+
+/**
+ * Read the process table again.
+ *
+ * The backend's own error text is kept, not swallowed into "load failed": the
+ * picker must say whether the snapshot was refused or the machine really has
+ * no match, and only the first of those is actionable.
+ */
+async function loadProcesses(): Promise<void> {
+  processLoading.value = true
+  processError.value = null
+  try {
+    processItems.value = await api.listProcesses()
+  } catch (cause) {
+    processError.value = describeError(cause)
+  } finally {
+    processLoading.value = false
+  }
+}
+
+function openPicker(): void {
+  pickerOpen.value = true
+  processQuery.value = ''
+  void loadProcesses()
+}
+
+/** Choosing a name fills the field; saving the rule is still a second,
+ *  deliberate click. */
+function pickProcess(name: string): void {
+  draft.value = name
+  pickerOpen.value = false
+}
+
+/** Both dialogs listen for Escape. While the picker is on top, Escape closes
+ *  it and leaves the half-filled rule alone. */
+function onEditorClose(): void {
+  if (pickerOpen.value) {
+    pickerOpen.value = false
+    return
+  }
+  emit('close')
+}
+
 /** Only enabled groups are offered: a rule pointing at a disabled group would
  *  render an outbound the kernel never receives. */
 const usableGroups = computed(() => groups.items.filter((group) => group.enabled))
@@ -61,6 +118,7 @@ watch(
   async (open) => {
     if (!open) return
     error.value = null
+    pickerOpen.value = false
     await Promise.all([groups.load(), ruleSets.load()])
     const source = props.rule
     if (source) {
@@ -172,7 +230,7 @@ function submit() {
     :title="rule ? t('ruleEditor.edit') : t('ruleEditor.new')"
     :width="560"
     :close-on-overlay="false"
-    @close="emit('close')"
+    @close="onEditorClose"
   >
     <div class="field">
       <label class="field-label" for="rule-name">{{ t('ruleEditor.name') }}</label>
@@ -210,7 +268,19 @@ function submit() {
 
     <div v-else class="field">
       <label class="field-label" for="rule-value">{{ t('ruleEditor.value') }}</label>
+      <div v-if="draft.kind === 'process_name'" class="pick-row">
+        <input
+          id="rule-value"
+          v-model="draft.value"
+          class="input input-mono"
+          :placeholder="placeholder()"
+        />
+        <button class="btn btn-ghost btn-sm" type="button" @click="openPicker">
+          {{ t('process.pick') }}
+        </button>
+      </div>
       <input
+        v-else
         id="rule-value"
         v-model="draft.value"
         class="input input-mono"
@@ -255,4 +325,99 @@ function submit() {
       <button class="btn btn-primary" type="button" @click="submit">{{ t('common.save') }}</button>
     </template>
   </ModalDialog>
+
+  <ModalDialog
+    :open="pickerOpen"
+    :title="t('process.pick')"
+    :width="520"
+    :close-on-overlay="false"
+    @close="pickerOpen = false"
+  >
+    <input
+      v-model="processQuery"
+      class="input"
+      :placeholder="t('process.search')"
+      :aria-label="t('process.search')"
+    />
+
+    <div v-if="processLoading" class="picker-state">{{ t('process.loading') }}</div>
+    <p v-else-if="processError" class="alert">{{ processError }}</p>
+    <div v-else-if="filteredProcesses.length === 0" class="picker-state">
+      {{ t('process.empty') }}
+    </div>
+    <div v-else class="process-list">
+      <button
+        v-for="item in filteredProcesses"
+        :key="item.name"
+        type="button"
+        class="process-row"
+        :title="item.pids.join(', ')"
+        @click="pickProcess(item.name)"
+      >
+        {{ item.name }} ({{ item.pids.length }})
+      </button>
+    </div>
+
+    <p class="field-hint">{{ t('process.hint') }}</p>
+
+    <template #footer>
+      <button class="btn btn-sm" type="button" :disabled="processLoading" @click="loadProcesses">
+        {{ t('process.refresh') }}
+      </button>
+    </template>
+  </ModalDialog>
 </template>
+
+<style scoped>
+/* The value input and its picker button share one row; the input keeps the
+   flexible width so the button never gets squeezed off the edge. */
+.pick-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pick-row .input {
+  flex: 1 1 auto;
+}
+
+/* Six standard rows tall: enough of a real machine's process table to browse,
+   short enough that the dialog never outgrows the window. */
+.process-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: calc(var(--row-height) * 6);
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+}
+
+.process-row {
+  flex: 0 0 auto;
+  height: var(--row-height);
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  text-align: left;
+}
+
+.process-row:hover {
+  background: var(--surface-hover);
+}
+
+.picker-state {
+  padding: 12px 10px;
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+  color: var(--text-tertiary);
+  font-size: 12px;
+  text-align: center;
+}
+</style>

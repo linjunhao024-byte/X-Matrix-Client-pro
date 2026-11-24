@@ -804,4 +804,11 @@ export const zh: Record<string, string> = {
   "time.never": "从未",
   "time.now": "刚刚",
   "time.yesterday": "昨天",
+  // process
+  "process.pick": "选择进程",
+  "process.search": "按名字过滤，例如 chrome.exe",
+  "process.loading": "正在读进程列表…",
+  "process.empty": "没有匹配的进程",
+  "process.refresh": "刷新",
+  "process.hint": "按进程分流在 sing-box 上走 `process_name` 字段；Xray 的 `process` 匹配取决于内核版本与平台，本项目没在真机上验过",
 }

@@ -13,6 +13,7 @@ mod rulesets;
 mod state;
 mod autostart;
 mod store;
+mod sysproc;
 mod sysproxy;
 mod tray;
 mod update;

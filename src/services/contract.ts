@@ -33,6 +33,7 @@ import type {
   ProbeKind,
   ProxyGroup_Deserialize,
   ProxyGroup_Serialize,
+  ProcessInfo,
   ProxyMode,
   RefreshOutcome_Serialize,
   RuleTest_Serialize,
@@ -107,6 +108,9 @@ export const api = {
 
   /** Read a text file the user picked; `null` means they cancelled. */
   openTextFile: (): Promise<string | null> => unwrap(commands.openTextFile()),
+
+  /** Running processes merged by executable name, for the rule editor. */
+  listProcesses: (): Promise<ProcessInfo[]> => unwrap(commands.listProcesses()),
 
   listNodes: (): Promise<Node_Serialize[]> => unwrap(commands.listNodes()),
   upsertNode: (node: Node_Deserialize): Promise<Node_Serialize[]> => unwrap(commands.upsertNode(node)),
@@ -298,6 +302,7 @@ export type {
   ProbeKind,
   ProxyGroup_Deserialize,
   ProxyGroup_Serialize,
+  ProcessInfo,
   ProxyMode,
   RefreshOutcome_Serialize,
   RoutingRule,

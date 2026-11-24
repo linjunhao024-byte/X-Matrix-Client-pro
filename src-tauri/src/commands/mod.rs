@@ -3,6 +3,7 @@ pub mod engine;
 pub mod group;
 pub mod import;
 pub mod node;
+pub mod process;
 pub mod routing;
 pub mod ruleset;
 pub mod settings;

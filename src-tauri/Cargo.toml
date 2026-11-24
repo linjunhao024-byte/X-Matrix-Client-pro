@@ -57,6 +57,8 @@ windows-sys = { version = "0.60", features = [
     "Win32_Security",
     "Win32_System_JobObjects",
     "Win32_System_LibraryLoader",
+    # The process picker walks a Toolhelp32 snapshot.
+    "Win32_System_Diagnostics_ToolHelp",
     "Win32_Graphics_Gdi",
     "Win32_System_Threading",
     "Win32_UI_Input_KeyboardAndMouse",

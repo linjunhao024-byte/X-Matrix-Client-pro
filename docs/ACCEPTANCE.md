@@ -1401,3 +1401,51 @@ app stderr 同步佐证：托盘行从 `模式 rule · 内核运行中` 重新�
 6. **色板在页面靠下的位置，`ScrollItemPattern.ScrollIntoView()` 之后 rect 才有效**；不滚就取 rect 会拿到负坐标或 0 宽。
 
 **一句实话**：这一条证的是「默认观感不变、六个预设两档都换到了、自定义色生效、恢复默认干净、选择活过重启」。没证的：① 只在这台 Windows Server 2022 的 WebView2 上验过，没验 HDR 与系统级高对比度模式；② 六个预设的具体色值是我按对比度挑的，没有跟 v2rayN / Clash Verge 的主题逐色对齐；③ 强调色对第三方的图表组件只做到「跟着重取 token」（`TrafficChart.vue` 里 `void ui.resolvedTheme` + `void ui.accentVersion`），没有逐像素验图表线条的颜色。
+
+## 51. 进程选择器：把「手打 chrome.exe」换成从真机进程表里挑（2026-11-25，云电脑 cloudpc-test）
+
+**要证的事**（S11，`docs/PARITY-PLAN.md`）：
+
+1. 规则编辑器在 `process_name` 匹配器下多出「选择进程」，点开能列出**这台机器上真实运行**的进程（不是 mock、不是固定表）；
+2. 搜索框能按名字把列表收窄，且收窄后剩下的是被问的那个；
+3. 点一行就把名字写进编辑器的值域，不需要再手打；
+4. 过滤到零行时界面说「没有匹配的进程」，不是空白一片；
+5. 关掉选择器不会连坐半填的规则（两层弹窗各自收口）。
+
+**验法**：
+
+- `bash /d/tmp/shots/51-proc-accept.sh [exe] [label]`（新增）——把 store 钉成**只有一条** `process_name=chrome.exe` 规则、`groups=[]`，于是路由表只有一行，`编辑` 不歧义；`system_proxy` / `pac_enabled` / `auto_connect` 全 false，全程不起内核、不碰代理。
+- 驱动是 `51-proc.ps1`（`mk_51_proc.py` 生成，UTF-8 BOM + CRLF）：导航到路由页（签名 `路由` + `新增规则`）→ 点规则行的 `编辑` → 点 `选择进程` → 数列表行数（行名形如 `chrome.exe (12)`，按 `.+ \(\d+\)` 判）→ 在搜索框（唯一的 Edit，Name 就是 placeholder `按名字过滤，例如 chrome.exe`）里写 `x-matrix` → 再数一遍 → 点剩下的那行 → 用 `ValuePattern` 回读编辑器所有 Edit 的 `Name`/`Value`；随后再开一次选择器、填 `zzzznosuchprocess`，在整棵树里找 `没有匹配的进程` 这段文字；最后 `关闭` 选择器、`取消` 编辑器。
+- 判定靠日志里的数字与回读值，不靠「看起来像」。
+
+**判据（`label=s11b`，exe 10,511,360 B，md5 `fc01826477a1ef4fe075eaca5ee01afa`）**：
+
+| # | 检查 | 观察 |
+|---|------|------|
+| 1 | 路由页 → `编辑` | `routing page: True`、`click edit: True`，规则编辑器打开、里面出现 `选择进程` |
+| 2 | 点 `选择进程` | `click picker: True`，弹窗列出 **57 行** |
+| 3 | 列表是真实进程 | 前 10 行 `AggregatorHost.exe (1) | ais.exe (1) | aiuse-agent-daemon.exe (2) | AppMarketSvc.exe (2) | blnsvr.exe (1) | ChsIME.exe (1) | clink_agent.exe (1) | clink_agent_data.exe (1) | clink_agent_device.exe (1) | clink_service.exe (1)` —— 都是这台测试机上的东西 |
+| 4 | 搜索 `x-matrix` | `rows after filter: 1`、`filtered rows: X-Matrix.exe (1)`（57 → 1） |
+| 5 | 点该行 | 编辑器回读 `[名称]=proc picker test [匹配内容]=X-Matrix.exe` —— 名字写进值域了 |
+| 6 | 过滤到零行 | `rows with nonsense filter: 0`、`empty state text shown: True`（界面显示 `没有匹配的进程`） |
+| 7 | 关选择器再关编辑器 | `close picker: True` → 编辑器仍在 → `close editor: True`（两层各自收口，半填的规则没被连坐关掉） |
+| 8 | 门槛 | `npm run check` 全绿（`architecture ok (65 files checked)`、contract up to date、vitest **116 passed** / 12 文件）、`cargo test --lib` **405 passed**、IPC **82**（+1 条 `list_processes`）、i18n **784** 键 |
+| 9 | 收尾 | `cleanup.sh` → `ProxyEnable REG_DWORD 0x0`、`tasks-above-should-be-empty`；全程未起内核、未写系统代理 |
+
+**设计理由**：
+
+1. **一个可执行名一行，pid 只做计数与 tooltip。** 规则键的是名字（`chrome.exe`）而不是 pid；chrome 同时开十几个进程，按 pid 列就是十几行噪声。归并在 `sysproc::group()` 里做纯函数（大小写不敏感、保留首次拼写、pid 升序去重、按小写名排序、原名破平），三条单测不需要 Windows 也不用起进程。
+2. **枚举只在 Windows 上实现，非 Windows 明确报错。** 别的平台返回 `AppError::Internal("进程列表当前只有 Windows 实现")`，而不是空表——空表会被读成「这台机器没有进程」，那是没人能处理的谎话。同理快照失败是 `AppError::Io("读取进程快照失败：…")`，句柄用 `Drop` 关（提前返回也关得掉），pid 0（System Idle，没有可执行文件）与空名一律跳过。
+3. **点行只写值，不提交。** 保存仍是第二次明确点击：用户可以挑完再改名，也可以反悔取消。
+4. **选择器是第二个弹窗，Escape 先关它。** `onEditorClose()` 先看 `pickerOpen`：选择器开着就只关选择器，半填的规则留在原地；只有选择器已经关了，Escape 才关编辑器。
+5. **界面上写清这句话**：sing-box 用 `process_name` 字段（本项目就是这么下发的），Xray 的 `process` 匹配**取决于内核版本与平台、本项目没在真机验过**。宁可让用户知道哪一半没证，也不假装两个内核一样。
+
+**坑**：
+
+1. **`Buttons-Named '编辑'` 的 `.Count` 打出空串**：PowerShell 只有一个匹配时会把数组解包成单个 `AutomationElement`，`.Count` 不存在 → 日志里 `edit buttons:` 是空的。这不是产品问题（`Click-Named` 走 `Scroll-To` 另一条路，`click edit: True`），但别拿这行空白当「按钮不存在」。
+2. **进程行名带 ` (n)` 后缀**，判定列表行要用 `-match '.+ \(\d+\)'`，点行得把**完整名字**（含 ` (1)`）传给 `NameProperty` 条件，只传 `X-Matrix.exe` 匹配不上。
+3. **输入框的 UIA `Name` 是 placeholder**，所以驱动靠 `按名字过滤，例如 chrome.exe` 这段文案定位搜索框——**改文案就会让驱动失效**，这一条写进 `docs/HANDOVER.md` 的坑列表。
+4. **`reg query "…\Internet Settings" /v …` 经 ssh 进 cmd 时引号会被吃掉**，回报 `错误: 无效语法`。末态改由 `cleanup.sh` 证明（它引用正确），别在验收脚本里再写一遍。
+5. **`szExeFile` 只有 basename**，没有全路径也没有用户名；同名不同程序会被合到一行（这是数据形状的取舍，不是 bug，见设计理由 1）。
+
+**一句实话**：证的是「真实进程表 → 收窄 → 写进值域 → 空态文案 → 两层弹窗各自收口」。没证的四件事：① 进程名全是 ASCII，中文/非 ASCII 进程名没验；② 没有走「挑完保存 → 重开规则看值是否留存」（脚本以取消收尾，规则没落库），「选完不自动提交」也只是从「编辑器还开着 + 取消收尾」推出来的，没单独断言；③ `group()` 只把同名合并，没列路径/用户，同名不同程序在界面上分不开；④ Xray 运行期是否真按 `process` 匹配没验（内核版本相关），界面已经如实写了这一条。

@@ -53,6 +53,8 @@ PAC 只表达**能表达的**：绕过列表 + 规则里「直连」的域名类
 `list_processes()`（Windows Toolhelp32，去重、带图标可省）供规则编辑器选择 `ProcessName`；说明只有 sing-box 的 `process_name` 匹配在运行期生效。
 判据：选择器能列出真实进程；选中后规则落库；sing-box 运行中该进程流量按规则走（真机）。
 
+结果（2026-11-25）：`src-tauri/src/sysproc.rs` 里 `ProcessInfo { name, pids }` + 纯函数 `group()`（大小写不敏感归并、保留首次拼写、pid 升序去重、按小写名排序）+ `list()`（Windows Toolhelp32，RAII 关句柄，快照失败报 `AppError::Io`，非 Windows 报 `AppError::Internal`，跳过 pid 0 与空名）；命令只有一条 `list_processes`（81 → 82）。界面在规则编辑器 `process_name` 分支里多一个「选择进程」按钮 → 第二个 `ModalDialog`（搜索、`名称 (pid数)` 单行、loading/错误/空三态、刷新、点行只写值不提交），过滤是 `src/services/processlist.ts` 的纯函数（三条 vitest）。真机（`label=s11b`）：57 个真实进程、搜 `x-matrix` 收窄到 `X-Matrix.exe (1)`、点行后编辑器值域回读为 `X-Matrix.exe`、无匹配时显示「没有匹配的进程」、关选择器不关规则；见 `docs/ACCEPTANCE.md` §51。老实说明：只验了「枚举 → 收窄 → 写进值域 → 空态」，没有跑 sing-box 运行期按进程分流（测试机无外网出口，也怕在云电脑上起内核留下状态）；Xray 的 `process` 匹配是否生效未证，界面已如实写明。
+
 ### S9 · 回退组 / 负载均衡组
 `GroupKind` 增加 `Fallback`（按成员顺序，健康检查失败就顺延）与 `LoadBalance`（轮询）。sing-box 用 `selector` + 应用侧健康检查切换；Xray 下如实标注为「静态副本，不具备回退语义」。
 判据：sing-box 下杀掉首选成员的内核出口能自动落到下一个；轮询组连续请求分散到不同成员；Xray 下界面明确说明差异。
@@ -89,7 +91,7 @@ sing-box `tun` 入站（`auto_route`、`strict_route`、`stack: system`），需
 | S2 PAC | **已完成**（2026-11-25） | 与 `src-tauri/src/sysproxy/pac.rs` 同一次提交（`git log --oneline -- src-tauri/src/sysproxy/pac.rs` 最新一条） | `docs/ACCEPTANCE.md` §48；真机脚本 `D:\tmp\shots\48-pac-accept.sh` |
 | S8 分离端口 | **已完成**（2026-11-25） | 与 `src-tauri/src/engine/mod.rs` 同一次提交（`git log --oneline -- src-tauri/src/engine/mod.rs` 最新一条） | `docs/ACCEPTANCE.md` §49；真机脚本 `D:\tmp\shots\49-split-accept.sh`、`49-ui-accept.sh` |
 | S10 主题 | **已完成**（2026-11-25） | 与 `src/services/accent.ts` 同一次提交（`git log --oneline -- src/services/accent.ts` 最新一条） | `docs/ACCEPTANCE.md` §50；真机脚本 `D:\tmp\shots\50-accent-accept.sh` |
-| S11 进程选择器 | 未开始 | — | — |
+| S11 进程选择器 | **已完成**（2026-11-25） | 与 `src-tauri/src/sysproc.rs` 同一次提交（`git log --oneline -- src-tauri/src/sysproc.rs` 最新一条） | `docs/ACCEPTANCE.md` §51；真机脚本 `D:	mp\shots)-proc-accept.sh` |
 | S9 回退/负载组 | 未开始 | — | — |
 | S3 内核更新 | 未开始 | — | — |
 | S6 WebDAV | 未开始 | — | — |

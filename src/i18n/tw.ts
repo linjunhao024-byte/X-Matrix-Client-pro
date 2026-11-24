@@ -804,4 +804,11 @@ export const tw: Record<string, string> = {
   "time.never": "從未",
   "time.now": "剛剛",
   "time.yesterday": "昨天",
+  // process
+  "process.pick": "選擇進程",
+  "process.search": "按名字過濾，例如 chrome.exe",
+  "process.loading": "正在讀進程列表…",
+  "process.empty": "沒有匹配的進程",
+  "process.refresh": "重新整理",
+  "process.hint": "按進程分流在 sing-box 上走 `process_name` 欄位；Xray 的 `process` 匹配取決於內核版本與平台，本項目沒在真機上驗過",
 }

@@ -10,23 +10,23 @@
 ## 0. 三句话现状
 
 1. 主体功能已追平 V2RayN / Clash 的日常面：双内核（Xray / sing-box）渲染与启停、系统代理接管与还原、订阅/整包导入、Clash 配置连同 **策略组与规则** 一起导入、运行中热切换节点与代理模式、托盘子菜单、日志页、hysteria2 / tuic、真实延迟（分组与节点）、流量历史落盘、一键断开全部 + 进程归属、测速预算与「选最快」、域名正则 / 域名分类匹配器、诊断包导出、全局快捷键。
-2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§50）。
+2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§51）。
 3. 交接时那处未提交的工作（N12 应用内更新检查）已经构建、真机验收并提交；此后又合入四件事：`--quit` 正常退出并删除托盘图标（§21）、GEO 数据文件卡片与镜像回退下载（§23）、测速记录落盘（§24）。工作区现在是干净的。
 
 ### 0.1 进度快照（交接这一刻的硬数字）
 
 | 项 | 值 |
 |---|---|
-| 代码 HEAD | 「feat(theme): six accents and one custom colour, all on four tokens」，含 §50（S10 强调色）——就是 `git log --oneline -- src/services/accent.ts` 的第一条；再往前：§49（S8）、`a794438`（§48）、`6fd790f`（§47） |
-| 未提交 | 无。§50（S10 强调色）的代码、构建、真机验收、`docs/ACCEPTANCE.md` §50 与 `docs/PARITY-PLAN.md` 都在同一次提交里（见 §0.6） |
+| 代码 HEAD | 「feat(routing): pick a running process instead of typing its name」，含 §51（S11 进程选择器）——就是 `git log --oneline -- src-tauri/src/sysproc.rs` 的第一条；再往前：§50（S10 强调色，查 `src/services/accent.ts`）、§49（S8）、`a794438`（§48）、`6fd790f`（§47） |
+| 未提交 | 无。§51（S11 进程选择器）的代码、构建、真机验收、`docs/ACCEPTANCE.md` §51 与 `docs/PARITY-PLAN.md` 都在同一次提交里（见 §0.7） |
 | 上一版未提交清单（留档） | `src-tauri/src/domain/settings.rs`、`src-tauri/src/engine/{mod,render,runtime,xray}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§39 分片）；再上一版：`src-tauri/src/engine/{mod,runtime}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§37 统一提示）；再上一版：`src-tauri/src/commands/settings.rs`、`src-tauri/src/commands/sysproxy.rs`、`src/stores/sysproxy.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`、`docs/ACCEPTANCE.md`（§36 系统代理即时生效） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库；之后每次收尾都跟着更新 |
-| IPC 命令 | **81**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
-| Rust 单测 | **402 passed**（`ARCHITECTURE.md:278` 已同步） |
-| 前端检查 | `npm run check` 全绿：vue-tsc / architecture / contract / vitest **113**（11 文件） |
-| i18n | **778** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
-| 桌面产物 | 桌面上的旧副本**已不存在**；唯一产物是 `src-tauri/target/release/x-matrix.exe`（10,481,152 B @2026-11-25 06:51，md5 `dd36d82a50a89d55a47485d52acc01c9`，含 §21–§50 全部改动） |
-| 验收文档 | `docs/ACCEPTANCE.md` §0–§50（§7 历史空缺，编号不连续但内容完整） |
+| IPC 命令 | **82**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
+| Rust 单测 | **405 passed**（`ARCHITECTURE.md:278` 已同步） |
+| 前端检查 | `npm run check` 全绿：vue-tsc / architecture（65 文件）/ contract / vitest **116**（12 文件） |
+| i18n | **784** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
+| 桌面产物 | 桌面上的旧副本**已不存在**；唯一产物是 `src-tauri/target/release/x-matrix.exe`（10,511,360 B @2026-11-25 07:25，md5 `fc01826477a1ef4fe075eaca5ee01afa`，含 §21–§51 全部改动） |
+| 验收文档 | `docs/ACCEPTANCE.md` §0–§51（§7 历史空缺，编号不连续但内容完整） |
 | 云电脑 | 干净：`ProxyEnable=0x0`、无 X-Matrix/sing-box/xray 进程、无 `xm*` 计划任务 |
 
 **下一步的确定顺序**（做完一条打一个勾，别跳）：
@@ -37,11 +37,13 @@
 - [x] 4. `docs/ACCEPTANCE.md` 写到 §26
 - [x] 5. 提交（`fix(tray)` / `feat(update)` / `feat(geo,nodes)` / `feat(engine)` 各一条）
 - [x] 6. `FEED_URL` 已指向真实仓库 `linjunhao024-byte/X-Matrix-Client-pro`，`v0.1.0` 已发布并带 `X-Matrix.exe` 资产
-- [x] 7. 计数已同步：81 命令 / 402 单测 / 113 vitest / 778 i18n 键 × 3
+- [x] 7. 计数已同步：82 命令 / 405 单测 / 116 vitest / 784 i18n 键 × 3
 - [x] 8. `bash /d/tmp/shots/cleanup.sh` 收尾云电脑（2026-11-24 23:55 再跑一次：`ProxyEnable 0x0`、无 `xm*` 任务）
 - [x] 9. §47 订阅刷新后前端握着死 ID：补丁 → 构建 → 云电脑两轮对比验收 → 写 §47 → 提交（2026-11-25 02:36）
 - [x] 10. §48（S2）PAC 自动配置：生成脚本 + 注册表互斥 + 回环/私网兜底 → 构建 → 云电脑验收 → 写 §48 → 提交（2026-11-25 04:20）；后续 S10/S11/S9/S3/S6/S5/S4/S1/S7 见 `docs/PARITY-PLAN.md`
 - [x] 11. §49（S8）HTTP 与 SOCKS 分离端口：`Endpoints` 一处决议 + 两个渲染器 + 界面生效值 → 构建 → 云电脑三阶段验收 → 写 §49 → 提交（2026-11-25 06:5x）
+- [x] 12. §50（S10）六个强调色 + 自定义 hex：`tokens.css` 每预设两块 + `accent.ts` 现算对比度 → 构建 → 云电脑像素计数验收 → 写 §50 → 提交（2026-11-25 07:0x）
+- [x] 13. §51（S11）进程选择器：`sysproc.rs` 归并 + 一条 `list_processes` + 规则编辑器第二个弹窗 → 构建 → 云电脑 57 行真实进程/收窄/回读/空态验收 → 写 §51 → 提交（2026-11-25 07:3x）
 
 ### 0.2 这个窗口（2026-11-24）新完成的六件事
 
@@ -89,6 +91,14 @@
 - **两个假失败要先知道**：① `恢复默认` 在 UIA 树里有 5 个同名 Button（高级项里还有两个重置），第一个在屏幕外，按名字取第 0 个会点到别处 —— 要取与唯一 `应用` 按钮同一行右边那个；② `Scroll-To` 返回的是 `{CX,CY}` 而不是 AutomationElement，对它取 `.Current.BoundingRectangle` 得到 `0,0,0x0`，于是点了标题栏。
 - **计数**：命令 81（不变）、Rust **402**（不变）、vitest **113**（+15，11 文件）、i18n **778**（+10）。
 
+### 0.7 §51（S11）按进程分流的进程选择器（已完成，2026-11-25）
+
+- **为什么做**：`docs/PARITY-PLAN.md` 的第 4 项。`RuleMatcher::ProcessName` 早就在（Xray 渲染 `process: [...]`、sing-box 渲染 `process_name: [...]`），但用户要在规则里**手打** `chrome.exe`——Clash Verge 与 v2rayN 都能从进程表里挑。
+- **做了什么**：新增 `src-tauri/src/sysproc.rs`（`ProcessInfo { name, pids }` + 纯函数 `group()` + `list()`）、`src-tauri/src/commands/process.rs`（**唯一一条新命令** `list_processes`，IPC 从此 81 → 82）、`src/services/processlist.ts`（`filterProcesses` 纯函数）。`group()` 大小写不敏感归并、保留首次拼写、pid 升序去重、按小写名排序原名破平；`list()` 走 Windows Toolhelp32（`CreateToolhelp32Snapshot` + `Process32FirstW/NextW`，句柄用 `Drop` 关，`INVALID_HANDLE_VALUE` → `AppError::Io("读取进程快照失败：…")`，跳过 pid 0 与空名，非 Windows → `AppError::Internal`）。`src/components/RuleEditor.vue` 在 `process_name` 分支里多一个 `选择进程` 按钮 → 第二个 `ModalDialog`：搜索框、`名称 (pid数)` 单行列表、loading / 后端原文错误 / 空态三态、刷新按钮、点行只写 `draft.value` 不提交；`onEditorClose()` 让 Escape 先关选择器、不连坐半填的规则。界面上如实写明：sing-box 走 `process_name` 字段，**Xray 的 `process` 匹配取决于内核版本与平台、本项目没在真机验过**。
+- **验收**：`bash /d/tmp/shots/51-proc-accept.sh`（`mk_51_proc.py` 生成驱动；store 钉成只有一条 `process_name=chrome.exe` 规则，路由表只有一行，`编辑` 不歧义）在云电脑上跑通：**57 行真实进程**（`AggregatorHost.exe (1)`、`ais.exe (1)`、`ChsIME.exe (1)` …）、搜 `x-matrix` 收窄到 1 行 `X-Matrix.exe (1)`、点行后编辑器回读 `匹配内容=X-Matrix.exe`、填 `zzzznosuchprocess` 时 0 行且界面出现 `没有匹配的进程`、关选择器后编辑器仍在。细节见 `docs/ACCEPTANCE.md` §51。
+- **坑（真机脚本）**：① 输入框的 UIA `Name` 就是 placeholder，所以驱动靠 `按名字过滤，例如 chrome.exe` 这段文案定位——**改这条文案会让驱动失效**，改的时候顺手改 `mk_51_proc.py`；② 列表行名带 ` (n)` 后缀，数行用 `-match '.+ \(\d+\)'`，点行要把完整名字（含 ` (1)`）传给 `NameProperty`；③ `Buttons-Named` 只有一个匹配时会解包成单个元素，`.Count` 打出来是空串（不是「按钮不存在」）；④ `reg query "…\Internet Settings"` 经 ssh 进 cmd 会被吃掉引号，末态一律由 `cleanup.sh` 证明。
+- **计数**：命令 **82**（+1）、Rust **405**（+3：`group()` 三条）、vitest **116**（+3，12 文件）、i18n **784**（+6）。
+
 ---
 
 ## 1. 项目坐标与命令
@@ -105,8 +115,8 @@
 | 桌面产物 | `/c/Users/83611/Desktop/X-Matrix.exe`、`/c/Users/83611/Desktop/X-Matrix_0.1.0_x64-setup.exe` |
 | 当前构建产物 | `src-tauri/target/release/x-matrix.exe` **10,481,152 B @2026-11-25 06:51，md5 `dd36d82a50a89d55a47485d52acc01c9`**（含 §21–§50）；桌面副本已不在，需要时自己 `cp` 过去 |
 
-**计数基线（改动后记得同步文档）**：命令 **81**、`cargo test --lib` **402**、vitest **98**（10 个文件）、i18n **768** 键。
-> `README.md:81` 与 `ARCHITECTURE.md:277-278` 已同步为 81 条命令 / 402 项测试。
+**计数基线（改动后记得同步文档）**：命令 **82**、`cargo test --lib` **405**、vitest **116**（12 个文件）、i18n **784** 键。
+> `README.md:81` 与 `ARCHITECTURE.md:277-278` 已同步为 82 条命令 / 405 项测试。
 
 命令数核算法：
 
@@ -159,7 +169,7 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 
 ## 4. 已完成的功能与验收索引
 
-`docs/ACCEPTANCE.md` 是**唯一可信的进度表**（28 节，每节都有「验法 + 判据 + 设计理由 + 坑」）：
+`docs/ACCEPTANCE.md` 是**唯一可信的进度表**（§0–§51 共 51 节，每节都有「验法 + 判据 + 设计理由 + 坑」）：
 
 | 节 | 内容 |
 |---|---|
@@ -214,7 +224,7 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 已提交的提交序列（新→旧，14 条主体）：
 `5a44af3` 域名正则+geosite · `569a7ce` 流量历史 · `44b857b` 测速预算+选最快 · `42f85bd` 一键断开+进程名 · `f817726` 真实延迟 · `f3fc750` 订阅走代理 · `d892b9e` Clash 导入带组和规则 · `6851775` 托盘子菜单 · `f9a0406` H4 验收文档 · `14ddb20` hysteria2/tuic · `fdd0b8d` 运行中热切换 · `eb3f453` 日志页 · `79ccadd` 设计修复（粘右操作列、错误用红、焦点陷阱等）· `535124b` 快捷键与诊断包验收。
 
-`D:\tmp\parity-gaps.md` 是最初的对标审计（31 行已覆盖、7 高价值、13 锦上添花、11 明确不做），H1–H7 与 N1、N2、N8、N9、N12 已吃掉其中大部分。
+`D:\tmp\parity-gaps.md` 是最初的对标审计（31 行已覆盖、7 高价值、13 锦上添花、11 条当时判定不做（2026-11-25 已全部解禁），H1–H7 与 N1、N2、N8、N9、N12 已吃掉其中大部分。
 
 ---
 
@@ -285,9 +295,13 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 | ~~N5 出口 IP~~ | 已完成：首页卡片 + 三主机退让 + 失败清空旧值（§26） | — | 见下方「已完成」说明 |
 | ~~N7 订阅下次刷新倒计时~~ | 已完成：每行「刚刚 / 还有 N 小时」，30 秒共用计时器（§27） | — | 见「已完成」说明 |
 | ~~§47 订阅刷新后前端握着死 ID~~ | 已完成：`src/views/SubscriptionsView.vue` 的 `kernelStopped()` 无条件重读设置，验收见 §47 | 小（1 文件 + 2 轮真机对比） | 2026-11-25 关闭 |
+| ~~S2 PAC 脚本~~ | 已完成：`src-tauri/src/sysproxy/pac.rs` 生成 + `AutoConfigURL` 接管/还原/互斥，界面开关，验收见 §48 | 中 | 2026-11-25 关闭 |
+| ~~S8 HTTP 与 SOCKS 分端口~~ | 已完成：`Endpoints` 一处决议 + 两个渲染器各开两个入站 + 界面显示生效值，验收见 §49 | 中 | 2026-11-25 关闭 |
+| ~~S10 强调色 / 自定义主题~~ | 已完成：六个预设两块 CSS + 自定义 hex 现算对比度 + `localStorage` 持久化，验收见 §50 | 小 | 2026-11-25 关闭 |
+| ~~S11 进程选择器~~ | 已完成：`sysproc::list()` + 一条 `list_processes` + 规则编辑器第二个弹窗，验收见 §51 | 中 | 2026-11-25 关闭 |
 | 设计审计残余 | `D:\tmp\design-audit-2.md` | — | 二审 15 条已全部处理完；这份文件可以当历史读 |
 
-明确**不做**的（`D:\tmp\parity-gaps.md` §2.3，S1–S11）：TUN 模式、PAC 脚本、内核自动更新与下载、开机直接接管系统代理等。
+**S1–S11 已全部解禁**（用户 2026-11-25 指示：功能要做到 V2RayN 与 Clash 二者结合），旧口径「明确不做」作废。进度与顺序只认 `docs/PARITY-PLAN.md`：S2（§48）、S8（§49）、S10（§50）、S11（§51）已完成；剩 S9 回退/负载组、S3 内核下载更新、S6 WebDAV 备份、S5 轻量模式、S4 提权/服务、S1 TUN、S7 多配置。
 
 ---
 
@@ -351,7 +365,7 @@ scp -i /c/Users/83611/.ssh/id_ed25519_cpc 本地文件 Administrator@100.106.121
 
 1. `cd /d/GitHub-Warehouse/X-Matrix-Client-Pro && git status` —— 工作区应当干净；有改动先弄清是谁的。
 2. 读本文件的 §5 与 `docs/ACCEPTANCE.md` 的最后两节，对齐上下文。
-3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 402 passed）。
+3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 405 passed）。
 4. `cd .. && npm run check`（应为全绿）。
 5. 从 §6 表里挑一项（按性价比排序），**一项一提交**，提交信息用英文 `feat(...)/fix(...)/docs: ...`。
 6. 真机验证前先跑 `bash /d/tmp/shots/deploy-tray.sh <exe>`；远端被 `cleanup.sh` 清过的话，先 `scp x-act.ps1 uia2.ps1 ocr.ps1` 上去。
