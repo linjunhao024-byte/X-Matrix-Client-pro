@@ -8,7 +8,7 @@
 ## 0. 三句话现状
 
 1. 主体功能已追平 V2RayN / Clash 的日常面：双内核（Xray / sing-box）渲染与启停、系统代理接管与还原、订阅/整包导入、Clash 配置连同 **策略组与规则** 一起导入、运行中热切换节点与代理模式、托盘子菜单、日志页、hysteria2 / tuic、真实延迟（分组与节点）、流量历史落盘、一键断开全部 + 进程归属、测速预算与「选最快」、域名正则 / 域名分类匹配器、诊断包导出、全局快捷键。
-2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§42）。
+2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§43）。
 3. 交接时那处未提交的工作（N12 应用内更新检查）已经构建、真机验收并提交；此后又合入四件事：`--quit` 正常退出并删除托盘图标（§21）、GEO 数据文件卡片与镜像回退下载（§23）、测速记录落盘（§24）。工作区现在是干净的。
 
 ### 0.1 进度快照（交接这一刻的硬数字）
@@ -19,12 +19,12 @@
 | 未提交 | 无（§42 的改动已提交为 `057fdb3`） |
 | 上一版未提交清单（留档） | `src-tauri/src/domain/settings.rs`、`src-tauri/src/engine/{mod,render,runtime,xray}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§39 分片）；再上一版：`src-tauri/src/engine/{mod,runtime}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§37 统一提示）；再上一版：`src-tauri/src/commands/settings.rs`、`src-tauri/src/commands/sysproxy.rs`、`src/stores/sysproxy.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`、`docs/ACCEPTANCE.md`（§36 系统代理即时生效） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库（HEAD 上这一条） |
-| IPC 命令 | **80**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
-| Rust 单测 | **368 passed**（`ARCHITECTURE.md:278` 已同步） |
+| IPC 命令 | **81**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
+| Rust 单测 | **372 passed**（`ARCHITECTURE.md:278` 已同步） |
 | 前端检查 | `npm run check` 全绿：vue-tsc / architecture / contract / vitest **96**（10 文件） |
-| i18n | **750** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
+| i18n | **754** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
 | 桌面产物 | 见 §1 表格（每次构建后刷新；当前 release 构建含 N12 + GEO + 测速落盘 + 退出通知） |
-| 验收文档 | `docs/ACCEPTANCE.md` §0–§42（§7 历史空缺，编号不连续但内容完整） |
+| 验收文档 | `docs/ACCEPTANCE.md` §0–§43（§7 历史空缺，编号不连续但内容完整） |
 | 云电脑 | 干净：`ProxyEnable=0x0`、无 X-Matrix/sing-box/xray 进程、无 `xm*` 计划任务 |
 
 **下一步的确定顺序**（做完一条打一个勾，别跳）：
@@ -35,7 +35,7 @@
 - [x] 4. `docs/ACCEPTANCE.md` 写到 §26
 - [x] 5. 提交（`fix(tray)` / `feat(update)` / `feat(geo,nodes)` / `feat(engine)` 各一条）
 - [x] 6. `FEED_URL` 已指向真实仓库 `linjunhao024-byte/X-Matrix-Client-pro`，`v0.1.0` 已发布并带 `X-Matrix.exe` 资产
-- [x] 7. 计数已同步：80 命令 / 368 单测 / 96 vitest / 750 i18n 键 × 3
+- [x] 7. 计数已同步：81 命令 / 372 单测 / 96 vitest / 754 i18n 键 × 3
 - [ ] 8. `bash /d/tmp/shots/cleanup.sh` 收尾云电脑
 
 ---
@@ -155,6 +155,7 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 | §40 | 改正在跑的节点：说出「内核还在用旧的一份」，一键按新配置重启 |
 | §41 | 全局快捷键可改可关：录制、保存即生效、两键不许相同 |
 | §42 | 第三种语言：机械转繁体 + 台湾用词表，选择器落库，托盘与通知跟着换 |
+| §43 | 不启动内核也能测真实延迟：临时内核打一枪就撤，拒绝与失败分开记 |
 
 已提交的提交序列（新→旧，14 条主体）：
 `5a44af3` 域名正则+geosite · `569a7ce` 流量历史 · `44b857b` 测速预算+选最快 · `42f85bd` 一键断开+进程名 · `f817726` 真实延迟 · `f3fc750` 订阅走代理 · `d892b9e` Clash 导入带组和规则 · `6851775` 托盘子菜单 · `f9a0406` H4 验收文档 · `14ddb20` hysteria2/tuic · `fdd0b8d` 运行中热切换 · `eb3f453` 日志页 · `79ccadd` 设计修复（粘右操作列、错误用红、焦点陷阱等）· `535124b` 快捷键与诊断包验收。
@@ -164,6 +165,10 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 ---
 
 ## 5. 最近完成的事（已提交、已真机验收）
+
+**测试在空载与满载下不是一回事（2026-11-24）**：`cargo test --lib` 在开发机空载时连续 7 次全绿（372 passed，默认 16 线程与 4 线程都一样），但在两个进程同时抢盘（一边跑 `npm run check`、一边连跑三轮 cargo）的那一次里出现 13 条假失败，全部集中在 `commands::node`（`["a","b","a"]`、`["b","b"]`）、`commands::ruleset`（`loaded_sets` 多出一条）、`commands::subscription`（换个新 id 的采纳断言、`nothing was installed`）。同一批用例单独跑 `cargo test --lib commands::node` 连跑 6 次全过，所以不是断言写错，而是并发写盘时 `target/test-tmp` 下各用例自己的目录仍被拖慢到一个边界上。判据：先空载复跑；仍红才算回归，红了先单独跑那个模块。
+
+**不启动内核的真实延迟（2026-11-24，§43）**：此前「真实延迟」只有一条路——经正在跑的内核打一次探测（`node_delay`），没启动内核时只能提示「先启动内核」。H5(b) 就是补这一半：`src-tauri/src/engine/temp.rs` 起一个一次性内核（自己挑两个空闲端口、渲染只含该节点、`mode=Global` 的配置、`XRAY_LOCATION_ASSET` 与主内核同源、`CREATE_NO_WINDOW`），轮询到混合端口监听后经 `http_latency_via_proxy_with_timeout` 打一枪，`Cleanup` 的 `Drop` 负责 kill + 删 `probe-*.json/.err`。命令 `node_delay_offline`（前端 `api.nodeDelayOffline`）在内核运行中直接拒绝（「直接用「真实延迟」经它测」），按 `settings.last_engine` 选内核并先 `validate_node()`，所以 hysteria2/tuic 配 Xray 会得到和首页一样的人话。三种结局分开记：`Measured` 写数字、`Failed` 写 `delay_ms: null`、`NotStarted`（拒绝）一个字节都不写。节点页在没有内核时每行多一个「真实延迟」文字按钮，成功后用页面原有的提示条说「真实延迟 539 ms」。真机证据（`offline-accept.txt`）：本机 sing-box 假服务端 `127.0.0.1:8388`，`SS-Local` → 界面 `539 ms · 刚刚`、store `{"delay_ms":539,"kind":"real"}`；`SS-Dead` → 界面 `经代理请求返回 HTTP 503`、store `{"delay_ms":null,"kind":"real"}`；内核在跑时 `real delay buttons while running: 0`；事后 `dir probe-*.json` 为空、无残留进程、`ProxyEnable=0`。`cargo test --lib` 372（新增 4 条），vitest 96，i18n 754×3。剩下的大候选表里只剩设计审计残余与明确不做的 S1–S11。
 
 **第三种语言（2026-11-24，§42）**：此前只有简体与英文两份字典，`Language` 也只有 `Zh`/`En`。现在多了繁体（台湾用词）：`scripts/i18n-pairs.json` 每行四格 `[key, zh, en, tw]`，`python scripts/gen_i18n.py` 一次写 `src/i18n/{zh,en,tw}.ts`，繁体列由 `zhconv` 机械转换 + 用词表（`默认→預設`、`设置→設定`、`端口→埠`、`保存→儲存`、`配置→設定` …），不是逐键手翻，所以三份字典键集由 `i18n.test.ts` 的 `keyDiff` 卡死。`src/i18n/index.ts` 的 `Locale` 加 `'zh-tw'`，`applyDocumentLang` 写 `zh-TW`。后端 `Language` 加 `ZhTw` 并单独 `#[serde(rename = "zh-tw")]`（`rename_all = "lowercase"` 会拼成 `zhtw`，与前端字典键不一致）；`tray.rs` 与退出通知各有繁体分支。顺手补了一个协调性缺口：以前选择器只写 `localStorage`，`settings.language` 从不落库，于是托盘菜单和内核退出通知在英文界面下仍说中文——新增窄命令 `set_language`（写字段 + `persist()` + `refresh_tray`），前端 `chooseLocale()` 同时调它。真机证据（`lang-accept.txt`）：`picked zh-tw: True` → `store language after zh-tw: 'zh-tw'` → `save button is 儲存: True`、`texts zh-tw: … 設定 … 埠、模式與系統集成 …`、`home nav in zh-tw: True` → `language after quit: 'zh-tw'` → 重启后 `after restart texts: … 首頁 …`、`after restart home in zh-tw: True` → 换回 `store language after zh: 'zh'`、`home nav back in zh: True`。`cargo test --lib` 368，vitest 96，i18n 750×3。
 
@@ -215,8 +220,8 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 | ~~N3 节点二维码~~ | 已完成：前端 `qrcode` npm 包出 SVG，节点行「二维码」按钮 + 对话框（§30） | — | 原计划要走 Rust 与 `qrcode` crate，但本机 cargo 缓存里没有；npm 可用，于是改为纯前端，零新增 IPC |
 | ~~N10 订阅重命名 / 过滤~~ | 已完成：`rename_prefix` + 保留/排除正则，刷新时先过滤再改名（§28） | — | 见「已完成」说明 |
 | ~~N11 内核二进制选择~~ | 已完成：`settings.xray_binary` / `singbox_binary` + 原生对话框 + 版本校验 + geo 数据回落 engines（§29） | — | 换内核时暴露了 `XRAY_LOCATION_ASSET` 的定位错误，已一并修 |
-| **N13 更多语言** | `scripts/i18n-pairs.json` 加 zh-TW / ja；`Language` 枚举 + 托盘 `Labels` + `describeError` 的文案都要跟上 | 大 | parity 测试会强制键集完整，724 键 ×2 语言 |
-| **H5(b) 无内核时的逐节点真实延迟** | 临时起一个最小内核做探测 | 大 | 风险高（要多一条内核生命周期），当初明确「先不做」 |
+| ~~N13 更多语言~~ | 已完成：`scripts/i18n-pairs.json` 四格 `[key, zh, en, tw]`，繁体由 `zhconv` + 台湾用词表机械转换，`Language::ZhTw` + 托盘/通知分支 + `set_language` 落库（§42） | — | 剩 ja 等语言可按同一流程加；键集由 `i18n.test.ts` 卡住 |
+| ~~H5(b) 无内核时的逐节点真实延迟~~ | 已完成：`engine/temp.rs` 起一次性内核 + `node_delay_offline`，拒绝与失败分开记（§43） | — | 当初列为「风险高，先不做」，实际只需一条受控的临时生命周期 |
 | ~~N5 出口 IP~~ | 已完成：首页卡片 + 三主机退让 + 失败清空旧值（§26） | — | 见下方「已完成」说明 |
 | ~~N7 订阅下次刷新倒计时~~ | 已完成：每行「刚刚 / 还有 N 小时」，30 秒共用计时器（§27） | — | 见「已完成」说明 |
 | 设计审计残余 | `D:\tmp\design-audit-2.md` | — | 二审 15 条已全部处理完；这份文件可以当历史读 |
@@ -285,7 +290,7 @@ scp -i /c/Users/83611/.ssh/id_ed25519_cpc 本地文件 Administrator@100.106.121
 
 1. `cd /d/GitHub-Warehouse/X-Matrix-Client-Pro && git status` —— 工作区应当干净；有改动先弄清是谁的。
 2. 读本文件的 §5 与 `docs/ACCEPTANCE.md` 的最后两节，对齐上下文。
-3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 368 passed）。
+3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 372 passed）。
 4. `cd .. && npm run check`（应为全绿）。
 5. 从 §6 表里挑一项（按性价比排序），**一项一提交**，提交信息用英文 `feat(...)/fix(...)/docs: ...`。
 6. 真机验证前先跑 `bash /d/tmp/shots/deploy-tray.sh <exe>`；远端被 `cleanup.sh` 清过的话，先 `scp x-act.ps1 uia2.ps1 ocr.ps1` 上去。

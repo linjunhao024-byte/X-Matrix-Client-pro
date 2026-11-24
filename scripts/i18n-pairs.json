@@ -2268,6 +2268,30 @@
     "已切換到 {name}"
   ],
   [
+    "nodes.realDelay",
+    "真实延迟",
+    "Real delay",
+    "真實延遲"
+  ],
+  [
+    "nodes.realDelayHint",
+    "起一个临时内核，经它打一次探测地址；不启动主内核也能测",
+    "Starts a throwaway kernel and sends one probe through it",
+    "起一個臨時內核，經它打一次探測位址；不啟動主內核也能測"
+  ],
+  [
+    "nodes.realDelayBusy",
+    "正在测…",
+    "Measuring…",
+    "正在測…"
+  ],
+  [
+    "nodes.realDelayDone",
+    "「{name}」经临时内核测得 {value} ms",
+    "{name} measured {value} ms through a throwaway kernel",
+    "「{name}」經臨時內核測得 {value} ms"
+  ],
+  [
     "nodes.probe.clear",
     "清除测速记录",
     "Clear latency records",

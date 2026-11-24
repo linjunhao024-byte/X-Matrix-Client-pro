@@ -51,6 +51,7 @@ pub fn builder() -> Builder<tauri::Wry> {
         commands::engine::proxy_speed,
         commands::engine::group_delay,
         commands::engine::node_delay,
+        commands::node::node_delay_offline,
         commands::engine::close_connection,
         commands::engine::close_connections,
         commands::engine::engine_start,

@@ -19,6 +19,9 @@ mod render;
 pub(crate) mod runtime;
 mod singbox;
 pub mod stats;
+// Throwaway kernels for measuring one node while no kernel runs; see the
+// module docs for why this is not part of the runtime.
+pub(crate) mod temp;
 pub mod traffic_log;
 mod xray;
 

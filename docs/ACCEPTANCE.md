@@ -1057,3 +1057,35 @@ bash /d/tmp/shots/lang-accept.sh
 4. **不是所有译文都该跟简体不同。** 最初加了一条「繁体值不得等于简体值」的断言，`sub.status.ok`、`time.yesterday` 这类纯 ASCII/纯符号键当场命中——一样的字才是对的。现在只对少数 Taiwan 用词做点检（`首頁`、`儲存`、`按延遲`、`設定備份`）。
 
 **一句实话**：本节证明「选择器能落库、三处界面（设置页/侧栏/首页）立刻改用繁体、重启后仍然是繁体、还能换回简体」，不证明 750 条译文的中文质量——繁体列是机械转换加用词表，个别句子可能仍有大陆语序，需要母语者再读一遍。托盘菜单的繁体措辞由 `tray.rs` 的单测（`every_language_names_the_menu_in_its_own_words`）保证，本节没有真的去点托盘。
+
+## 43. 不启动内核也能测真实延迟：起一个临时内核，打一枪就撤（2026-11-24，云电脑 cloudpc-test）
+
+**验法**：
+
+```bash
+bash /d/tmp/shots/offline-accept.sh
+```
+
+云电脑上先用 sing-box 在本机起一个 shadowsocks 服务端（`127.0.0.1:8388`，`aes-128-gcm`，口令 `xm-test`），`prep-offline.ps1` 往 store 顶部放两个节点：`SS-Local`（指向这个真服务端）与 `SS-Dead`（指向没人听的 `127.0.0.1:9999`），探测地址设为 `http://cp.cloudflare.com/`。脚本启动应用，在节点页对两行分别点「真实延迟」，回读界面文字与 `store.json` 的 `probes`。
+
+| 判据 | 证据（`offline-accept.txt`） | 结果 |
+|---|---|---|
+| 出厂没有测量记录 | `probe before SS-Local: none` | **通过** |
+| 不启动主内核，点一下就量出数 | `pressed 真实延迟 below 586 at 668,772` → 界面 `SS-Local \| Shadowsocks \| 127.0.0.1:8388 \| TCP \| 539 ms · 刚刚` | **通过** |
+| 结果以「真实延迟」身份落盘 | `probe after SS-Local: "ss-offline-local-1": { "delay_ms": 539, "at": 1795499889, "kind": "real" }` | **通过** |
+| 坏节点失败得诚实 | `SS-Dead` → 界面 `经代理请求返回 HTTP 503` → `"ss-offline-dead-1": { "delay_ms": null, "kind": "real" }`（测不到也记下来） | **通过** |
+| 主内核在跑时这排按钮退场 | `kernels: sing-box#2480,xray#628` → `real delay buttons while running: 0` | **通过** |
+| 事后不留痕 | `dir probe-*.json` 为空、无 xray/sing-box 残留进程、`ProxyEnable=0` | **通过** |
+
+**三个设计理由**：
+- **临时内核是一次性的，不是第二个应用。** `engine/temp.rs` 每次自己挑两个空闲端口、渲染一份只含该节点的配置（`mode = Global`，`nodes` 只有它一个）、写进 `configs/probe-<纳秒>.json`、起 `engines/<内核>.exe`，拿到数就 `kill` + 删文件。`Cleanup` 带 `Drop`，所以任何一个 `?` 提前返回都不会留下跑着的内核或临时配置（已用 `dir` 核对）。
+- **拒绝 ≠ 失败。** 命令先把「内核正在运行」「节点不存在」「所选内核不支持这个协议」这类**没测**的情况退回去（不写记录），只有「内核起来了、请求失败了」才写 `delay_ms: null`。这和 §26 出口 IP 是同一条原则：没发生的测量不能覆盖上一次真的数字。
+- **用配置里的内核，而不是写死 Xray。** 选 sing-box 的用户测 hysteria2/tuic 节点时，Xray 根本没有对应出站；所以临时内核按 `settings.last_engine` 走，并在起内核之前用 `validate_node()` 把不支持的协议拦下来，报错和首页启动时那句一模一样。
+
+**四个坑**：
+1. **`Global` 模式仍然会写一条路由规则。** 想「配置里没有 rules」是做不到的：`xray_routing_rules`/`singbox_routing_rules` 在 Global 下正好写一条兜底（Xray 叫 `outboundTag`、sing-box 叫 `outbound`，都指向 `proxy`），这条兜底正是保证探测不会绕过去走 `direct` 的东西；测试断言的是「恰好一条、指向 proxy、没有用户匹配器」。
+2. **节点列表会把屏幕外的行从 UIA 树里拿掉。** 验收第一版把两个测试节点追加在 10 个节点末尾，`Row-Top` 读到 2863，按它点等于点到屏幕外；把测试节点放到 store 顶部后一切正常。真实用户场景没问题（他们滚到哪就在哪看），但验收必须让被测行看得见。
+3. **死的 shadowsocks 节点不会「连接失败」，而是 HTTP 503。** Xray 对连不上的出站回一个 503，所以错误文案是「经代理请求返回 HTTP 503」而不是超时；这条同样证明请求真的走了隧道（否则直连 `cp.cloudflare.com` 会 204）。
+4. **主机上的测试服务端会被当成「内核」。** 验收脚本用 `Kernels` 数进程，本机的 `sing-box.exe` 服务端也会被数进去（`sing-box#2480,xray#628`）；判断「主内核在不在」要看那条 xray 记录，别数总数。
+
+**一句实话**：本节证明「临时内核真的起得来、探测真的走它的隧道、失败真的被记下来、事后真的不留痕」，不证明它比 539 ms 这个数字更快或更准——`539 ms` 里包含一次本机 shadowsocks 中转与一次公网 204，绝对值没有意义，有意义的是「同一条链路下它是唯一把隧道算进去的数字」。

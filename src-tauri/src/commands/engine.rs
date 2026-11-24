@@ -37,7 +37,7 @@ fn now_seconds() -> i64 {
 }
 
 /// Resolve a node by id, or fail with a message the UI can show verbatim.
-fn lookup_node(state: &AppState, node_id: &str) -> AppResult<Node> {
+pub(crate) fn lookup_node(state: &AppState, node_id: &str) -> AppResult<Node> {
     state
         .nodes
         .read()
@@ -619,7 +619,7 @@ fn delay_of(runtime: &EngineRuntime, tag: &str, url: &str) -> AppResult<u32> {
 }
 
 /// The probe URL, or the built-in one when the setting is blank.
-fn probe_url(state: &AppState) -> String {
+pub(crate) fn probe_url(state: &AppState) -> String {
     let settings = state.settings.read();
     if settings.test_url.trim().is_empty() {
         latency::PROBE_URL.to_string()
@@ -710,7 +710,7 @@ pub async fn node_delay(
 
 /// Store a real-delay result without letting a disk problem hide the number the
 /// measurement already produced.
-fn remember_real(state: &AppState, id: &str, delay_ms: Option<u32>) {
+pub(crate) fn remember_real(state: &AppState, id: &str, delay_ms: Option<u32>) {
     if let Err(error) = state.record_probe(&id.to_string(), delay_ms, ProbeKind::Real) {
         eprintln!("记不住真实延迟：{error}");
     }

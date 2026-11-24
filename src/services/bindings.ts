@@ -199,6 +199,7 @@ export const commands = {
 	 *  dial through, and saying so is better than measuring someone else's path.
 	 */
 	nodeDelay: (id: string) => typedError<number, AppError>(__TAURI_INVOKE("node_delay", { id })),
+	nodeDelayOffline: (id: string) => typedError<number, AppError>(__TAURI_INVOKE("node_delay_offline", { id })),
 	/**  Drop one live connection (sing-box only — Xray has no connection table). */
 	closeConnection: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("close_connection", { id })),
 	/**

@@ -210,6 +210,8 @@ export const api = {
   groupDelay: (id: string): Promise<number> => unwrap(commands.groupDelay(id)),
   /** Real delay of one node, via its own outbound in the running sing-box. */
   nodeDelay: (id: string): Promise<number> => unwrap(commands.nodeDelay(id)),
+  /** The same number with no kernel running: one throwaway kernel, one request. */
+  nodeDelayOffline: (id: string): Promise<number> => unwrap(commands.nodeDelayOffline(id)),
   /** sing-box only: drop one live connection. */
   closeConnection: (id: string): Promise<void> => unwrap(commands.closeConnection(id)).then(() => undefined),
   /** sing-box only: drop several connections; an empty list means all of them. */

@@ -57,6 +57,13 @@ const pendingDelete = ref<Node_Serialize | null>(null)
 const deleting = ref(false)
 const startingId = ref<string | null>(null)
 const testingId = ref<string | null>(null)
+/**
+ * The node whose throwaway-kernel measurement is in flight. Kept apart from
+ * `testingId` because the two buttons answer to different backends: this one
+ * needs the main kernel stopped, and hanging its spinner on the shared flag
+ * would lock out 测速 / 全测速 on every row for no reason.
+ */
+const offlineId = ref<string | null>(null)
 const testingAll = ref(false)
 const search = ref('')
 const selecting = ref(false)
@@ -562,6 +569,40 @@ async function testLatency(node: Node_Serialize) {
   }
 }
 
+/** Real delay through a throwaway kernel, for when the main one is stopped.
+ *
+ *  The backend starts a kernel that carries this one node, sends a single
+ *  probe through its mixed port and kills it again, so the answer means the
+ *  same thing `nodeDelay` means — only nothing had to be running first. It
+ *  records the result with the backend's own clock, which is why the probe
+ *  list is re-read rather than stamped from here. */
+async function testRealDelay(node: Node_Serialize) {
+  offlineId.value = node.id
+  actionError.value = null
+  try {
+    const ms = await api.nodeDelayOffline(node.id)
+    const next = { ...latency.value }
+    next[node.id] = ms
+    latency.value = next
+    await loadProbes()
+    actionNote.value = t('nodes.realDelayDone', { name: node.name, value: ms })
+    if (actionTimer) clearTimeout(actionTimer)
+    actionTimer = setTimeout(() => {
+      actionNote.value = null
+    }, 6000)
+  } catch (cause) {
+    // A measurement that failed is not a number: drop the cell and let the
+    // stored verdict (the backend marks it failed) carry the bad news.
+    const next = { ...latency.value }
+    delete next[node.id]
+    latency.value = next
+    await loadProbes()
+    actionError.value = describeError(cause)
+  } finally {
+    offlineId.value = null
+  }
+}
+
 /** One command, `test_concurrency` workers.
  *
  *  It used to loop here one node at a time: a burst of parallel handshakes
@@ -1002,6 +1043,20 @@ function securityLabel(node: Node_Serialize): string {
                 @click.stop="testLatency(node)"
               >
                 <AppIcon name="refresh" :size="14" />
+              </button>
+              <!-- Only offered with the main kernel stopped: with one running
+                   the 测速 button above measures through it, and the command
+                   refuses anyway rather than starting a second kernel. -->
+              <button
+                v-if="!engine.running"
+                class="btn btn-ghost btn-sm"
+                type="button"
+                :disabled="offlineId !== null || engine.busy"
+                :title="t('nodes.realDelayHint')"
+                :aria-label="t('nodes.realDelay')"
+                @click.stop="testRealDelay(node)"
+              >
+                {{ offlineId === node.id ? t('nodes.realDelayBusy') : t('nodes.realDelay') }}
               </button>
               <template v-if="sortBy === 'manual'">
                 <button

@@ -5,8 +5,12 @@ use std::time::Duration;
 
 use tauri::{AppHandle, State};
 
-use super::engine::{run_blocking, stop_if_running_node, Proxy, Runtime};
+use super::engine::{
+    lookup_node, probe_url, remember_real, run_blocking, stop_if_running_node, Proxy, Runtime,
+};
 use crate::domain::{Node, NodeId, NodeProbe, ProbeKind};
+use crate::engine::temp::Attempt;
+use crate::engine::{EngineKind, EngineRuntime};
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 
@@ -408,6 +412,83 @@ pub fn clear_node_probes(
     Ok(state.probes.read().clone())
 }
 
+// Real delay of one node, measured through a throwaway kernel.
+//
+// The running kernel is the better instrument — it already holds the node — so
+// this refuses while one runs instead of competing with it for ports and nodes.
+// Without a kernel this is the only path that measures the tunnel rather than
+// the TCP handshake, which is why it starts a kernel, sends one request through
+// it and kills it again.
+#[tauri::command]
+#[specta::specta]
+pub async fn node_delay_offline(
+    state: State<'_, AppState>,
+    runtime: Runtime<'_>,
+    id: String,
+) -> AppResult<u32> {
+    delay_offline(&state, &runtime, &id).await
+}
+
+// The body of `node_delay_offline`, free of `State` so the refusal paths are
+// testable without spinning up a Tauri app.
+pub(crate) async fn delay_offline(
+    state: &AppState,
+    runtime: &EngineRuntime,
+    id: &str,
+) -> AppResult<u32> {
+    if runtime.status().running {
+        return Err(AppError::InvalidInput(
+            "内核正在运行：直接用「真实延迟」经它测，不必另起一个".to_string(),
+        ));
+    }
+    // Everything below is a refusal too: an unknown id, a protocol the chosen
+    // kernel cannot run, a probe URL that makes no sense. None of them measured
+    // anything, so none of them may touch the stored result.
+    let node = lookup_node(state, id)?;
+    let settings = state.settings.read().clone();
+    let kind = settings
+        .last_engine
+        .as_deref()
+        .and_then(EngineKind::parse)
+        .unwrap_or(EngineKind::Xray);
+    // Refuse here rather than in the kernel: a QUIC node under Xray fails deep
+    // inside a config the user never sees, with a message about a field name.
+    kind.engine().validate_node(&node)?;
+    let url = probe_url(state);
+    let timeout = Duration::from_millis(u64::from(settings.test_timeout_ms));
+    let engines_dir = runtime.engines_dir().to_path_buf();
+    let config_dir = runtime.config_dir().to_path_buf();
+    let target = node.id.clone();
+
+    let outcome = run_blocking(move || {
+        Ok(crate::engine::temp::attempt(
+            &node,
+            kind,
+            &engines_dir,
+            &config_dir,
+            &url,
+            timeout,
+        ))
+    })
+    .await?;
+
+    match outcome {
+        Attempt::Measured(ms) => {
+            remember_real(state, &target, Some(ms));
+            Ok(ms)
+        }
+        // The kernel started and the request failed: the node is what did not
+        // answer, and that belongs in the record exactly like a failed probe
+        // through the running kernel.
+        Attempt::Failed(error) => {
+            remember_real(state, &target, None);
+            Err(error)
+        }
+        // No measurement took place — nothing to remember.
+        Attempt::NotStarted(error) => Err(error),
+    }
+}
+
 /// TCP handshake latency for a list of nodes, in milliseconds.
 ///
 /// An empty list means every node: that is what "test all" wants, and asking the
@@ -500,6 +581,8 @@ pub fn export_node_links(state: State<'_, AppState>, ids: Vec<NodeId>) -> AppRes
 mod tests {
     use super::*;
     use crate::domain::{Protocol, Security, Transport};
+    use crate::engine::runtime::tests::{harness, Harness};
+    use crate::engine::{Endpoints, RunOptions};
     use crate::store::Store;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -534,6 +617,65 @@ mod tests {
         let state = AppState::load(Store::new(scratch().join("store.json")));
         state.nodes.write().extend(nodes);
         state
+    }
+
+    /// The runtime fakes with a kernel that reports itself as running. No real
+    /// process exists: `FakeSpawner` records the spawn and answers with a pid.
+    fn running_runtime() -> Harness {
+        let harness = harness(true, false);
+        harness
+            .runtime
+            .start(
+                EngineKind::Xray,
+                &crate::engine::runtime::tests::node(),
+                Endpoints::new(7890, 9090).unwrap(),
+                RunOptions::new(),
+            )
+            .unwrap();
+        harness
+    }
+
+    fn cleanup(harness: Harness) {
+        let dir = harness.dir.clone();
+        drop(harness);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn offline_delay_refuses_while_the_main_kernel_runs() {
+        // A second kernel for the same node would fight the running one for
+        // ports and ports-to-nothing: the honest answer is "use the one you
+        // already have".
+        let state = state_with(vec![node("n1", &[])]);
+        let harness = running_runtime();
+        assert!(harness.runtime.status().running);
+
+        let error = tauri::async_runtime::block_on(delay_offline(&state, &harness.runtime, "n1"))
+            .unwrap_err();
+        assert!(matches!(&error, AppError::InvalidInput(_)), "{error}");
+        assert!(error.to_string().contains("内核正在运行"), "{error}");
+        cleanup(harness);
+    }
+
+    #[test]
+    fn a_refusal_keeps_the_remembered_real_delay() {
+        // A refusal measured nothing, so overwriting a real number with
+        // "测不到" would destroy a fact to report an error.
+        let state = state_with(vec![node("n1", &[])]);
+        state
+            .record_probe(&"n1".to_string(), Some(321), ProbeKind::Real)
+            .unwrap();
+        let harness = running_runtime();
+
+        assert!(
+            tauri::async_runtime::block_on(delay_offline(&state, &harness.runtime, "n1")).is_err()
+        );
+
+        let probes = state.probes.read();
+        assert_eq!(probes["n1"].delay_ms, Some(321));
+        assert_eq!(probes["n1"].kind, ProbeKind::Real);
+        drop(probes);
+        cleanup(harness);
     }
 
     #[test]
