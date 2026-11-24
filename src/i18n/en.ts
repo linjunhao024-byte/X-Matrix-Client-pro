@@ -639,7 +639,7 @@ export const en: Record<string, string> = {
   "settings.modeHint": "Rule mode follows your rules, global sends everything through the proxy, direct bypasses every node.",
   "settings.ports": "Ports",
   "settings.proxyHeldSuffix": ", held by X-Matrix",
-  "settings.proxyIntent": "Settings are only stored here; they take effect the next time the kernel starts.",
+  "settings.proxyIntent": "While a kernel is running, saving this change takes or releases the system proxy at once; with no kernel, it applies on the next start.",
   "settings.proxyOff": "off",
   "settings.proxyOn": "on",
   "settings.proxyServer": " ({server})",

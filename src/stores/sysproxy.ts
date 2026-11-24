@@ -1,9 +1,11 @@
 /**
  * The Windows system proxy, as seen by the backend.
  *
- * The UI can read it and give it back, but never seize it: takeover happens
- * when a kernel starts with "接管系统代理" enabled. That keeps a single, obvious
- * owner for the setting instead of two buttons fighting each other.
+ * The UI can read it and give it back, but never seize it on its own: takeover
+ * is bound to "a kernel is running *and* the saved setting says so". Starting
+ * a kernel with "接管系统代理" enabled takes it, and saving that setting while a
+ * kernel runs re-asserts or releases it — one owner instead of two buttons
+ * fighting each other.
  */
 
 import { defineStore } from 'pinia'

@@ -828,3 +828,29 @@
 2. **「刷新」要有真东西可刷。** 订阅源走代理（`subscription_via_proxy=true`）时，假订阅源在 `127.0.0.1:8898`，请求却从内核代理出去——而测试节点指向文档保留网段，永远连不上。验收前必须把 `subscription_via_proxy` 关掉，否则刷新失败、`last_node_id` 不变，看起来像「没有接手」。
 3. **内容不变时 ID 也不变。** 同一份订阅原样再刷一次，行会被整体替换但 ID 依旧（`unique_suffix` 在同一毫秒内递增），此时不该出现接手动作；要验证接手，必须让节点的**位置或数量**变化（本次把四个节点倒序，过滤后仍在名单里的「香港 01」拿到新 ID）。
 4. **`store.json` 有 BOM，写回时要保留。** 用 `json.loads` 读、`json.dump` 写会把 BOM 丢掉，应用随后把整份 store 当成损坏——脚本里读原始字节、判 BOM、写回时补回 `ï»¿`。
+
+## 36. 保存系统代理开关，正在跑的内核立刻照办（2026-11-24，云电脑 cloudpc-test）
+
+**验法**：`bash /d/tmp/shots/proxy-switch-accept.sh`（启动内核 → 设置页把「接管系统代理」关掉 → 保存 → 读注册表 → 再打开 → 保存 → 读注册表 → 改「代理例外」→ 保存 → 读 `ProxyOverride` → 还原 → 停止内核）。
+
+这一节管的是「设置说保存了，但正在跑的内核还按旧设置活着」。以前 `system_proxy` 和 `proxy_bypass` 只在启动内核时被读一次：内核在跑的时候把「接管系统代理」关掉、点保存，页面下方写着「系统代理当前 已关闭」，注册表里却还指着 `127.0.0.1:7890` —— 关掉内核后整台机器直接断网。改「代理例外」同理，要等下一次启动才生效。
+
+| 判据 | 验法 | 结果 |
+|---|---|---|
+| 启动时照旧接管 | `TAKEN ProxyEnable=1 ProxyServer=127.0.0.1:7890` | **通过** |
+| 关掉并保存，立刻交还 | `RELEASED ProxyEnable=0 ProxyServer=` | **通过** |
+| 交还后内核没被杀 | `kernels still: 1` | **通过** |
+| 再打开并保存，立刻接管 | `RETAKE ProxyEnable=1 ProxyServer=127.0.0.1:7890` | **通过** |
+| 改代理例外，立刻写进注册表 | `override now: …;*.example.com` | **通过** |
+| 换回默认例外 | `restored override: …;<local>`（`*.corp.test` 已被覆盖） | **通过** |
+| 停止后一切归零 | `after stop: ProxyEnable=0 ProxyServer=`，`kernels after stop: 0` | **通过** |
+
+**三个设计理由**：
+- **这件事必须在上游改，不能只加一句提示。** 端口、日志级别改不动时内核是「跑得挺好但配置旧」，提醒一下让人自己重启就够了；系统代理改不动是**断网**：交还的动作属于保存路径，不属于「下次再说」。所以 `save_settings` 在写盘之后、`refresh_tray` 之前，按 `takeover_change(before, after)` 直接 `enable_with_bypass` 或 `disable`。
+- **用正在跑的那个端口，不用设置里存的那个。** 刚把混合端口从 7890 改到 7891 再保存，此刻内核还在 7890 上；如果按保存后的端口接管，注册表就会指向一个没人监听的端口。所以取 `status.mixed_port`，为 0 时才退回 `settings.mixed_port`。
+- **接管时重新断言，不重新快照。** `ProxyGuard::enable_with_bypass` 在已经持有代理时只重写值、不再拍快照；否则每改一次例外清单就覆盖一次「用户原本的设置」，退出时还原的就不是原样了。
+
+**三个坑**：
+1. **`ProxyEnable=1` + 空 `ProxyServer` 仍然是坏状态。** 第一轮验收脚本没真按下开关（见坑 2），于是「交还」后读到 `ProxyEnable=1 ProxyServer=` —— 注册表开关还开着、地址却空了，等于每条请求都往一个空代理送。判据必须同时看开关和地址，不能只看地址为空。
+2. **「接管系统代理」在 UIA 里是 `Button`，不是 `CheckBox`。** 名字和旁边的说明文字重名（`Text | 接管系统代理` 在左边），按名字取元素要加 `AndCondition(ControlType=Button)`；`Buttons-Named` 返回的是带坐标的包装对象，`GetCurrentPattern` 要用它内部的 `.El`，否则抛「[PSCustomObject] 不包含名为 GetCurrentPattern 的方法」。
+3. **`Get-Win.FindAll(...)` 会被 PowerShell 当成命令名。** 写 `foreach ($e in Get-Win.FindAll(...))` 直接静默失败（函数返回空、异常被 catch 吞掉），必须先 `$win = Get-Win` 再 `$win.FindAll(...)`；同理找 `Edit` 时比较 `ControlType` 要用 `.Id`，对象 `-ne` 永远为真，会把所有元素都 `continue` 掉。

@@ -2971,8 +2971,8 @@
   ],
   [
     "settings.proxyIntent",
-    "设置在这里只保存意图，下次启动内核时生效。",
-    "Settings are only stored here; they take effect the next time the kernel starts."
+    "内核在跑时，改这一项并保存会立刻接管或交还系统代理；内核没跑时，下次启动生效。",
+    "While a kernel is running, saving this change takes or releases the system proxy at once; with no kernel, it applies on the next start."
   ],
   [
     "settings.proxyOff",

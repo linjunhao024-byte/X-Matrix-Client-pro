@@ -4,6 +4,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, State};
 
 use crate::autostart::{AutoStart, WindowsAutoStart};
+use crate::commands::engine::Proxy;
 use crate::domain::Settings;
 use crate::engine::{EngineKind, EngineRuntime};
 use crate::error::{AppError, AppResult};
@@ -58,15 +59,53 @@ pub fn get_settings(state: State<'_, AppState>) -> AppResult<Settings> {
     Ok(state.settings.read().clone())
 }
 
+/// What saving the settings means for a proxy we may already be holding.
+#[derive(Debug, PartialEq, Eq)]
+enum Takeover {
+    /// Neither proxy field changed: the machine already matches the document.
+    None,
+    /// Point the system proxy at the running kernel (first take, or re-assert
+    /// with an edited bypass list).
+    Take,
+    /// Give the system proxy back: the user just turned the takeover off.
+    Release,
+}
+
+/// Compare the saved settings before and after a save.
+///
+/// Only the two proxy fields are read: everything else a save changes is baked
+/// into the config of the *next* start anyway. Callers check that a kernel is
+/// running first — with nothing listening, there is nothing to take over or
+/// give back.
+fn takeover_change(before: &Settings, after: &Settings) -> Takeover {
+    if before.system_proxy != after.system_proxy {
+        return match after.system_proxy {
+            true => Takeover::Take,
+            false => Takeover::Release,
+        };
+    }
+    // Still on, but the bypass list moved: the registry value carries the
+    // list, so only re-asserting it makes the edit real.
+    if after.system_proxy && before.proxy_bypass != after.proxy_bypass {
+        return Takeover::Take;
+    }
+    Takeover::None
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn save_settings(
     app: AppHandle,
     state: State<'_, AppState>,
     runtime: State<'_, Arc<EngineRuntime>>,
+    proxy: Proxy<'_>,
     settings: Settings,
 ) -> AppResult<Settings> {
     settings.validate().map_err(AppError::InvalidInput)?;
+
+    // The proxy we may be holding was taken over from the old values, so the
+    // decision below needs the document as it stood before this save.
+    let before = state.settings.read().clone();
 
     // Launch-at-login is a side effect of the setting, not a separate switch:
     // the user flips one thing and the registry follows. Applying it before we
@@ -79,8 +118,93 @@ pub fn save_settings(
     // The runtime caches the executable per kernel; a saved path must take
     // effect for the next start without an app restart.
     apply_engine_binaries(&runtime, &settings);
+
+    // The system proxy is the one setting that points at a process, so it only
+    // has a machine side effect while that process runs. Turning the takeover
+    // off is a safety action: it must release the machine now, not at the next
+    // start, or the user saves "off" and stays hijacked.
+    let status = runtime.status();
+    if status.running {
+        match takeover_change(&before, &settings) {
+            Takeover::Take => {
+                // The *running* kernel's port, never the saved one: a port
+                // edited in the same save only takes effect on the next start,
+                // and pointing the registry at it now would send every request
+                // into a port nothing listens on.
+                let port = match status.mixed_port {
+                    0 => settings.mixed_port,
+                    port => port,
+                };
+                // The settings are already saved when this fails: the error
+                // tells the user why the machine state did not follow, instead
+                // of silently rolling their change back.
+                proxy.enable_with_bypass("127.0.0.1", port, &settings.proxy_bypass)?;
+            }
+            Takeover::Release => proxy.disable()?,
+            Takeover::None => {}
+        }
+    }
+
     // The tray lists the node names and checks the current mode, so a saved
     // setting is a reason to rebuild it.
     crate::refresh_tray(&app);
     Ok(settings)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Settings differing from the defaults only in the two proxy fields.
+    fn proxy_settings(system_proxy: bool, bypass: &str) -> Settings {
+        Settings {
+            system_proxy,
+            proxy_bypass: bypass.to_string(),
+            ..Settings::default()
+        }
+    }
+
+    #[test]
+    fn unchanged_proxy_settings_are_none() {
+        let before = proxy_settings(true, "localhost");
+        let after = before.clone();
+        assert_eq!(takeover_change(&before, &after), Takeover::None);
+    }
+
+    #[test]
+    fn turning_system_proxy_on_takes() {
+        let before = proxy_settings(false, "localhost");
+        let after = proxy_settings(true, "localhost");
+        assert_eq!(takeover_change(&before, &after), Takeover::Take);
+    }
+
+    #[test]
+    fn turning_system_proxy_off_releases() {
+        let before = proxy_settings(true, "localhost");
+        let after = proxy_settings(false, "localhost");
+        assert_eq!(takeover_change(&before, &after), Takeover::Release);
+    }
+
+    #[test]
+    fn editing_bypass_while_on_takes_again() {
+        let before = proxy_settings(true, "localhost");
+        let after = proxy_settings(true, "localhost;*.corp.example");
+        assert_eq!(takeover_change(&before, &after), Takeover::Take);
+    }
+
+    #[test]
+    fn editing_bypass_while_off_does_nothing() {
+        let before = proxy_settings(false, "localhost");
+        let after = proxy_settings(false, "localhost;*.corp.example");
+        assert_eq!(takeover_change(&before, &after), Takeover::None);
+    }
+
+    #[test]
+    fn switching_off_and_editing_bypass_releases() {
+        // Both fields moved at once: giving the proxy back wins, because the
+        // takeover is off and nothing should be re-asserted.
+        let before = proxy_settings(true, "localhost");
+        let after = proxy_settings(false, "localhost;*.corp.example");
+        assert_eq!(takeover_change(&before, &after), Takeover::Release);
+    }
 }

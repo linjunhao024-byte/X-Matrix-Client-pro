@@ -268,6 +268,10 @@ async function save() {
     draft.value = { ...(store.settings as Settings_Serialize) }
     saved.value = true
     await refreshAutostart()
+    // Saving may have just taken or released the system proxy (the backend
+    // applies it to a running kernel immediately), so the live block below the
+    // toggle must show the machine as it is now, not as it was on mount.
+    await proxy.refresh()
     window.setTimeout(() => {
       saved.value = false
     }, 2000)

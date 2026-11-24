@@ -1,10 +1,13 @@
 //! System proxy commands.
 //!
 //! Deliberately narrow: the UI can *read* the state and *give back* what we
-//! took, but it cannot seize the system proxy on a button press. Taking it is
-//! bound to starting a kernel with "system proxy" enabled in settings — the
-//! same contract v2rayN and Clash Verge use, and the one place where the
-//! ownership question has an obvious answer.
+//! took, but it cannot seize the system proxy on a bare button press. Taking it
+//! is bound to "a kernel is running *and* the saved setting says so": starting
+//! a kernel with "system proxy" enabled takes it, and saving the settings while
+//! a kernel runs re-asserts or releases it to match (`save_settings` does that
+//! through [`crate::sysproxy::ProxyGuard`]). That is the same contract v2rayN
+//! and Clash Verge use, and the one place where the ownership question has an
+//! obvious answer.
 
 use std::sync::Arc;
 

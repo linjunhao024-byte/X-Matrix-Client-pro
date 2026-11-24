@@ -639,7 +639,7 @@ export const zh: Record<string, string> = {
   "settings.modeHint": "规则模式按路由规则分流；全局模式全部走代理；直连模式不经过任何节点。",
   "settings.ports": "端口",
   "settings.proxyHeldSuffix": "，由 X-Matrix 接管",
-  "settings.proxyIntent": "设置在这里只保存意图，下次启动内核时生效。",
+  "settings.proxyIntent": "内核在跑时，改这一项并保存会立刻接管或交还系统代理；内核没跑时，下次启动生效。",
   "settings.proxyOff": "已关闭",
   "settings.proxyOn": "已开启",
   "settings.proxyServer": "（{server}）",
