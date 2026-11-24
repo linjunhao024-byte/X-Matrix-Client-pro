@@ -52,6 +52,7 @@ const { api, feed } = vi.hoisted(() => {
 vi.mock('../services/contract', () => ({ api, describeError: (e: unknown) => String(e) }))
 
 import { useEngineStore } from './engine'
+import { useSettingsStore } from './settings'
 
 describe('engine store session counter', () => {
   beforeEach(() => {
@@ -131,9 +132,36 @@ describe('engine store reapply', () => {
     expect(api.engineApply).not.toHaveBeenCalled()
   })
 
-  it('reports false when a kernel runs but no node was recorded', async () => {
-    // Settings carry the node the restart has to reuse. Without one there is
-    // nothing to restart onto, and `apply` must not be called with a guess.
+  it('reuses the node the kernel reports, even when the mirror disagrees', async () => {
+    // The real failure: the settings mirror still named a node that a
+    // subscription refresh had already replaced, so the notice's restart asked
+    // to start a node that no longer existed and quietly did nothing. The
+    // kernel's own answer is the one that cannot be stale.
+    const settings = useSettingsStore()
+    settings.settings = { last_node_id: 'deleted-node' } as never
+    const store = useEngineStore()
+    await store.refreshStatus()
+    expect(store.running).toBe(true)
+    expect(await store.reapply()).toBe(true)
+    expect(api.engineApply).toHaveBeenCalledWith(expect.anything(), 'n1')
+  })
+
+  it('falls back to the mirror before the poller has named a node', async () => {
+    // A window that opened straight on a config page can hold a status from
+    // before the kernel started; the mirror is the only id available then.
+    api.engineStatus.mockResolvedValueOnce({ running: true, kind: 'xray', node_id: null, mixed_port: 7890, api_port: 9090, started_at_ms: 0, last_exit_code: null, last_error: null } as never)
+    const settings = useSettingsStore()
+    settings.settings = { last_node_id: 'n9' } as never
+    const store = useEngineStore()
+    await store.refreshStatus()
+    expect(await store.reapply()).toBe(true)
+    expect(api.engineApply).toHaveBeenCalledWith(expect.anything(), 'n9')
+  })
+
+  it('reports false when neither the kernel nor the mirror knows a node', async () => {
+    // Without an id there is nothing to restart onto, and `apply` must not be
+    // called with a guess.
+    api.engineStatus.mockResolvedValueOnce({ running: true, kind: 'xray', node_id: null, mixed_port: 7890, api_port: 9090, started_at_ms: 0, last_exit_code: null, last_error: null } as never)
     const store = useEngineStore()
     await store.refreshStatus()
     expect(store.running).toBe(true)

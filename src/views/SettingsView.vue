@@ -100,6 +100,7 @@ const staleItems = computed<string[]>(() => {
   if (!engine.running || !store.loaded || saved === null || status === null) return []
 
   const items: string[] = []
+  if (saved.mode !== status.mode) items.push('settings.stale.itemMode')
   if (saved.mixed_port !== status.mixed_port || saved.api_port !== status.api_port) {
     items.push('settings.stale.itemPorts')
   }

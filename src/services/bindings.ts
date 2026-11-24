@@ -422,6 +422,12 @@ export type EngineStatus_Deserialize = {
 	 */
 	last_exit_code?: number | null,
 	/**
+	 *  The mode the running kernel was started with (`rule` / `global` /
+	 *  `direct`). The routing table is rendered from it at start, so the
+	 *  settings page needs this to tell a saved mode from the one in force.
+	 */
+	mode: ProxyMode,
+	/**
 	 *  The level the running kernel was started with. The log level is baked
 	 *  into the rendered config, so the UI needs this to tell a saved-but-not-
 	 *  applied change from an applied one.
@@ -490,6 +496,12 @@ export type EngineStatus_Serialize = {
 	 *  instead of silently flipping to "not running".
 	 */
 	last_exit_code: number | null,
+	/**
+	 *  The mode the running kernel was started with (`rule` / `global` /
+	 *  `direct`). The routing table is rendered from it at start, so the
+	 *  settings page needs this to tell a saved mode from the one in force.
+	 */
+	mode: ProxyMode,
 	/**
 	 *  The level the running kernel was started with. The log level is baked
 	 *  into the rendered config, so the UI needs this to tell a saved-but-not-

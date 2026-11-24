@@ -666,6 +666,7 @@ export const zh: Record<string, string> = {
   "settings.staleListApply": "用新设置重启内核",
   "settings.stale.itemPorts": "端口",
   "settings.stale.itemLog": "日志级别",
+  "settings.stale.itemMode": "代理模式",
   "settings.stale.itemLan": "局域网连接",
   "settings.stale.itemMux": "多路复用",
   "settings.stale.itemDns": "DNS",

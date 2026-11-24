@@ -30,6 +30,7 @@ use specta::Type;
 use super::job::KillOnCloseJob;
 use super::{Endpoints, EngineKind, LoadedRuleSet, RenderInput, RunOptions, StatsChannel};
 use crate::domain::node::Node;
+use crate::domain::settings::ProxyMode;
 use crate::domain::settings::LogLevel;
 use crate::error::{AppError, AppResult};
 
@@ -204,6 +205,10 @@ pub struct EngineStatus {
     /// Set when a kernel exited on its own, so the UI can explain the stop
     /// instead of silently flipping to "not running".
     pub last_exit_code: Option<i32>,
+    /// The mode the running kernel was started with (`rule` / `global` /
+    /// `direct`). The routing table is rendered from it at start, so the
+    /// settings page needs this to tell a saved mode from the one in force.
+    pub mode: ProxyMode,
     /// The level the running kernel was started with. The log level is baked
     /// into the rendered config, so the UI needs this to tell a saved-but-not-
     /// applied change from an applied one.
@@ -250,6 +255,7 @@ impl Default for EngineStatus {
             config_path: String::new(),
             started_at_ms: 0,
             last_exit_code: None,
+            mode: ProxyMode::Rule,
             log_level: LogLevel::Warn,
             allow_lan: false,
             dns_servers: String::new(),
@@ -298,6 +304,9 @@ struct Running {
     endpoints: Endpoints,
     config_path: PathBuf,
     started_at_ms: u64,
+    /// The routing mode this kernel was started with; see
+    /// [`EngineStatus::mode`].
+    mode: ProxyMode,
     /// The level this kernel was started with; see [`EngineStatus::log_level`].
     log_level: LogLevel,
     /// The LAN opt-in this kernel was started with; see
@@ -430,6 +439,7 @@ impl EngineRuntime {
         // `with_options` consumes them. Same for the DNS/LAN/mux/fragment
         // settings: the UI compares them with the saved ones, and the rendered
         // config cannot give the original text back.
+        let mode = options.mode;
         let log_level = options.log_level;
         let allow_lan = options.allow_lan;
         let dns_servers = options.dns_servers_raw.clone();
@@ -480,6 +490,7 @@ impl EngineRuntime {
             endpoints,
             config_path: config_path.clone(),
             started_at_ms,
+            mode,
             log_level,
             allow_lan,
             dns_servers: dns_servers.clone(),
@@ -498,6 +509,7 @@ impl EngineRuntime {
 
         Ok(EngineStatus {
             running: true,
+            mode,
             kind: Some(kind),
             node_name: node.name.clone(),
             node_id: Some(node.id.clone()),
@@ -608,6 +620,7 @@ impl EngineRuntime {
                 config_path: running.config_path.to_string_lossy().into_owned(),
                 started_at_ms: running.started_at_ms,
                 last_exit_code: None,
+                mode: running.mode,
                 log_level: running.log_level,
                 allow_lan: running.allow_lan,
                 dns_servers: running.dns_servers.clone(),
@@ -1397,6 +1410,27 @@ four"
         // the saved value.
         assert_eq!(started.log_level, LogLevel::Debug);
         assert_eq!(h.runtime.status().log_level, LogLevel::Debug);
+
+        std::fs::remove_dir_all(&h.dir).ok();
+    }
+
+    #[test]
+    fn status_reports_the_mode_the_kernel_was_started_with() {
+        let h = harness(true, false);
+        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let options = RunOptions {
+            mode: ProxyMode::Global,
+            ..RunOptions::new()
+        };
+        let started = h
+            .runtime
+            .start(EngineKind::Xray, &node(), endpoints, options)
+            .unwrap();
+
+        // The routing table is rendered from the mode, so the settings page
+        // compares this against the saved value instead of guessing.
+        assert_eq!(started.mode, ProxyMode::Global);
+        assert_eq!(h.runtime.status().mode, ProxyMode::Global);
 
         std::fs::remove_dir_all(&h.dir).ok();
     }

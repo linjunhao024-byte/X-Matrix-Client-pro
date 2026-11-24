@@ -666,6 +666,7 @@ export const en: Record<string, string> = {
   "settings.staleListApply": "Restart the kernel with the new settings",
   "settings.stale.itemPorts": "ports",
   "settings.stale.itemLog": "log level",
+  "settings.stale.itemMode": "proxy mode",
   "settings.stale.itemLan": "LAN access",
   "settings.stale.itemMux": "multiplexing",
   "settings.stale.itemDns": "DNS",

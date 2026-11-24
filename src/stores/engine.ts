@@ -281,7 +281,12 @@ export const useEngineStore = defineStore('engine', () => {
    * nothing to restart, so callers can skip the notice entirely.
    */
   async function reapply(): Promise<boolean> {
-    const active = useSettingsStore().settings?.last_node_id
+    // Which node is live is the kernel's own answer, not the settings mirror:
+    // the backend writes that mirror at start time, so it can still name a node
+    // that was deleted or replaced by a refresh since. Asking `status` first
+    // keeps a restart on the node the kernel is really using, and falls back to
+    // the mirror only when the poller has not answered yet.
+    const active = status.value?.node_id || useSettingsStore().settings?.last_node_id
     if (!running.value || !active) return false
     await apply(active)
     return true

@@ -1089,3 +1089,37 @@ bash /d/tmp/shots/offline-accept.sh
 4. **主机上的测试服务端会被当成「内核」。** 验收脚本用 `Kernels` 数进程，本机的 `sing-box.exe` 服务端也会被数进去（`sing-box#2480,xray#628`）；判断「主内核在不在」要看那条 xray 记录，别数总数。
 
 **一句实话**：本节证明「临时内核真的起得来、探测真的走它的隧道、失败真的被记下来、事后真的不留痕」，不证明它比 539 ms 这个数字更快或更准——`539 ms` 里包含一次本机 shadowsocks 中转与一次公网 204，绝对值没有意义，有意义的是「同一条链路下它是唯一把隧道算进去的数字」。
+
+## 44. 换代理模式也要说一声：三个按钮落盘后，内核还按老表在跑（2026-11-24，云电脑 cloudpc-test）
+
+**要证的事**：设置页把「代理模式」从「规则」改成「全局」并保存时，如果内核正在跑，界面要直说内核还用着旧的路由表；点提示里的按钮之后，新内核真的按新表起来（`configs/xray.json` 里的路由规则数从 3 条变成 1 条），提示消失；再改回「规则」并重启，表恢复成 3 条。
+
+**验法**：
+
+```bash
+bash /d/tmp/shots/mode-accept.sh
+```
+
+`prep-mode2.ps1` 先把 store 归位（`mode = rule`、`system_proxy = true`，顺手清掉上一节残留的 `ss-offline-*` 节点，并把 `last_node_id` 指回一个真的存在的节点）。脚本启动应用、首页点「启动」、读当前渲染出的路由规则数，再去设置页点「全局」、保存，读提示文字与 store，点「用新设置重启内核」，重新读 pid 和规则数，最后改回「规则」重启一次。
+
+| 判据 | 证据（`mode-accept.txt`） | 结果 |
+|---|---|---|
+| 内核在跑，旧表有 3 条规则 | `kernels: xray#7164`、`routing rules before: 3` | **通过** |
+| 保存后立刻点名 | `store mode after save: global` → `stale: 内核还在用旧设置：代理模式`、`item mode: True` | **通过** |
+| 旧内核没被偷偷换掉 | `routing rules while stale: 3`（保存只写意图） | **通过** |
+| 点按钮真的重启 | `pids before=7164 after=2552` | **通过** |
+| 新表生效 | `routing rules after restart: 1`（全局模式一条兜底） | **通过** |
+| 提示自清 | `stale after restart: 0` | **通过** |
+| 改回「规则」再重启，表恢复 | `stale back: 1` → `routing rules restored: 3` | **通过** |
+| 全程代理没掉 | `proxy after restart: ProxyEnable=1 ProxyServer=127.0.0.1:7890`；停止后 `ProxyEnable=0` | **通过** |
+
+**三个设计理由**：
+- **模式由内核自己报，界面不回读设置。** `EngineStatus.mode` 和端口、日志级别、DNS、局域网、多路复用、分片走同一条路：`Running` 记下启动时用的值，`start()`/`status()` 都带着它。界面拿「已保存的设置」和「内核自报的值」比，才不会出现「刚保存就说已经生效」的谎话。
+- **一句话列全所有落后项，而不是每条一个提示。** `staleItems` 按面板顺序拼（端口 → 日志级别 → 局域网 → DNS → 多路复用 → 分片 → 代理模式），用户一次就知道要重启一次解决哪些事。
+- **提示的清除只认 `started_at_ms`。** 重启由谁发起都行（提示按钮、首页「重启」、托盘），新的 `started_at_ms` 一到，提示自己消失；不需要在每个入口手工清状态。
+
+**四个坑**：
+1. **`last_node_id` 可能指向已经不存在的节点。** 第一次跑时按钮点了毫无反应：`reapply()` 用的是设置里的镜像，而镜像里存着上一节清理时删掉的 `ss-offline-local-1`，`apply` 于是要求启动一个不存在的节点并抛错，错误只落在提示组件内部的 `role="alert"` 里。修法是先问内核（`status.node_id`，§35 就有了），镜像只当轮询还没回来时的兜底。
+2. **三个模式按钮是普通 `Button`，`ItemStatus` 才是选中态。** 名字是「规则 / 全局 / 直连」，用 `InvokePattern` 能点动；判断当前选中不能看颜色，要看 `ItemStatus`。
+3. **渲染出的配置里「全局」并不是「没有 rules」。** 全局模式正好一条兜底规则（`outboundTag` 指向 `proxy`），所以判据是「3 → 1 → 3」，不是「3 → 0 → 3」。
+4. **验收脚本自己的启动顺序会骗人。** 计划任务建好不等于跑起来：`mode-accept.sh` 第一版忘了 `schtasks /run /tn xmmode`，日志文件根本没生成，界面却一切正常；脚本现在 `xmapp` 之后 `sleep 10` 再跑巡检任务。

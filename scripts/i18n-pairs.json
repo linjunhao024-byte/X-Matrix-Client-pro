@@ -3726,6 +3726,12 @@
     "日誌級別"
   ],
   [
+    "settings.stale.itemMode",
+    "代理模式",
+    "proxy mode",
+    "代理模式"
+  ],
+  [
     "settings.stale.itemLan",
     "局域网连接",
     "LAN access",
