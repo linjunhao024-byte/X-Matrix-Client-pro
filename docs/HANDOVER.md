@@ -15,11 +15,11 @@
 
 | 项 | 值 |
 |---|---|
-| 代码 HEAD | `6a64bf0`「feat(settings): say when the kernel still listens on the old ports, and restart it on the new ones」（= 最后一个**已提交**的功能；§34 日志级别提示尚未提交） |
-| 未提交 | 日志级别过期提示（§34）：`src-tauri/src/engine/runtime.rs`、`src/views/SettingsView.vue`、`src/services/bindings.ts`、i18n、文档 |
+| 代码 HEAD | `09692ae`「feat(engine): a kernel stops when its node is deleted and follows an id change on refresh」（= 最后一个**已提交**的功能，含 §34 与 §35） |
+| 未提交 | 无 |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库（HEAD 上这一条） |
 | IPC 命令 | **77**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
-| Rust 单测 | **320 passed**（`ARCHITECTURE.md:278` 已同步） |
+| Rust 单测 | **336 passed**（`ARCHITECTURE.md:278` 已同步） |
 | 前端检查 | `npm run check` 全绿：vue-tsc / architecture / contract / vitest **78**（8 文件） |
 | i18n | **733** 键（`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
 | 桌面产物 | 见 §1 表格（每次构建后刷新；当前 release 构建含 N12 + GEO + 测速落盘 + 退出通知） |
