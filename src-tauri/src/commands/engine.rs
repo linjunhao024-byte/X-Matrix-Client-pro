@@ -266,12 +266,24 @@ pub fn start_engine(
         .with_catalog(&request.nodes, &request.groups)
         .with_rule_sets(&request.rule_sets);
     let status = runtime.start(request.kind, &request.node, request.endpoints, options)?;
-    if request.settings.system_proxy
-        && let Err(error) =
-            proxy.enable_with_bypass("127.0.0.1", request.endpoints.mixed_port, &request.settings.proxy_bypass)
-    {
-        let _ = runtime.stop();
-        return Err(error);
+    if request.settings.system_proxy {
+        let bypass = request.settings.proxy_bypass.as_str();
+        let applied = if request.settings.pac_enabled {
+            // The script encodes the port itself, so it is rendered from the
+            // endpoint that is actually listening — not from the saved setting.
+            let script = crate::sysproxy::pac::render(
+                request.endpoints.mixed_port,
+                bypass,
+                &crate::sysproxy::pac::direct_patterns(&request.rules),
+            );
+            proxy.enable_pac(request.endpoints.mixed_port, bypass, &script)
+        } else {
+            proxy.enable_with_bypass("127.0.0.1", request.endpoints.mixed_port, bypass)
+        };
+        if let Err(error) = applied {
+            let _ = runtime.stop();
+            return Err(error);
+        }
     }
     Ok(status)
 }
@@ -768,7 +780,7 @@ pub(crate) mod tests {
             writes: Mutex::new(Vec::new()),
         });
         let path = scratch("snapshot");
-        let guard = ProxyGuard::new(Box::new(fake.clone()), &path);
+        let guard = ProxyGuard::new(Box::new(fake.clone()), &path, scratch("pac").with_extension("pac"));
         (guard, fake, path)
     }
 

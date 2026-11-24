@@ -17,6 +17,12 @@ pub struct Settings {
     pub mode: ProxyMode,
     /// Whether X-Matrix currently owns the Windows system proxy.
     pub system_proxy: bool,
+    /// Write a PAC script and point `AutoConfigURL` at it instead of a fixed
+    /// `ProxyServer`. Only meaningful while [`Settings::system_proxy`] is on:
+    /// it is the *how*, not a second takeover. Off by default, because a script
+    /// runs inside every application that reads the system proxy and the
+    /// fixed-server path is the one users expect from a proxy client.
+    pub pac_enabled: bool,
     pub auto_start: bool,
     pub language: Language,
     /// Start the last used node as soon as the app comes up. Off by default:
@@ -313,6 +319,7 @@ impl Default for Settings {
             allow_lan: false,
             mode: ProxyMode::Rule,
             system_proxy: false,
+            pac_enabled: false,
             auto_start: false,
             language: Language::Zh,
             auto_connect: false,

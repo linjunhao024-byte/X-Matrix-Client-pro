@@ -40,8 +40,8 @@ onMounted(async () => {
  *
  * The "not supported" rows are deliberate: a switch that silently does nothing
  * is worse than a line that says no and explains why. TUN needs a virtual
- * adapter driver and would collide with an already-running proxy; PAC needs a
- * script generator nobody has asked for yet.
+ * adapter driver and would collide with an already-running proxy; PAC exists,
+ * but only for the part a script can express (domain names).
  */
 interface Capability {
   key: string
@@ -57,7 +57,7 @@ const capabilities: Capability[] = [
   { key: 'connections', supported: true, note: 'about.caps.connections.note' },
   { key: 'backup', supported: true, note: 'about.caps.backup.note' },
   { key: 'tun', supported: false, note: 'about.caps.tun.note' },
-  { key: 'pac', supported: false, note: 'about.caps.pac.note' },
+  { key: 'pac', supported: true, note: 'about.caps.pac.note' },
   { key: 'update', supported: false, note: 'about.caps.update.note' },
 ]
 

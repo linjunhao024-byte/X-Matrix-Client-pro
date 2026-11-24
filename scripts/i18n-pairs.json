@@ -49,9 +49,9 @@
   ],
   [
     "about.caps.pac.note",
-    "没做：只接管系统代理，不生成 PAC 脚本。",
-    "Not built: only the system proxy is taken over, no PAC script is generated.",
-    "沒做：只接管系統代理，不生成 PAC 腳本。"
+    "可选：生成 PAC 脚本并按域名直连，只表达域名这一层（IP、端口、协议规则仍靠内核路由）。",
+    "Optional: generates a PAC script that sends chosen domains direct. Domain names only — IP, port and protocol rules stay with the kernel's own routing.",
+    "可選用：產生 PAC 腳本並依網域直連，只表達網域這一層（IP、連接埠、協定規則仍靠內核路由）。"
   ],
   [
     "about.caps.proxy",
@@ -3442,6 +3442,42 @@
     "分号分隔。留空则用默认值（本机回环与内网段不走代理）。",
     "Semicolon separated. Empty falls back to the default (loopback and private ranges stay direct).",
     "分號分隔。留空則用預設值（本機迴環與內網段不走代理）。"
+  ],
+  [
+    "settings.pac",
+    "用 PAC 按域名分流",
+    "Route by domain with a PAC script",
+    "用 PAC 依網域分流"
+  ],
+  [
+    "settings.pacHint",
+    "由本应用生成一份 PAC 脚本，把 Windows 的自动配置地址指向它；开启后不再写固定代理端口，两者不并用。",
+    "Generate a PAC script and point the Windows auto-config URL at it. The fixed proxy server is not written at the same time — the two would fight over the same traffic.",
+    "由本應用產生一份 PAC 腳本，把 Windows 的自動設定位址指向它；開啟後不再寫入固定代理連接埠，兩者不並用。"
+  ],
+  [
+    "settings.pacLimit",
+    "PAC 只认得域名：协议、端口、IP 段、geosite 与进程规则写不进脚本，这部分仍由内核自己的路由处理。",
+    "A PAC script only understands domain names. Protocol, port, IP-range, geosite and process rules cannot be expressed in it — the kernel's own routing still decides those.",
+    "PAC 只認得網域：協定、連接埠、IP 網段、geosite 與程序規則寫不進腳本，這部分仍由內核自己的路由處理。"
+  ],
+  [
+    "settings.pacState",
+    "自动配置地址",
+    "Auto-config URL",
+    "自動設定位址"
+  ],
+  [
+    "settings.pacNone",
+    "未设置",
+    "not set",
+    "未設定"
+  ],
+  [
+    "settings.pacRestart",
+    "内核没在运行：这个改动会在下次启动内核时写进注册表。",
+    "No kernel is running: this change reaches the registry the next time one starts.",
+    "內核沒在執行：這個改動會在下次啟動內核時寫入登錄檔。"
   ],
   [
     "settings.closeToTray",

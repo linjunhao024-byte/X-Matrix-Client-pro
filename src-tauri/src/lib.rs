@@ -101,6 +101,7 @@ pub fn run() {
             let guard = ProxyGuard::new(
                 Box::new(windows_proxy()) as Box<dyn SystemProxy>,
                 base.join("proxy-snapshot.json"),
+                base.join("x-matrix.pac"),
             );
             match guard.recover() {
                 Ok(true) => eprintln!("x-matrix: 已恢复上次异常退出前的系统代理设置"),

@@ -297,13 +297,13 @@ export const commands = {
 	geoAssets: () => __TAURI_INVOKE<GeoAssetStatus_Serialize[]>("geo_assets"),
 	updateGeoAssets: () => typedError<GeoUpdate, AppError>(__TAURI_INVOKE("update_geo_assets")),
 	/**  What the system proxy looks like right now, and whether we are holding it. */
-	systemProxyStatus: () => typedError<SystemProxyStatus, AppError>(__TAURI_INVOKE("system_proxy_status")),
+	systemProxyStatus: () => typedError<SystemProxyStatus_Serialize, AppError>(__TAURI_INVOKE("system_proxy_status")),
 	/**
 	 *  Restore whatever was configured before X-Matrix took over.
 	 * 
 	 *  Safe to call at any time: it does nothing unless a snapshot says we took it.
 	 */
-	systemProxyDisable: () => typedError<SystemProxyStatus, AppError>(__TAURI_INVOKE("system_proxy_disable")),
+	systemProxyDisable: () => typedError<SystemProxyStatus_Serialize, AppError>(__TAURI_INVOKE("system_proxy_disable")),
 	listSubscriptions: () => __TAURI_INVOKE<Subscription_Serialize[]>("list_subscriptions"),
 	/**  Creating from the UI: the id is ours, not the user's. */
 	createSubscription: (name: string, url: string) => typedError<Subscription_Serialize[], AppError>(__TAURI_INVOKE("create_subscription", { name, url })),
@@ -1154,6 +1154,14 @@ export type Settings_Deserialize = {
 	mode?: ProxyMode,
 	/**  Whether X-Matrix currently owns the Windows system proxy. */
 	system_proxy?: boolean,
+	/**
+	 *  Write a PAC script and point `AutoConfigURL` at it instead of a fixed
+	 *  `ProxyServer`. Only meaningful while [`Settings::system_proxy`] is on:
+	 *  it is the *how*, not a second takeover. Off by default, because a script
+	 *  runs inside every application that reads the system proxy and the
+	 *  fixed-server path is the one users expect from a proxy client.
+	 */
+	pac_enabled?: boolean,
 	auto_start?: boolean,
 	language?: Language,
 	/**
@@ -1316,6 +1324,14 @@ export type Settings_Serialize = {
 	mode: ProxyMode,
 	/**  Whether X-Matrix currently owns the Windows system proxy. */
 	system_proxy: boolean,
+	/**
+	 *  Write a PAC script and point `AutoConfigURL` at it instead of a fixed
+	 *  `ProxyServer`. Only meaningful while [`Settings::system_proxy`] is on:
+	 *  it is the *how*, not a second takeover. Off by default, because a script
+	 *  runs inside every application that reads the system proxy and the
+	 *  fixed-server path is the one users expect from a proxy client.
+	 */
+	pac_enabled: boolean,
 	auto_start: boolean,
 	language: Language,
 	/**
@@ -1547,7 +1563,10 @@ export type Subscription_Serialize = {
 };
 
 /**  What the UI shows on the settings page. */
-export type SystemProxyStatus = {
+export type SystemProxyStatus = SystemProxyStatus_Serialize | SystemProxyStatus_Deserialize;
+
+/**  What the UI shows on the settings page. */
+export type SystemProxyStatus_Deserialize = {
 	/**  True when *we* are the ones holding the system proxy. */
 	active: boolean,
 	/**  True when the system currently routes through some proxy (ours or not). */
@@ -1556,6 +1575,22 @@ export type SystemProxyStatus = {
 	server: string,
 	/**  A leftover snapshot means the previous run died while holding it. */
 	snapshot_present: boolean,
+	/**  The PAC script URL the machine is currently pointed at, if any. */
+	pac_url?: string | null,
+};
+
+/**  What the UI shows on the settings page. */
+export type SystemProxyStatus_Serialize = {
+	/**  True when *we* are the ones holding the system proxy. */
+	active: boolean,
+	/**  True when the system currently routes through some proxy (ours or not). */
+	enabled: boolean,
+	/**  Whatever `ProxyServer` currently says. */
+	server: string,
+	/**  A leftover snapshot means the previous run died while holding it. */
+	snapshot_present: boolean,
+	/**  The PAC script URL the machine is currently pointed at, if any. */
+	pac_url: string | null,
 };
 
 /**

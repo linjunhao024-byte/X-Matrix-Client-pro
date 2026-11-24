@@ -75,7 +75,7 @@ X-Matrix-Client-pro/
         │   ├── xray_grpc.rs
         │   └── clash_api.rs
         ├── storage/             # SQLite 单一持久化
-        └── sys/                 # 系统代理 / 自启 / 路径
+        └── sys/                 # 系统代理（含 PAC 生成）/ 自启 / 路径
 ```
 
 **分层铁律**：`commands` 不含业务逻辑，`domain` 不含 IO，`engine` 不认识 SQLite。
@@ -275,12 +275,12 @@ pub enum StatsChannel {
 | 层 | 状态 | 证据 |
 |---|---|---|
 | 契约层 | 完成 | `tauri-specta` 生成 `src/services/bindings.ts`，81 个命令；`npm run check:contract` 校验不过期 |
-| 引擎层 | Xray + sing-box 配置渲染、启停、就绪探测、统计读取、日志尾部、启动前端口预检 | `cargo test --lib`（全库 377 项）；渲染是纯函数，测试不需要任何内核二进制 |
+| 引擎层 | Xray + sing-box 配置渲染、启停、就绪探测、统计读取、日志尾部、启动前端口预检 | `cargo test --lib`（全库 394 项）；渲染是纯函数，测试不需要任何内核二进制 |
 | 数据层 | 单文件 JSON 原子替换 + 坏文件留证 | `store.rs`，重启后节点/设置/规则都在 |
 | 导入 | vless / vmess / trojan / ss + 整包 base64 | `import.rs`，不支持的行进 `skipped` 而不是报错 |
 | 路由 | 7 种匹配器 × 4 种动作（代理/直连/拦截/策略组），双内核各自渲染 | `domain/routing.rs` + `render.rs`（唯一的内核差异点） |
 | DNS | 设置页填自定义解析器（逗号分隔），三种写法：`1.1.1.1` / `tls://1.1.1.1`（DoT）/ `https://1.1.1.1/dns-query`（DoH）。`DnsEntry::parse` 解析成带标签的枚举，两个渲染器各说各的方言：Xray 拼回 `tls://`/`https://` 字符串，sing-box 用 `{type:"udp"|"tls"|"https", tag:"dns-N"}` + `final`。留空完全不生成 `dns` 键。主机部分只接受 IP 字面量（域名要先被解析，那正是解析器的活） | `domain/settings.rs` 的 `DnsEntry`、`engine/xray.rs`、`engine/singbox.rs`，含 4 项解析校验 + 3 项渲染测试；`xray -test` 与 `sing-box check` 真二进制验过 |
-| 系统代理 | 快照 → 接管 → 还原，异常退出可恢复 | `sysproxy/mod.rs`，7 项测试跑在假后端上 |
+| 系统代理 | 快照 → 接管 → 还原，异常退出可恢复。接管有两种写法：固定 `ProxyServer`，或生成 `x-matrix.pac` 并写 `AutoConfigURL`（`settings.pac_enabled`，两者不并用），关闭时按同一份快照还原 | `sysproxy/mod.rs`、`sysproxy/pac.rs`，全部测试跑在假后端上 |
 | 启动行为 | 「启动时隐藏窗口」「关闭窗口时最小化到托盘」两个设置：前者在 setup 末尾 `window.hide()`（先创建再隐藏，避免闪一下）；后者决定 × 是 hide 还是 `quit_cleanly`（还原系统代理 + 杀内核 + 退出）。没有托盘时 × 一律退出——否则窗口既看不见又关不掉 | `src-tauri/src/lib.rs`、`domain/settings.rs`（2 项测试） |
 | 窗口几何 | `tauri-plugin-window-state` 记住大小、位置、最大化状态；flags 只要这三样——`visible` 归「启动时隐藏」管，把磁盘上的可见性也还原回来会跟设置打架。还原前过一次 `ensure_window_reachable`：拔掉扩展屏后旧坐标可能落在不存在的显示器上，落在任何显示器外就 `window.center()`，宁可不记得也不能还原出一个看不见的窗口 | `src-tauri/src/lib.rs` 的 `ensure_window_reachable`、`Cargo.toml` |
 | 系统集成 | 开机自启（写 HKCU Run）、启动时自动连接（`settings.auto_connect` + 记住上次的节点与内核）、托盘三动词（显示窗口 / 启停内核 / 退出，标签与 tooltip 跟随状态）、节点 TCP 测速、流量曲线、内核日志（级别可选 warn/info/debug）、配置预览 | `autostart.rs` / `lib.rs` 的 `auto_connect`、`toggle_kernel`、`refresh_tray` / `net/latency.rs` / `runtime.log_tail` |
@@ -307,7 +307,7 @@ pub enum StatsChannel {
 | 真实延迟 | 经**运行中的隧道**发一个 HTTP 请求量到的往返（V2RayN 叫 real delay）：包含内核、隧道和节点自己的 DNS，只有跑着才有数。节点列表里那个数是到节点的 TCP 握手，启动前就能测，两者各有用处 | `net/latency.rs` 的 `http_latency_via_proxy`（3 项测试，含「502 不算延迟」）、`commands/engine.rs` 的 `proxy_latency` |
 | 连接管理 | 连接页每行可「断开」（sing-box 的 Clash API `DELETE /connections/{id}`）；Xray 没有连接表，按钮直接不出现而不是点了才报错 | `engine/stats.rs` 的 `close_connection`、`views/ConnectionsView.vue` |
 | 配置备份 | 导出把整个 JSON 文档 + 每个规则集的条目文本写进一个文件；恢复是**整体替换**而不是合并（合并会造出重复 id 和指向不存在策略组的规则），并且要求先停内核；解析有 4 项测试（往返、外来 JSON 被拒、坏节点被拒、乱码被拒） | `commands/backup.rs`、`state.rs` 的 `document` / `replace` |
-| 系统代理例外 | 接管系统代理时写进注册表的 bypass 列表可编辑（默认本机回环 + 内网段）；留空回落默认值——写空的 `ProxyOverride` 会把本机回环也推进隧道，本机服务全断 | `sysproxy/mod.rs` 的 `enable_with_bypass`（2 项测试）、设置页「代理例外」 |
+| 系统代理例外 | 接管系统代理时写进注册表的 bypass 列表可编辑（默认本机回环 + 内网段）；留空回落默认值——写空的 `ProxyOverride` 会把本机回环也推进隧道，本机服务全断。PAC 模式下同一份列表变成脚本里的 `DIRECT` 判断（`*` 通配与 `<local>` 都认） | `sysproxy/mod.rs` 的 `enable_with_bypass`、`sysproxy/pac.rs` 的 `render`，设置页「代理例外」 |
 | 自动测速 | 设置里可选 5 / 15 / 60 分钟重新测一遍全部节点，默认关（按流量计费的人会注意到后台在打节点）；手动测速进行中时自动的那次跳过，避免两次扫描互相排队 | `views/NodesView.vue` 的 `armAutoTest` |
 | 端口预检 | 启动前先 `bind` 一次混合端口与控制端口：内核绑不上只会死在自己的日志里，而桌面上最常见的原因是另一个代理客户端还占着 7890。只在**空闲时**检查——内核跑着的时候端口本来就是它自己占的，那时检查会拒绝每一次切节点。绑定即检测，不先问 OS 再绑（中间会有窗口期） | `net/ports.rs`（2 项测试）、`commands/engine.rs` 的 `start_engine` |
 | 从剪贴板导入 | 机场链接常常是浏览器里复制的一大串 base64，让人手选两百个字符就是给错字机会。剪贴板 API 在非安全上下文不可用，拒绝时明确提示「手动粘贴」，不静默失败 | `components/ImportDialog.vue` 的 `loadFromClipboard` |

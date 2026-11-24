@@ -1253,3 +1253,49 @@ app stderr 同步佐证：托盘行从 `模式 rule · 内核运行中` 重新�
 3. **WebView2 的元素模式不齐，点击要留后路。** 模式按钮（规则/全局/直连）只有 `TogglePattern`、没有 `InvokePattern`，硬调 Invoke 会报 `不支持的模式。`；原生 `<select>` 没有 `SelectionPattern`，只能走 `ValuePattern` 读当前值。行内按钮在行名下方约 160 px（取 `Top >= 行顶` 的最小者），`Has-Named` 会读到陈旧快照，别用它当判据。
 
 **一句实话**：这一条证明的是「刷新后镜像立刻是新的，所以整份回写不会再把死 id 写回去」；死 id 真正让人疼的那一步——下次带 `auto_connect` 启动时日志里那句 `x-matrix: 自动连接失败：节点 … 不存在`（`src-tauri/src/lib.rs:211` 起）——没有单独再跑一轮真机复现，是从 store 里那个「不在节点表里的 id」+ `lookup_node` 的文案推出来的。命令数 81、Rust 单测 377、vitest 98、i18n 758 键 × 3 均不变（纯前端补丁）。
+
+## 48. PAC 自动配置：把「按域名分流」交给系统，但回环和私网必须自己兜住（2026-11-25，云电脑 cloudpc-test）
+
+**要证的事**：S2 给系统代理加第二种接管方式——不只写死一个 `ProxyServer`，还能生成一份 `.pac`（`FindProxyForURL`）并写 `AutoConfigURL`，让 Windows 自己按域名决定走代理还是直连。要证四件事：
+
+1. 开启后注册表**只有** `AutoConfigURL`（`file:///…\x-matrix.pac`），`ProxyEnable=0`、`ProxyServer` 被清空——两种接管方式互斥，不许同时生效；
+2. 脚本内容跟着设置走：绕过列表 + 规则里「直连」的域名匹配器 → `DIRECT`，其余 → `PROXY 127.0.0.1:<mixed_port>; DIRECT`；
+3. 设置页关掉再开，两条路径来回切都不留残渣，且**不断内核**；
+4. 停内核后按快照还原到接管前的样子。
+
+**验法**：`bash /d/tmp/shots/48-pac-accept.sh [exe] [label]`（新增，约 90 行；沿用 `47-accept.sh` 的部署/钉 store/起进程骨架）。它把 store 钉成 `system_proxy=true`、`pac_enabled=true`、`auto_connect=false`、`last_node_id=Clip-Test`，并确保有一条 `domain_suffix=.example.com → direct` 的规则；然后 `schtasks` 在会话 1 里起应用与驱动脚本 `48-pac.ps1`（`mk_48_pac.py` 生成，UTF-8 BOM + CRLF）。驱动流程：节点页行内「启动」→ 13 秒后读注册表三值 / PAC 文件大小 / 用 `cscript //nologo pac-check.js <pac>` 实跑 `FindProxyForURL` → 设置页关 PAC 保存 → 读注册表 + 内核 PID → 再开 PAC 保存 → 再读一遍 → 首页「停止」→ 读还原结果。
+
+`D:\tmp\shots\pac-check.js` 是 cscript 上的 JScript 5.8 harness：自己实现 `dnsDomainIs` / `shExpMatch` / `isPlainHostName` 三个内建，`eval` 脚本后逐 host 打印 `FindProxyForURL` 的返回值；**不**预先替换其他内建函数——PAC 里若用了引擎不给的 API 就会直接报错，这是有意的探针。本次二进制 `src-tauri/target/release/x-matrix.exe`（md5 `2f66e09124a2d5c937e2677c9d7e03ed`，10,466,816 B）。
+
+**判据与结果**：
+
+| 判据 | 结果 |
+|---|---|
+| 接管前 | `ProxyEnable=0 ProxyServer= AutoConfigURL=`，`kernels before:` 空 |
+| 点「启动」后 | `kernels after start: xray#2668`；`ProxyEnable=0`、`ProxyServer=`（空）、`AutoConfigURL=file:///C:/Users/Administrator/AppData/Roaming/com.xmatrix.client/x-matrix.pac` |
+| PAC 文件 | `x-matrix.pac bytes=3302`，**非 ASCII 字节 0**（非 ASCII 全部 `\uXXXX`，因为 WinINet 按 ANSI 读 `.pac`，中文规则原样写进去会变乱码） |
+| 脚本对域名的判断 | `example.com → DIRECT`、`www.example.com → DIRECT`（`domain_suffix=.example.com` 规则）、`baidu.com → PROXY 127.0.0.1:7890; DIRECT` |
+| 本机回环 | `localhost → DIRECT`、`printer → DIRECT`（无点的裸名）、`127.0.0.1 → DIRECT` |
+| 私网 / 链路本地 | `10.1.2.3 → DIRECT`、`192.168.1.5 → DIRECT`、`172.20.0.1 → DIRECT`、`172.32.0.1 → **PROXY**`（172.32 不在 172.16–31，反例证明不是「172. 一律直连」）、`169.254.1.1 → DIRECT` |
+| IPv6 | `::1 → DIRECT`、`[::1] → DIRECT`（两种写法都认） |
+| `.local` | `nas.local → DIRECT` |
+| 设置页关掉 PAC 保存 | `ProxyEnable=1 ProxyServer=127.0.0.1:7890 AutoConfigURL=`（切回固定代理、脚本值清空）、`pac=<none>`、**`kernels after pac off: xray#2668`（内核没被打断）** |
+| 再打开 PAC 保存 | 又变回 `ProxyEnable=0` + `AutoConfigURL=file:///…`，`bytes=3302`，第二轮 `pac-eval` 与第一轮逐条相同 |
+| 首页「停止」 | `kernels after stop:` 空、`ProxyEnable=0 ProxyServer= AutoConfigURL=`、`pac=<none>`（按快照还原） |
+
+**四个设计理由**：
+- **互斥而不是叠加。** 固定代理与 PAC 是同一件事的两种说法；同时留着 `ProxyServer` 与 `AutoConfigURL` 时 WinINet 会优先用脚本，界面上却显示「已接管固定代理」，故障时没人能说清是谁在管事。所以 PAC 接管时显式清 `ProxyServer`，固定代理接管时显式清 `AutoConfigURL`，`ProxyState` 里 `auto_config` 为空就表示「这个值本来不存在」，还原时据此删键而不是写空串。
+- **脚本先落盘，再指注册表。** 顺序反了就会出现「注册表现在指着一个还没写完的文件」，WinINet 读到半截脚本会按解析失败处理（等价于全局直连，用户看到的是「代理没生效」）。所以 `enable_pac` 先写 `*.pac.tmp` 再 `rename`，最后才写注册表；写注册表前还校验脚本里确实带上了 `PROXY 127.0.0.1:<当前端口>; DIRECT` 这一行，端口对不上直接 `AppError::InvalidInput` 拒绝并且**不落盘、不写注册表**。
+- **回环、私网、链路本地永远直连，且不依赖绕过列表。** 这是本轮真机跑出来的缺陷：第一版把「要不要直连」完全交给 store 里的 `proxy_bypass`，而云电脑上那个字段是一段被手工改坏的值（`和http：//cp.cloudfllare.com/`，看得出有人把默认那份 `localhost;127.*;10.*;172.16.*…;<local>` 整段替换掉了）。结果是 PAC 把 `localhost`/`127.0.0.1`/`10.1.2.3` 全送回 `127.0.0.1:7890`——代理自己就监听在这个地址上，形成回环；LAN 地址经出口节点也必然失败。固定代理那条路不受影响，是因为 `<local>` 由 WinINet 自己处理；脚本这条路必须自己说，而且绕过列表是用户可编辑字段，不能当唯一护栏。所以脚本里加了 `isAlwaysDirect(host)` 并在 `isBypassed` 之前无条件调用：`localhost`、无点的裸名、`127.`/`10.`/`192.168.`/`169.254.` 前缀、`172.` 的第二段在 16–31、`::1`/`[::1]`/`fe80`/`fc`/`fd` 前缀、`.local` 结尾一律直连。
+- **只写能表达的那一半，剩下的在界面上说实话。** PAC 只会看 URL 的主机和 scheme；规则里的 IP 段、端口、geosite、进程名、规则集都没有对应写法。把这些硬塞进脚本（比如按域名猜 IP 段）比不做更糟。所以 `direct_patterns()` 只取 `enabled && action == Direct` 的三个域名匹配器：`DomainFull` → 精确、`DomainSuffix` → `.suffix`（交给 `dnsDomainIs`）、`DomainKeyword` → `*kw*`（交给 `shExpMatch`）；设置页那行说明写的就是「PAC 只按域名分流，IP 段 / 端口 / 进程类规则在其中不生效」。
+
+**五个坑**：
+1. **`<local>` 语义在脚本里没人替你做。** 固定代理路径靠 WinINet 自己把 `localhost`、裸名当本地；PAC 里必须手写（见上一条）。这条如果不修，验收时表现得很像「PAC 没生效」——所有 host 都返回 `PROXY`，看着还挺一致。
+2. **`.pac` 必须是纯 ASCII。** 中文规则（例如关键词 `中文`）直接写进去，WinINet 按当前 ANSI 代码页读，到别的机器／别的语言就成了乱码。生成时统一转 `\uXXXX`（测试 `non_ascii_is_escaped_so_the_file_can_be_any_encoding` 守着这条），拉回来的文件 `non-ascii bytes: 0` 才算过。
+3. **PAC 引擎是 JScript 5.8，不要用 ES5 之后的 Array 方法。** 第一版 `isBypassed` 用了 `BYPASS_EXACT.indexOf(host)`；WinINet 的引擎没有这个方法，抛异常后被当成「直连」——恰好把「绕过列表里那条坏值」掩盖成「一切直连」。改成显式的 `for` 循环比较。同理，脚本里没有任何一处依赖引擎可能不提供的宿主函数（`.local` 的判断都是自己 `substring` 比出来的）。
+4. **开关和按钮在 WebView2 里不是同一种东西。** 设置页的 ToggleSwitch 是 `<button role="switch">`，UIA 树里除了这个按钮还有一个同名 `<span class="switch-label">`，按名字点会点到 span 上、什么都没发生。驱动脚本必须先 `Scroll-To` 把行滚进视口，再取 `Buttons-Named(label)` 里第一个用 `[Ui]::Click` 点中心——`Invoke-Named` 在这里不可靠（和 §47 的坑 3 同源）。另外 PAC 开关是 `:disabled="!draft.system_proxy"`，测试前必须保证「接管系统代理」也是开的，否则点了没反应。
+5. **出口 IP 那三条永远是红的。** 测试机不通外网，每次都会留下 `ipv4.icanhazip.com` / `ifconfig.me/ip` / `ipinfo.io/ip` 拉取失败的提示；这是环境，不是缺陷，判据只看注册表与脚本求值结果。
+
+**一句实话**：这一条证明的是「PAC 落地、互斥、还原、以及脚本对各 host 的判定」。没证明的部分：① Windows 真的按这份脚本分流了浏览器的流量（那要用一台能上外网的机器、加一条只走代理的域名去看出口 IP，本机规则禁止我在这台机器上装代理客户端，测试机又不通外网）；② `.pac` 文件在退出应用后不删（只还原注册表），所以应用目录里会留下一个孤儿脚本——下次接管会覆盖它，不影响正确性，但清理逻辑是有意省掉的；③ 内核没跑时拨开关只在界面上提示「下次启动内核生效」，不写注册表。
+
+命令数 81（不变）、Rust 单测 **394**（+17，PAC 生成 12 项 + `sysproxy` 里 PAC 接管 5 项）、vitest **98**（不变）、i18n **764** 键 × 3（+6）。

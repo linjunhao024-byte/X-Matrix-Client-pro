@@ -458,6 +458,23 @@ async function save() {
           :label="t('settings.systemProxy')"
           :description="t('settings.systemProxyHint')"
         />
+        <div class="divider" />
+        <ToggleSwitch
+          v-model="draft.pac_enabled"
+          :label="t('settings.pac')"
+          :description="t('settings.pacHint')"
+          :disabled="!draft.system_proxy"
+        />
+        <div class="proxy-state">
+          <span class="muted">
+            {{ t('settings.pacState') }}
+            <strong class="mono">{{ proxy.status?.pac_url ?? t('settings.pacNone') }}</strong>
+          </span>
+        </div>
+        <p class="field-hint">{{ t('settings.pacLimit') }}</p>
+        <p v-if="draft.pac_enabled && !engine.running" class="field-hint">
+          {{ t('settings.pacRestart') }}
+        </p>
         <div class="proxy-state">
           <span class="muted">
             {{ t('settings.proxyState') }}

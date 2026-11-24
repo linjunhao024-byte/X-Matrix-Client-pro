@@ -66,7 +66,7 @@ enum Takeover {
     /// Neither proxy field changed: the machine already matches the document.
     None,
     /// Point the system proxy at the running kernel (first take, or re-assert
-    /// with an edited bypass list).
+    /// with an edited bypass list or a switched PAC mode).
     Take,
     /// Give the system proxy back: the user just turned the takeover off.
     Release,
@@ -85,9 +85,11 @@ fn takeover_change(before: &Settings, after: &Settings) -> Takeover {
             false => Takeover::Release,
         };
     }
-    // Still on, but the bypass list moved: the registry value carries the
-    // list, so only re-asserting it makes the edit real.
-    if after.system_proxy && before.proxy_bypass != after.proxy_bypass {
+    // Still on, but the bypass list or the PAC switch moved: both change what
+    // the registry must say, so only re-asserting makes the edit real.
+    if after.system_proxy
+        && (before.proxy_bypass != after.proxy_bypass || before.pac_enabled != after.pac_enabled)
+    {
         return Takeover::Take;
     }
     Takeover::None
@@ -139,7 +141,18 @@ pub fn save_settings(
                 // The settings are already saved when this fails: the error
                 // tells the user why the machine state did not follow, instead
                 // of silently rolling their change back.
-                proxy.enable_with_bypass("127.0.0.1", port, &settings.proxy_bypass)?;
+                if settings.pac_enabled {
+                    // Rendered from the rules as they are saved now: a rule
+                    // edited in this same save is part of the new script.
+                    let script = crate::sysproxy::pac::render(
+                        port,
+                        &settings.proxy_bypass,
+                        &crate::sysproxy::pac::direct_patterns(&state.rules.read()),
+                    );
+                    proxy.enable_pac(port, &settings.proxy_bypass, &script)?;
+                } else {
+                    proxy.enable_with_bypass("127.0.0.1", port, &settings.proxy_bypass)?;
+                }
             }
             Takeover::Release => proxy.disable()?,
             Takeover::None => {}

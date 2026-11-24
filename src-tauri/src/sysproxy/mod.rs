@@ -21,6 +21,8 @@ use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
+pub mod pac;
+
 use crate::error::{AppError, AppResult};
 
 /// The three registry values that make up "the system proxy".
@@ -29,6 +31,13 @@ pub struct ProxyState {
     pub enabled: bool,
     pub server: String,
     pub bypass: String,
+    /// The `AutoConfigURL` value: a PAC script URL, or empty when none is set.
+    ///
+    /// Kept in the same struct as the other three because it is part of "the
+    /// system proxy" from the user's point of view, and because the snapshot has
+    /// to restore it together with them.
+    #[serde(default)]
+    pub auto_config: String,
 }
 
 impl ProxyState {
@@ -40,6 +49,7 @@ impl ProxyState {
             enabled: false,
             server: String::new(),
             bypass: String::new(),
+            auto_config: String::new(),
         }
     }
 }
@@ -55,6 +65,8 @@ pub struct SystemProxyStatus {
     pub server: String,
     /// A leftover snapshot means the previous run died while holding it.
     pub snapshot_present: bool,
+    /// The PAC script URL the machine is currently pointed at, if any.
+    pub pac_url: Option<String>,
 }
 
 /// The platform side effect. One implementation per OS.
@@ -72,14 +84,23 @@ pub const DEFAULT_BYPASS: &str = "localhost;127.*;10.*;172.16.*;172.17.*;172.18.
 pub struct ProxyGuard {
     backend: Box<dyn SystemProxy>,
     snapshot_path: PathBuf,
+    /// Where the generated PAC script is written. Unused unless
+    /// [`ProxyGuard::enable_pac`] is called, but owned here so the path the
+    /// registry points at and the path we write can never drift apart.
+    pac_path: PathBuf,
     active: Mutex<bool>,
 }
 
 impl ProxyGuard {
-    pub fn new(backend: Box<dyn SystemProxy>, snapshot_path: impl Into<PathBuf>) -> Self {
+    pub fn new(
+        backend: Box<dyn SystemProxy>,
+        snapshot_path: impl Into<PathBuf>,
+        pac_path: impl Into<PathBuf>,
+    ) -> Self {
         Self {
             backend,
             snapshot_path: snapshot_path.into(),
+            pac_path: pac_path.into(),
             active: Mutex::new(false),
         }
     }
@@ -96,6 +117,7 @@ impl ProxyGuard {
             enabled: current.enabled,
             server: current.server,
             snapshot_present: self.snapshot_path.exists(),
+            pac_url: Some(current.auto_config).filter(|url| !url.is_empty()),
         })
     }
 
@@ -114,11 +136,59 @@ impl ProxyGuard {
             enabled: true,
             server: format!("{host}:{port}"),
             bypass: bypass.to_string(),
+            // A fixed proxy and a PAC script are mutually exclusive: leaving a
+            // stale `AutoConfigURL` behind would keep the script in charge.
+            auto_config: String::new(),
         };
 
         if self.is_active() {
             // Already ours: re-assert the values, never re-snapshot (that would
             // overwrite the user's real configuration with our own).
+            self.backend.write(&next)?;
+            return Ok(());
+        }
+
+        let previous = self.backend.read()?;
+        self.save_snapshot(&previous)?;
+        self.backend.write(&next)?;
+        *self.active.lock() = true;
+        Ok(())
+    }
+
+    /// Point the system proxy at a PAC script instead of a fixed server.
+    ///
+    /// The script is written first: pointing the registry at a file that does
+    /// not exist yet would make every application fall back to "no proxy" until
+    /// the next write. `ProxyEnable` is turned off on purpose — with a script
+    /// configured, WinINet ignores the fixed server, and leaving the old port
+    /// armed would look like two proxies are active at once in the Windows
+    /// settings UI.
+    ///
+    /// The snapshot is taken before the first takeover only, exactly like
+    /// [`ProxyGuard::enable_with_bypass`]: re-enabling must never overwrite the
+    /// user's own configuration with our own values.
+    pub fn enable_pac(&self, port: u16, bypass: &str, script: &str) -> AppResult<()> {
+        // The script is rendered by the caller, the port is passed here: if the
+        // two ever disagree, the machine would be pointed at a script that
+        // forwards into a port nothing listens on. That is exactly the failure
+        // the "use the running kernel's port" rule exists to prevent, so it is
+        // refused instead of written.
+        let directive = format!("PROXY 127.0.0.1:{port}; DIRECT");
+        if !script.contains(&directive) {
+            return Err(AppError::InvalidInput(format!(
+                "PAC script does not forward to {directive}"
+            )));
+        }
+        let bypass = if bypass.trim().is_empty() { DEFAULT_BYPASS } else { bypass.trim() };
+        self.write_script(script)?;
+        let next = ProxyState {
+            enabled: false,
+            server: String::new(),
+            bypass: bypass.to_string(),
+            auto_config: pac::file_url(&self.pac_path),
+        };
+
+        if self.is_active() {
             self.backend.write(&next)?;
             return Ok(());
         }
@@ -168,6 +238,21 @@ impl ProxyGuard {
         self.remove_snapshot();
         *self.active.lock() = false;
         Ok(true)
+    }
+
+    /// Write the script where `AutoConfigURL` will point.
+    ///
+    /// A temp file plus a rename, because the browser may read the file at any
+    /// moment: a half-written script is a syntax error, and a PAC the browser
+    /// cannot parse means *no* proxy for everything.
+    fn write_script(&self, script: &str) -> AppResult<()> {
+        if let Some(parent) = self.pac_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let temp = self.pac_path.with_extension("pac.tmp");
+        std::fs::write(&temp, script)?;
+        std::fs::rename(&temp, &self.pac_path)?;
+        Ok(())
     }
 
     fn save_snapshot(&self, state: &ProxyState) -> AppResult<()> {
@@ -241,10 +326,14 @@ mod windows_impl {
             let bypass = key
                 .get_value::<String, _>("ProxyOverride")
                 .unwrap_or_default();
+            let auto_config = key
+                .get_value::<String, _>("AutoConfigURL")
+                .unwrap_or_default();
             Ok(ProxyState {
                 enabled,
                 server,
                 bypass,
+                auto_config,
             })
         }
 
@@ -263,6 +352,11 @@ mod windows_impl {
                 let _ = key.delete_value("ProxyOverride");
             } else {
                 key.set_value("ProxyOverride", &state.bypass).map_err(io)?;
+            }
+            if state.auto_config.is_empty() {
+                let _ = key.delete_value("AutoConfigURL");
+            } else {
+                key.set_value("AutoConfigURL", &state.auto_config).map_err(io)?;
             }
 
             notify_settings_changed();
@@ -350,6 +444,7 @@ mod tests {
             enabled: true,
             server: "10.0.0.1:8080".into(),
             bypass: "old".into(),
+            auto_config: String::new(),
         }
     }
 
@@ -358,7 +453,7 @@ mod tests {
         let before = custom();
         let fake = Arc::new(FakeProxy::with(before.clone()));
         let path = scratch("snapshot");
-        let guard = ProxyGuard::new(Box::new(fake.clone()), &path);
+        let guard = ProxyGuard::new(Box::new(fake.clone()), &path, scratch("pac"));
 
         guard.enable_with_bypass("127.0.0.1", 7890, DEFAULT_BYPASS).unwrap();
 
@@ -375,7 +470,7 @@ mod tests {
     fn a_custom_bypass_list_is_written_as_given() {
         let fake = Arc::new(FakeProxy::with(custom()));
         let path = scratch("bypass");
-        let guard = ProxyGuard::new(Box::new(fake.clone()), &path);
+        let guard = ProxyGuard::new(Box::new(fake.clone()), &path, scratch("pac"));
 
         guard
             .enable_with_bypass("127.0.0.1", 7890, "localhost;*.corp.example")
@@ -392,7 +487,7 @@ mod tests {
         // tunnel and break every local service.
         let fake = Arc::new(FakeProxy::with(custom()));
         let path = scratch("bypass-empty");
-        let guard = ProxyGuard::new(Box::new(fake.clone()), &path);
+        let guard = ProxyGuard::new(Box::new(fake.clone()), &path, scratch("pac"));
 
         guard.enable_with_bypass("127.0.0.1", 7890, "   ").unwrap();
 
@@ -406,7 +501,7 @@ mod tests {
         let before = custom();
         let fake = Arc::new(FakeProxy::with(before.clone()));
         let path = scratch("restore");
-        let guard = ProxyGuard::new(Box::new(fake.clone()), &path);
+        let guard = ProxyGuard::new(Box::new(fake.clone()), &path, scratch("pac"));
 
         guard.enable_with_bypass("127.0.0.1", 7890, DEFAULT_BYPASS).unwrap();
         guard.disable().unwrap();
@@ -423,7 +518,7 @@ mod tests {
         let fake = Arc::new(FakeProxy::with(before.clone()));
         let path = scratch("no-snapshot");
         let _ = std::fs::remove_file(&path);
-        let guard = ProxyGuard::new(Box::new(fake.clone()), &path);
+        let guard = ProxyGuard::new(Box::new(fake.clone()), &path, scratch("pac"));
 
         guard.disable().unwrap();
 
@@ -438,7 +533,7 @@ mod tests {
         let before = custom();
         let fake = Arc::new(FakeProxy::with(before.clone()));
         let path = scratch("release-active");
-        let guard = ProxyGuard::new(Box::new(fake.clone()), &path);
+        let guard = ProxyGuard::new(Box::new(fake.clone()), &path, scratch("pac"));
 
         guard.enable_with_bypass("127.0.0.1", 7890, DEFAULT_BYPASS).unwrap();
         assert!(guard.is_active());
@@ -456,7 +551,7 @@ mod tests {
         let fake = Arc::new(FakeProxy::with(custom()));
         let path = scratch("release-inactive");
         let _ = std::fs::remove_file(&path);
-        let guard = ProxyGuard::new(Box::new(fake.clone()), &path);
+        let guard = ProxyGuard::new(Box::new(fake.clone()), &path, scratch("pac"));
         let writes_before = fake.writes().len();
 
         assert!(!guard.release_if_active().unwrap());
@@ -471,11 +566,12 @@ mod tests {
             enabled: true,
             server: "127.0.0.1:7890".into(),
             bypass: DEFAULT_BYPASS.into(),
+            auto_config: String::new(),
         }));
         let path = scratch("recover");
         std::fs::write(&path, serde_json::to_string(&before).unwrap()).unwrap();
 
-        let guard = ProxyGuard::new(Box::new(fake.clone()), &path);
+        let guard = ProxyGuard::new(Box::new(fake.clone()), &path, scratch("pac"));
         assert!(guard.recover().unwrap());
 
         assert_eq!(*fake.state.lock(), before);
@@ -487,7 +583,7 @@ mod tests {
         let fake = Arc::new(FakeProxy::with(ProxyState::off()));
         let path = scratch("nothing");
         let _ = std::fs::remove_file(&path);
-        let guard = ProxyGuard::new(Box::new(fake.clone()), &path);
+        let guard = ProxyGuard::new(Box::new(fake.clone()), &path, scratch("pac"));
 
         assert!(!guard.recover().unwrap());
         assert!(fake.writes().is_empty());
@@ -498,7 +594,7 @@ mod tests {
         let before = custom();
         let fake = Arc::new(FakeProxy::with(before.clone()));
         let path = scratch("twice");
-        let guard = ProxyGuard::new(Box::new(fake.clone()), &path);
+        let guard = ProxyGuard::new(Box::new(fake.clone()), &path, scratch("pac"));
 
         guard.enable_with_bypass("127.0.0.1", 7890, DEFAULT_BYPASS).unwrap();
         guard.enable_with_bypass("127.0.0.1", 7891, DEFAULT_BYPASS).unwrap();
@@ -519,7 +615,7 @@ mod tests {
         let fake = Arc::new(FakeProxy::with(ProxyState::off()));
         let path = scratch("status");
         let _ = std::fs::remove_file(&path);
-        let guard = ProxyGuard::new(Box::new(fake.clone()), &path);
+        let guard = ProxyGuard::new(Box::new(fake.clone()), &path, scratch("pac"));
 
         let before = guard.status().unwrap();
         assert!(!before.active);
@@ -534,5 +630,113 @@ mod tests {
         assert!(after.snapshot_present);
         std::mem::forget(guard);
         let _ = std::fs::remove_file(&path);
+    }
+
+    fn scratch_pac(name: &str) -> PathBuf {
+        scratch(name).with_extension("pac")
+    }
+
+    #[test]
+    fn enabling_pac_writes_the_script_before_pointing_the_registry_at_it() {
+        let before = custom();
+        let fake = Arc::new(FakeProxy::with(before.clone()));
+        let path = scratch("pac-snapshot");
+        let pac = scratch_pac("pac-script");
+        let _ = std::fs::remove_file(&pac);
+        let guard = ProxyGuard::new(Box::new(fake.clone()), &path, &pac);
+
+        let rendered = pac::render(7890, "localhost;*.corp", &[]);
+        guard.enable_pac(7890, "localhost;*.corp", &rendered).unwrap();
+
+        let script = std::fs::read_to_string(&pac).unwrap();
+        assert_eq!(script, rendered);
+        let state = fake.state.lock().clone();
+        assert!(!state.enabled, "a PAC takeover must not leave ProxyEnable on");
+        assert!(state.server.is_empty());
+        assert_eq!(state.bypass, "localhost;*.corp");
+        assert_eq!(state.auto_config, pac::file_url(&pac));
+        assert!(guard.is_active());
+        std::mem::forget(guard);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&pac);
+    }
+
+    #[test]
+    fn a_pac_takeover_is_restored_like_a_server_takeover() {
+        let before = custom();
+        let fake = Arc::new(FakeProxy::with(before.clone()));
+        let path = scratch("pac-restore");
+        let pac = scratch_pac("pac-restore-script");
+        let guard = ProxyGuard::new(Box::new(fake.clone()), &path, &pac);
+
+        guard.enable_pac(7890, DEFAULT_BYPASS, &pac::render(7890, DEFAULT_BYPASS, &[])).unwrap();
+        guard.disable().unwrap();
+
+        assert_eq!(*fake.state.lock(), before, "the script URL must be cleared too");
+        assert!(!guard.is_active());
+        assert!(!path.exists());
+        let _ = std::fs::remove_file(&pac);
+    }
+
+    #[test]
+    fn switching_between_pac_and_a_fixed_server_never_re_snapshots() {
+        // The snapshot has to stay the pre-X-Matrix state across every later
+        // rewrite, or "restore" would restore values we wrote ourselves.
+        let before = custom();
+        let fake = Arc::new(FakeProxy::with(before.clone()));
+        let path = scratch("pac-switch");
+        let pac = scratch_pac("pac-switch-script");
+        let guard = ProxyGuard::new(Box::new(fake.clone()), &path, &pac);
+
+        guard.enable_with_bypass("127.0.0.1", 7890, DEFAULT_BYPASS).unwrap();
+        guard.enable_pac(7890, DEFAULT_BYPASS, &pac::render(7890, DEFAULT_BYPASS, &[])).unwrap();
+        guard.enable_with_bypass("127.0.0.1", 7891, DEFAULT_BYPASS).unwrap();
+
+        let snapshot: ProxyState =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(snapshot, before);
+        assert!(fake.state.lock().auto_config.is_empty());
+        std::mem::forget(guard);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&pac);
+    }
+
+    #[test]
+    fn a_script_rendered_for_another_port_is_refused() {
+        // A mismatch here would point Windows at a script forwarding into a port
+        // nothing listens on, and the UI would still claim the proxy is up.
+        let fake = Arc::new(FakeProxy::with(custom()));
+        let path = scratch("pac-port");
+        let pac = scratch_pac("pac-port-script");
+        let guard = ProxyGuard::new(Box::new(fake.clone()), &path, &pac);
+
+        let error = guard
+            .enable_pac(7890, DEFAULT_BYPASS, &pac::render(1080, DEFAULT_BYPASS, &[]))
+            .unwrap_err();
+
+        assert!(matches!(error, AppError::InvalidInput(_)), "{error:?}");
+        assert!(!guard.is_active());
+        assert!(fake.writes().is_empty(), "nothing may be written to the registry");
+        assert!(!pac.exists(), "the script must not be written either");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn status_reports_the_pac_url_once_a_script_is_active() {
+        let fake = Arc::new(FakeProxy::with(ProxyState::off()));
+        let path = scratch("pac-status");
+        let pac = scratch_pac("pac-status-script");
+        let guard = ProxyGuard::new(Box::new(fake.clone()), &path, &pac);
+
+        assert_eq!(guard.status().unwrap().pac_url, None);
+
+        guard.enable_pac(7890, DEFAULT_BYPASS, &pac::render(7890, DEFAULT_BYPASS, &[])).unwrap();
+        assert_eq!(
+            guard.status().unwrap().pac_url.as_deref(),
+            Some(pac::file_url(&pac).as_str())
+        );
+        std::mem::forget(guard);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&pac);
     }
 }
