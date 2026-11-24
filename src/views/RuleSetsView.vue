@@ -69,6 +69,12 @@ const note = ref<string | null>(null)
 const geo = ref<GeoAssetStatus_Serialize[]>([])
 const geoBusy = ref(false)
 const geoNote = ref<string | null>(null)
+/**
+ * The geo data files are read once, at kernel start. Replacing them under a
+ * running kernel therefore changes nothing until it restarts — the same gap as
+ * saving a rule, so it gets the same notice.
+ */
+const geoStale = ref(false)
 
 const isEmpty = computed(() => store.loaded && store.items.length === 0)
 
@@ -213,8 +219,9 @@ async function updateGeo(): Promise<void> {
   geoBusy.value = true
   geoNote.value = null
   try {
-    const lines = await api.updateGeoAssets()
-    geoNote.value = t('rs.geo.done') + (lines.length ? ` · ${lines.join(' · ')}` : '')
+    const result = await api.updateGeoAssets()
+    geoNote.value = t('rs.geo.done') + (result.lines.length ? ` · ${result.lines.join(' · ')}` : '')
+    if (result.restart_needed) geoStale.value = true
   } catch (cause) {
     geoNote.value = t('rs.geo.failed', { reason: describeError(cause) })
   } finally {
@@ -260,6 +267,13 @@ onMounted(() => {
         </button>
       </div>
       <p v-if="geoNote" class="notice">{{ geoNote }}</p>
+      <StaleConfig
+        :show="geoStale"
+        :message="t('rs.geo.stale')"
+        :apply-label="t('rs.geo.staleApply')"
+        @applied="geoStale = false"
+        @failed="geoStale = false"
+      />
       <ul class="geo-list">
         <li v-for="asset in geo" :key="asset.name">
           <span class="geo-name">{{ asset.name }}</span>

@@ -548,6 +548,8 @@ export const zh: Record<string, string> = {
   "rs.geo.busy": "正在下载…",
   "rs.geo.done": "geo 数据已更新",
   "rs.geo.failed": "更新失败：{reason}",
+  "rs.geo.stale": "geo 数据已更新，但内核还在用旧的一份",
+  "rs.geo.staleApply": "重载 geo 并重启内核",
   "rs.interval.12h": "每 12 小时",
   "rs.interval.6h": "每 6 小时",
   "rs.interval.custom": "每 {count} 分钟",

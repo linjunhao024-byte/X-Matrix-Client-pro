@@ -548,6 +548,8 @@ export const tw: Record<string, string> = {
   "rs.geo.busy": "正在下載…",
   "rs.geo.done": "geo 數據已更新",
   "rs.geo.failed": "更新失敗：{reason}",
+  "rs.geo.stale": "geo 數據已更新，但內核還在用舊的一份",
+  "rs.geo.staleApply": "重載 geo 並重啟內核",
   "rs.interval.12h": "每 12 小時",
   "rs.interval.6h": "每 6 小時",
   "rs.interval.custom": "每 {count} 分鐘",

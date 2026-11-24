@@ -1185,3 +1185,37 @@ bash /d/tmp/shots/mode-accept.sh
 4. **配置文件名是 `sing-box.json`，不是 `singbox.json`。** 验收脚本里读错名字，前面几轮一直报 `config probe url: missing`，看起来像内核没写配置。
 
 **一句实话**：这条只证明「保存 ≠ 生效，重启才生效，提示说得清楚」；`8,175` 字节的 `geosite-category-ads-all.srs` 证明本地规则集是真的文件，但**规则命中与否**没有在这里验（那要靠流量去撞一条 ads 域名）。
+
+## 46. geo 数据换了，跑着的内核还得重启才认（2026-11-24，云电脑 cloudpc-test）
+
+**要证的事**：`geoip.dat` / `geosite.dat` 是内核**启动时**读一次的文件。用户在「规则集」页点「更新 geo 数据」时，如果内核正在跑，它手里那份还是旧的；软件必须把这件事说出来，并且给的按钮真能把内核换成新文件。
+
+**验法**：`bash /d/tmp/shots/geostale-accept.sh`
+
+**判据与结果**（全部通过）：
+
+| 判据 | 观察到的证据 |
+|---|---|
+| 更新前有一个内核在跑 | `kernels: xray#9120` |
+| 规则集页能打开 | `nav rulesets: True`，按钮 `浅色 \| 收起 \| 刷新 \| 新建规则集 \| 更新 geo 数据 \| 新建规则集` |
+| 下载真的换了文件 | `geo note: geo 数据已更新 · geoip.dat 已更新（15.7 MB） · geosite.dat 已更新（11.0 MB）` |
+| 说了实话：内核还在用旧的 | `notice present: True`，文字 `geo 数据已更新，但内核还在用旧的一份` |
+| 按钮就在那儿 | `apply button: 重载 geo 并重启内核` |
+| 按钮真的重启了内核 | `kernels after restart: xray#7376 (was xray#9120)` |
+| 重启后提示自己消失 | `notice after restart: False` |
+| 收尾不留内核与代理 | `kernels after stop: none`、`proxy after stop: ProxyEnable=0` |
+| 总判 | `VERDICT listed=True restarted=True cleared=True` |
+
+app stderr 同步佐证：托盘行从 `模式 rule · 内核运行中` 重新出现一次（重启），停止后变成 `内核未运行`。
+
+**三个设计理由**：
+- **让后端自己报告「换了几个」，不解析自己的文案。** `GeoUpdate` 带 `updated` / `restart_needed`，前端不去猜「哪一行算成功」；`updated` 只在 `installed = true` 处加一，文案怎么写都不影响判断。
+- **只有真换了、且内核在跑才提示。** `stale_data_needs_restart(updated, running)`（有单测）——文件本来就是最新时点一次不该冒出「重启」，没内核跑的时候也不需要重启。
+- **提示不另起一套。** 复用 `StaleConfig`，和端口/日志级别/局域网/DNS/多路复用/分片/代理模式/测试地址同一种句式、同一个「重启后按 `started_at_ms` 自清」逻辑。
+
+**三个坑**：
+1. **geo 数据不小，验收要等。** 两份加起来约 26 MB，云电脑上约 26 秒；验收脚本按 5 秒一次轮询、最多 6 分钟，别按固定 sleep 写。
+2. **提示文字和「已更新」是两条独立的文本元素。** 更新完成的那一行先出现，提示条随后才渲染；脚本必须等 `内核还在用旧` 出现再判，不能只看第一行。
+3. **`store.json` 里没有 `system_proxy` 键时 `Store-Get` 返回空串。** 那是「没这个键」，不是「读失败」——判据里别把空串当异常。
+
+**一句实话**：这里证明的是「换文件 → 说出来 → 重启后内核拿到新文件」这条链路；**新规则有没有命中流量**没有在这条里验（那要靠撞一条只在新 geo 数据里存在的域名）。

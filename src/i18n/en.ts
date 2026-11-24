@@ -548,6 +548,8 @@ export const en: Record<string, string> = {
   "rs.geo.busy": "Downloading…",
   "rs.geo.done": "Geo data updated",
   "rs.geo.failed": "Update failed: {reason}",
+  "rs.geo.stale": "Geo data updated, but the kernel is still using the old files",
+  "rs.geo.staleApply": "Reload geo and restart the kernel",
   "rs.interval.12h": "Every 12 hours",
   "rs.interval.6h": "Every 6 hours",
   "rs.interval.custom": "Every {count} minutes",

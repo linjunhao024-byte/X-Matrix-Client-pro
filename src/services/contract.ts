@@ -25,6 +25,7 @@ import type {
   Language,
   LatencyProbe_Serialize,
   GeoAssetStatus_Serialize,
+  GeoUpdate,
   LogDelta,
   Node_Deserialize,
   Node_Serialize,
@@ -126,8 +127,12 @@ export const api = {
    * on disk. A missing file is reported, not thrown.
    */
   geoAssets: (): Promise<GeoAssetStatus_Serialize[]> => commands.geoAssets(),
-  /** Download both files; one line per file, failures included. */
-  updateGeoAssets: (): Promise<string[]> => unwrap(commands.updateGeoAssets()),
+  /**
+   * Download both files. `lines` reports one line per file (failures included),
+   * `restartNeeded` says the running kernel still holds the old copies — the
+   * data files are read once, when a kernel starts.
+   */
+  updateGeoAssets: (): Promise<GeoUpdate> => unwrap(commands.updateGeoAssets()),
 
   /** Every remembered latency result, keyed by node id; survives a restart.
    *  A read that cannot fail: the backend hands back its own map, so this is

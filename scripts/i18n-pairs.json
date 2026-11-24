@@ -3030,6 +3030,18 @@
     "更新失敗：{reason}"
   ],
   [
+    "rs.geo.stale",
+    "geo 数据已更新，但内核还在用旧的一份",
+    "Geo data updated, but the kernel is still using the old files",
+    "geo 數據已更新，但內核還在用舊的一份"
+  ],
+  [
+    "rs.geo.staleApply",
+    "重载 geo 并重启内核",
+    "Reload geo and restart the kernel",
+    "重載 geo 並重啟內核"
+  ],
+  [
     "rs.interval.12h",
     "每 12 小时",
     "Every 12 hours",

@@ -60,15 +60,34 @@ pub fn geo_assets(runtime: State<'_, Arc<EngineRuntime>>) -> Vec<geo::GeoAssetSt
 // each attempt's reason in address order so the UI can show something a user
 // can act on. (Kept as a plain comment: specta copies `///` text into the
 // generated IPC bindings, and changing a sentence there is not this task's.)
+/// What a geo update did, and whether a running kernel still has to be told.
+///
+/// The data files are read once, when a kernel starts: replacing them under a
+/// live kernel changes nothing until it restarts. `updated` therefore decides
+/// whether the page has to say "kernel is still using the old data".
+#[derive(Debug, Clone, serde::Serialize, specta::Type)]
+pub struct GeoUpdate {
+    /// One line per asset, in `geo::ASSET_NAMES` order, success or failure.
+    pub lines: Vec<String>,
+    /// How many files were actually replaced on disk.
+    #[specta(type = f64)]
+    pub updated: u32,
+    /// True when at least one file changed while a kernel was running.
+    pub restart_needed: bool,
+}
+
 #[tauri::command]
 #[specta::specta]
-pub fn update_geo_assets(runtime: State<'_, Arc<EngineRuntime>>) -> AppResult<Vec<String>> {
+pub fn update_geo_assets(
+    runtime: State<'_, Arc<EngineRuntime>>,
+) -> AppResult<GeoUpdate> {
     // Geo data is a few megabytes; the ordinary 10 s fetch timeout would cut
     // off a slow but healthy link.
     const GEO_TIMEOUT: Duration = Duration::from_secs(180);
     let dir = geo::asset_dir(runtime.engines_dir());
     let mut lines = Vec::with_capacity(geo::ASSET_NAMES.len());
     let mut failures = Vec::new();
+    let mut updated = 0u32;
 
     for name in geo::ASSET_NAMES {
         let mut attempts = Vec::new();
@@ -84,6 +103,7 @@ pub fn update_geo_assets(runtime: State<'_, Arc<EngineRuntime>>) -> AppResult<Ve
                                 geo::human_bytes(body.len() as u64)
                             ));
                             installed = true;
+                            updated += 1;
                             break;
                         }
                         // The bytes arrived but the disk refused them; the next
@@ -106,7 +126,12 @@ pub fn update_geo_assets(runtime: State<'_, Arc<EngineRuntime>>) -> AppResult<Ve
     if failures.len() == geo::ASSET_NAMES.len() {
         return Err(AppError::Engine(failures.join("；")));
     }
-    Ok(lines)
+    let restart_needed = stale_data_needs_restart(updated, runtime.status().running);
+    Ok(GeoUpdate {
+        lines,
+        updated,
+        restart_needed,
+    })
 }
 
 /// The one line shown when every source for `name` failed.
@@ -114,6 +139,14 @@ pub fn update_geo_assets(runtime: State<'_, Arc<EngineRuntime>>) -> AppResult<Ve
 /// Each attempt contributes its own short reason ("HTTP 403", a connection
 /// error), joined in the same order as the candidate list, so the reader can
 /// tell which mirrors were tried and how each one broke.
+/// Does a finished geo update leave a running kernel with stale data?
+///
+/// Only if a file was actually replaced *and* a kernel is running: nothing to
+/// reload when nothing changed, and no kernel to tell when none runs.
+fn stale_data_needs_restart(updated: u32, running: bool) -> bool {
+    updated > 0 && running
+}
+
 fn failures_line(name: &str, attempts: &[String]) -> String {
     format!("{name} 下载失败：{}", attempts.join("；"))
 }
@@ -314,6 +347,15 @@ fn record_error(state: &AppState, id: &str, message: &str) {
 
 #[cfg(test)]
 mod tests {
+    /// A running kernel only has to be told when a file really changed.
+    #[test]
+    fn only_a_real_change_needs_a_restart() {
+        assert!(stale_data_needs_restart(1, true));
+        assert!(stale_data_needs_restart(2, true));
+        assert!(!stale_data_needs_restart(0, true), "nothing changed, nothing to reload");
+        assert!(!stale_data_needs_restart(2, false), "no kernel, nothing to tell");
+    }
+
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use super::*;

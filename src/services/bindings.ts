@@ -295,14 +295,7 @@ export const commands = {
 	 *  a geo rule looks broken, and the page has to be able to say so.
 	 */
 	geoAssets: () => __TAURI_INVOKE<GeoAssetStatus_Serialize[]>("geo_assets"),
-	/**
-	 *  Download both `geoip.dat` and `geosite.dat`, one line per file.
-	 * 
-	 *  A kernel without these files still starts, so nothing else in the app would
-	 *  notice: the rules just stop matching. Downloads go to a temp file and are
-	 *  renamed into place, so an interrupted update leaves the old data usable.
-	 */
-	updateGeoAssets: () => typedError<string[], AppError>(__TAURI_INVOKE("update_geo_assets")),
+	updateGeoAssets: () => typedError<GeoUpdate, AppError>(__TAURI_INVOKE("update_geo_assets")),
 	/**  What the system proxy looks like right now, and whether we are holding it. */
 	systemProxyStatus: () => typedError<SystemProxyStatus, AppError>(__TAURI_INVOKE("system_proxy_status")),
 	/**
@@ -603,6 +596,27 @@ export type GeoAssetStatus_Serialize = {
 	bytes: number | null,
 	/**  Seconds since the epoch, or `None` when the file is missing. */
 	modified: number | null,
+};
+
+/**
+ *  Download both `geoip.dat` and `geosite.dat`, one line per file.
+ * 
+ *  A kernel without these files still starts, so nothing else in the app would
+ *  notice: the rules just stop matching. Downloads go to a temp file and are
+ *  renamed into place, so an interrupted update leaves the old data usable.
+ *  What a geo update did, and whether a running kernel still has to be told.
+ * 
+ *  The data files are read once, when a kernel starts: replacing them under a
+ *  live kernel changes nothing until it restarts. `updated` therefore decides
+ *  whether the page has to say "kernel is still using the old data".
+ */
+export type GeoUpdate = {
+	/**  One line per asset, in `geo::ASSET_NAMES` order, success or failure. */
+	lines: string[],
+	/**  How many files were actually replaced on disk. */
+	updated: number | null,
+	/**  True when at least one file changed while a kernel was running. */
+	restart_needed: boolean,
 };
 
 export type GroupKind = 
