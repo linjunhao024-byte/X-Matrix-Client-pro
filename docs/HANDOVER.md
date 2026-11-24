@@ -3,6 +3,8 @@
 > 写于 2026-11-23 11:20（Asia/Shanghai），交接时的真实状态。工作区：`D:\GitHub-Warehouse\X-Matrix-Client-Pro`
 > 目标（用户原话，长期有效）：**功能与前端设计追平 V2RayN / Clash**，做得比它们更干净。
 
+> **刚接手这个项目？先读 `docs/HANDOFF-BRIEF.md`（一页纸：现状、四条命令、下一个任务、坑）。** 本文是全书。
+
 ---
 
 ## 0. 三句话现状
@@ -15,15 +17,15 @@
 
 | 项 | 值 |
 |---|---|
-| 代码 HEAD | `ca53381`「feat(rulesets): say when the kernel is still running on the old geo data」（= 最后一个**已提交**的功能，含 §46） |
-| 未提交 | 无（§46 的改动已提交为 `ca53381`） |
+| 代码 HEAD | `git log -1`（归属 docs 的收尾提交）；最后一个**功能**提交是 `ca53381`「feat(rulesets): say when the kernel is still running on the old geo data」，含 §46 |
+| 未提交 | 无。§47 的修复已撤回成补丁 `D:\tmp\handover\47-subscription-refresh-id.patch`（35 行，未构建未验收，见 §0.3） |
 | 上一版未提交清单（留档） | `src-tauri/src/domain/settings.rs`、`src-tauri/src/engine/{mod,render,runtime,xray}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§39 分片）；再上一版：`src-tauri/src/engine/{mod,runtime}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§37 统一提示）；再上一版：`src-tauri/src/commands/settings.rs`、`src-tauri/src/commands/sysproxy.rs`、`src/stores/sysproxy.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`、`docs/ACCEPTANCE.md`（§36 系统代理即时生效） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库（HEAD 上这一条） |
 | IPC 命令 | **81**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
 | Rust 单测 | **377 passed**（`ARCHITECTURE.md:278` 已同步） |
 | 前端检查 | `npm run check` 全绿：vue-tsc / architecture / contract / vitest **98**（10 文件） |
 | i18n | **758** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
-| 桌面产物 | 见 §1 表格（每次构建后刷新；当前 release 构建含 N12 + GEO + 测速落盘 + 退出通知） |
+| 桌面产物 | 桌面上的旧副本**已不存在**；唯一产物是 `src-tauri/target/release/x-matrix.exe`（10,447,872 B @18:23，含 §21–§46 全部改动） |
 | 验收文档 | `docs/ACCEPTANCE.md` §0–§46（§7 历史空缺，编号不连续但内容完整） |
 | 云电脑 | 干净：`ProxyEnable=0x0`、无 X-Matrix/sing-box/xray 进程、无 `xm*` 计划任务 |
 
@@ -36,7 +38,27 @@
 - [x] 5. 提交（`fix(tray)` / `feat(update)` / `feat(geo,nodes)` / `feat(engine)` 各一条）
 - [x] 6. `FEED_URL` 已指向真实仓库 `linjunhao024-byte/X-Matrix-Client-pro`，`v0.1.0` 已发布并带 `X-Matrix.exe` 资产
 - [x] 7. 计数已同步：81 命令 / 377 单测 / 98 vitest / 758 i18n 键 × 3
-- [ ] 8. `bash /d/tmp/shots/cleanup.sh` 收尾云电脑
+- [x] 8. `bash /d/tmp/shots/cleanup.sh` 收尾云电脑（2026-11-24 23:55 再跑一次：`ProxyEnable 0x0`、无 `xm*` 任务）
+- [ ] 9. §47 订阅刷新后前端握着死 ID：按 §0.3 打补丁 → 构建 → 云电脑验收 → 写 §47 → 提交
+
+### 0.2 这个窗口（2026-11-24）新完成的六件事
+
+按验收节顺序，细节都在 `docs/ACCEPTANCE.md`：
+
+1. **§41 可录制的全局快捷键**：两个组合键存成 `settings.hotkey_toggle` / `hotkey_window` 的纯文本，录制按钮写值，保存即重注册（`hotkeys::apply` 往消息线程投 `WM_APP_REREGISTER`）。顺带修掉一个真死锁：`WM_APP_REREGISTER` 分支持着 `BINDINGS` 锁又去 `register_all` 里再锁同一把 `std::sync::Mutex`，结果新键永不生效、旧键也被注销。
+2. **§42 第三种界面语言（繁體中文）**：`scripts/i18n-pairs.json` 变成四格 `[key, zh, en, tw]`，繁体外加台湾用词表由 `zhconv` 机械转换；`Language::ZhTw` 用 `#[serde(rename = "zh-tw")]`（`rename_all = "lowercase"` 会拼成 `zhtw`）。同时补了一条真正的协调缺口：语言选择器以前只写 `localStorage`，**托盘菜单和退出通知根本不跟着换**；现在走窄命令 `set_language`（写设置 + `refresh_tray`）。
+3. **§43 无内核时的真实延迟**：`engine/temp.rs` 起一个一次性内核（两个空闲端口、单节点 `global` 配置、`Drop` 保证杀掉删净），测完即走；「拒绝」与「测不出」分开记，失败不覆盖上一次的好数字。
+4. **§44 换代理模式要说一声**：`EngineStatus.mode` 由内核自报，设置页把它并进统一提示；顺手修了「重启按钮点了没反应」——`engine.reapply()` 以前从设置镜像读 `last_node_id`，那个 id 可能已被删除/替换，现在优先用内核自报的 `status().node_id`。
+5. **§45 测试地址提示 + sing-box 启动失败的真凶**：发现我们一直给 sing-box 写 `"geosite"`/`"geoip"`，而 sing-box ≥1.12 已删除这两个字段 —— **只要规则表里有 geo 规则（默认就有），切到 sing-box 必然启动失败**，界面只报「8 秒内没打开控制端口 9090」。最终方案：应用启动前自己下 `.srs`（`geo::rule_set_candidates` + `runtime::prepare_geo_rule_sets`，落到 `rule-sets/geo-srs/`），渲染只指本地文件；`.srs` 必须二进制写（`std::fs::write` + rename），用 `write_atomic` 走 `String::from_utf8_lossy` 会被内核判 `flate: corrupt input before offset 10`。
+6. **§46 geo 数据换了、跑着的内核还在用旧的**：`update_geo_assets` 改成返回 `GeoUpdate { lines, updated, restart_needed }`，`updated` 在自己真正装了文件的地方计数（不解析文案），前端 `RuleSetsView.vue` 用 `StaleConfig` 说「geo 数据已更新，但内核还在用旧的一份」并一键重载重启。
+
+### 0.3 唯一未完成的活：§47 订阅刷新后，前端握着一个已经不存在的节点 ID
+
+- **现象**：内核在跑时刷新订阅 → 后端按指纹「采纳」了同一个服务器的新 ID（内核不断，§35），但前端 `src/views/SubscriptionsView.vue` 的 `kernelStopped()` 在「内核还活着」时提前 `return false`，**没有重读设置**。于是侧栏/首页的设置镜像里还是旧 ID：首页节点下拉框选不中，「启动」时会报「节点 … 已经不在了」，而那个节点明明就在屏幕上。
+- **修复（已写好，未提交）**：`kernelStopped()` 先 `await engine.refreshStatus()`，再**无条件** `await settings.load(true)`，最后才判断内核是否真的停了；函数上的 docblock 也要跟着改成「后端要么采纳新 ID（内核继续跑），要么清空并停内核」。
+- **补丁**：`D:\tmp\handover\47-subscription-refresh-id.patch`（`git apply` 即可，35 行，只改这一个文件）。
+- **验收方法（脚本已有九成）**：复用 `D:\tmp\shots\adopt-accept.sh`（假订阅源 `sub-server-b.ps1` 顺序反转、store 里 `subscription_via_proxy=false`、把 `last_node_id` 钉到订阅节点），在现有正文「`active id after`」之后追加：停止 → 首页「启动」→ 断言起了新内核（`kernels` 非空）且页面没有「已经不在了」字样。改前应能复现失败，改后应通过。
+- **完成标准**：`bash` 跑通 → 写 `docs/ACCEPTANCE.md` §47（判据表 + 3 条设计理由 + 坑）→ 计数同步（命令仍 81，Rust 仍 377，vitest 98，i18n 758）→ 提交并 push（`https_proxy=http://127.0.0.1:10808 git push origin main`）→ `bash /d/tmp/shots/cleanup.sh`。
 
 ---
 
@@ -52,7 +74,7 @@
 | 后端测试 | `cd src-tauri && cargo test --lib` |
 | 契约重生成 | `npm run gen:contract`（改了命令签名就必须跑，`check:contract` 会拦） |
 | 桌面产物 | `/c/Users/83611/Desktop/X-Matrix.exe`、`/c/Users/83611/Desktop/X-Matrix_0.1.0_x64-setup.exe` |
-| 当前桌面产物版本 | exe **9,823,232 B @10:32**、NSIS **3,181,050 B @10:32**（= N9 那一次构建，**不含 N12**） |
+| 当前构建产物 | `src-tauri/target/release/x-matrix.exe` **10,447,872 B @2026-11-24 18:23**（含 §21–§46）；桌面副本已不在，需要时自己 `cp` 过去 |
 
 **计数基线（改动后记得同步文档）**：命令 **81**、`cargo test --lib` **377**、vitest **98**（10 个文件）、i18n **758** 键。
 > `README.md:81` 与 `ARCHITECTURE.md:277-278` 已同步为 81 条命令 / 377 项测试。
@@ -233,6 +255,7 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 | ~~H5(b) 无内核时的逐节点真实延迟~~ | 已完成：`engine/temp.rs` 起一次性内核 + `node_delay_offline`，拒绝与失败分开记（§43） | — | 当初列为「风险高，先不做」，实际只需一条受控的临时生命周期 |
 | ~~N5 出口 IP~~ | 已完成：首页卡片 + 三主机退让 + 失败清空旧值（§26） | — | 见下方「已完成」说明 |
 | ~~N7 订阅下次刷新倒计时~~ | 已完成：每行「刚刚 / 还有 N 小时」，30 秒共用计时器（§27） | — | 见「已完成」说明 |
+| ~~§47 订阅刷新后前端握着死 ID~~ | 见 §0.3：补丁 `D:\tmp\handover\47-subscription-refresh-id.patch` | 小（1 文件 + 1 轮验收） | 唯一已知的真实缺陷，优先做 |
 | 设计审计残余 | `D:\tmp\design-audit-2.md` | — | 二审 15 条已全部处理完；这份文件可以当历史读 |
 
 明确**不做**的（`D:\tmp\parity-gaps.md` §2.3，S1–S11）：TUN 模式、PAC 脚本、内核自动更新与下载、开机直接接管系统代理等。
