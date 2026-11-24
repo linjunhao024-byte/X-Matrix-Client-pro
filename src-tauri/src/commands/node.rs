@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use tauri::{AppHandle, State};
 
+use super::engine::{run_blocking, stop_if_running_node, Proxy, Runtime};
 use crate::domain::{Node, NodeId, NodeProbe, ProbeKind};
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
@@ -142,14 +143,34 @@ pub fn move_node(
 
 #[tauri::command]
 #[specta::specta]
-pub fn delete_node(
+pub async fn delete_node(
     app: AppHandle,
     state: State<'_, AppState>,
+    runtime: Runtime<'_>,
+    proxy: Proxy<'_>,
     id: NodeId,
 ) -> AppResult<Vec<Node>> {
-    let snapshot = apply_delete(&state, std::slice::from_ref(&id))?;
+    let gone = vec![id];
+    let snapshot = apply_delete(&state, &gone)?;
+    stop_after_delete(runtime, proxy, gone).await?;
     crate::refresh_tray(&app);
     Ok(snapshot)
+}
+
+/// Stop the kernel when the node it runs was among those just removed.
+///
+/// Deleting the node under a running kernel would otherwise leave a kernel that
+/// keeps proxying through something the UI can no longer render, plus a
+/// `last_node_id` pointing at it. The stop itself lives in
+/// [`stop_if_running_node`], which also hands the system proxy back.
+async fn stop_after_delete(
+    runtime: Runtime<'_>,
+    proxy: Proxy<'_>,
+    gone: Vec<NodeId>,
+) -> AppResult<bool> {
+    let runtime = Arc::clone(runtime.inner());
+    let proxy = Arc::clone(proxy.inner());
+    run_blocking(move || stop_if_running_node(&runtime, &proxy, &gone)).await
 }
 
 /// Delete nodes and everything that points at them.
@@ -179,6 +200,19 @@ pub fn apply_delete(state: &AppState, ids: &[NodeId]) -> AppResult<Vec<Node>> {
         }
         nodes.clone()
     };
+
+    // Settings and nodes are separate locks, and this one is only taken once the
+    // nodes lock is released, so the two can never dead-lock. A `last_node_id`
+    // naming a node that no longer exists would make the app claim it is running
+    // something it cannot even render.
+    {
+        let mut settings = state.settings.write();
+        if let Some(last) = settings.last_node_id.clone() {
+            if ids.iter().any(|id| *id == last) {
+                settings.last_node_id = None;
+            }
+        }
+    }
 
     {
         let mut groups = state.groups.write();
@@ -426,12 +460,15 @@ pub async fn test_nodes_latency(
 /// like every other mutation here.
 #[tauri::command]
 #[specta::specta]
-pub fn delete_nodes(
+pub async fn delete_nodes(
     app: AppHandle,
     state: State<'_, AppState>,
+    runtime: Runtime<'_>,
+    proxy: Proxy<'_>,
     ids: Vec<NodeId>,
 ) -> AppResult<Vec<Node>> {
     let snapshot = apply_delete(&state, &ids)?;
+    stop_after_delete(runtime, proxy, ids).await?;
     crate::refresh_tray(&app);
     Ok(snapshot)
 }
@@ -641,6 +678,28 @@ mod tests {
             apply_delete(&state, &["nope".to_string()]),
             Err(AppError::NotFound(_))
         ));
+    }
+
+    #[test]
+    fn deleting_the_node_the_app_was_using_forgets_it() {
+        let state = state_with(vec![node("a", &[]), node("b", &[])]);
+        state.settings.write().last_node_id = Some("a".to_string());
+
+        apply_delete(&state, &["a".to_string()]).unwrap();
+
+        // An id that outlives its node would make the app preselect nothing, or
+        // claim a kernel is running something that cannot be rendered.
+        assert_eq!(state.settings.read().last_node_id, None);
+    }
+
+    #[test]
+    fn deleting_another_node_keeps_the_remembered_one() {
+        let state = state_with(vec![node("a", &[]), node("b", &[])]);
+        state.settings.write().last_node_id = Some("a".to_string());
+
+        apply_delete(&state, &["b".to_string()]).unwrap();
+
+        assert_eq!(state.settings.read().last_node_id.as_deref(), Some("a"));
     }
 
     #[test]

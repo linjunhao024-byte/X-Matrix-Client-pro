@@ -268,12 +268,23 @@ fn start_subscription_sweep(app: AppHandle) {
             .filter(|subscription| subscription.is_due(now))
             .map(|subscription| subscription.id.clone())
             .collect();
-        let running = app
+        // The sweep may have to stop a kernel whose node a refresh just took
+        // away, and it shares the same runtime its refresh route decision uses.
+        let kernel = app
             .try_state::<std::sync::Arc<EngineRuntime>>()
+            .map(|runtime| Arc::clone(runtime.inner()));
+        let proxy = app
+            .try_state::<std::sync::Arc<ProxyGuard>>()
+            .map(|proxy| Arc::clone(proxy.inner()));
+        let running = kernel
+            .as_ref()
             .map(|runtime| runtime.status().running)
             .unwrap_or(false);
         for id in due {
-            match commands::subscription::refresh_one_blocking(&state, &id, running) {
+            let (Some(kernel), Some(proxy)) = (kernel.as_ref(), proxy.as_ref()) else {
+                break;
+            };
+            match commands::subscription::refresh_one_blocking(&state, kernel, proxy, &id, running) {
                 Ok(outcome) => {
                     println!(
                         "x-matrix: 订阅「{}」已更新，{} 个节点",

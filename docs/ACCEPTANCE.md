@@ -799,3 +799,32 @@
 2. **点一个和当前值相同的按钮不算「改了」。** 第一次跑验收时 store 已经是 `warn`，脚本又点了「警告」——值没变，提示当然不出现；这不是 bug，是判据写错了。脚本要先读 store，再点**另一个**级别。
 3. **渲染出来的拼写和我们存的不一样。** 我们存 `warn`，xray 写的是 `"loglevel": "warning"`；比对要做映射（`warn → warning`），否则「重启成功」会被判成失败。
 4. **`store.json` 带 BOM，`ConvertFrom-Json` 会直接报错。** `Get-Content -Raw | ConvertFrom-Json` 抛「传入的对象无效，应为“:”或“}”」；用 `[IO.File]::ReadAllText` + 正则抠 `"log_level"` 才稳。
+
+## 35. 节点没了，内核就不能还占着它：删除即停，换 ID 则跟随（2026-11-24，云电脑 cloudpc-test）
+
+**验法**：两段。删节点用 `bash /d/tmp/shots/delnode-accept.sh`（启动内核 → 节点页删掉正在跑的那个节点 → 确认 → 读内核、注册表、store、提示）；订阅刷新用 `bash /d/tmp/shots/adopt2-accept.sh`（把订阅里的节点设成当前节点并启动 → 用内容相同但顺序不同的假订阅源刷新 → 读内核 PID、`last_node_id`、提示）。
+
+这一节管的是「应用说自己在跑，其实那个节点已经不存在了」。以前删节点只是把行从表里拿掉：`settings.last_node_id` 还指着它，内核里也还跑着它——界面上点什么都对不上，用户只能自己点「停止」。订阅刷新更隐蔽：整批节点换了新 ID，正在跑的那个也在其中，旧代码要么把内核杀掉（哪怕服务器一模一样），要么留着内核配一个已经消失的 ID。
+
+| 判据 | 验法 | 结果 |
+|---|---|---|
+| 删掉正在跑的节点，内核跟着停 | 删除后 `kernels after delete:`（空） | **通过** |
+| 系统代理同时交还 | `proxy after delete: ProxyEnable=0 ProxyServer=` | **通过** |
+| 设置里不再指着已删的节点 | `active after: none` | **通过** |
+| 页面把原因说清楚 | 出现 `删掉的节点正在被内核使用…内核已停止并交还系统代理` | **通过** |
+| 刷新同一个订阅，内核不被打断 | 刷新前后同一个 PID：`xray#4784 → xray#4784` | **通过** |
+| 新 ID 被认出来并接手 | `active id before: vless-18eac9ae1ba07634-0` → `after: vless-18ead5d985cb4444-3`，`id changed: True` | **通过** |
+| 不误报「已停止」 | 同一轮 `stopped notice present: False` | **通过** |
+| 系统代理没被碰 | `proxy after refresh: ProxyEnable=1 ProxyServer=127.0.0.1:7890` | **通过** |
+| 刷新结果本身正常 | `「机场A」更新完成：2 个节点（替换 2 个），按过滤规则丢掉 2 个` | **通过** |
+
+**三个设计理由**：
+- **「同一个服务器」由指纹判断，不由 ID 判断。** 每次导入都会铸新 ID（`documents.rs` 里的 `node()` 用时间戳），所以刷新后 ID 必然变；能证明「还是那台机器」的只有 `Node::fingerprint()`。它在换表**之前**从旧行上取下来，换完表再比对——顺序反了就永远拿不到旧指纹。
+- **先改指针，再决定要不要杀。** 找到替身就 `settings.last_node_id = Some(new)` 并让运行中的内核跟着改 ID（`EngineRuntime::adopt_node_id`）；找不到替身才清空并停内核。于是「服务器还在」和「服务器没了」走两条完全不同的路，而不是一律重启。
+- **停内核时先交还代理。** `stop_if_running_node` 里 `proxy.disable()` 在 `runtime.stop()` 之前；否则注册表会指着一个已经没有监听的端口，用户表现为「断网」。
+
+**四个坑**：
+1. **节点表格没有 `DataItem`。** 订阅页的行是 `DataItem`，节点页的行是 `ControlType.Text`（`Local-WS | 435,586 90x29`），行内按钮离名字约 160px；先按名字找到 Text 的 `Top`，再取 `Top >= 该值` 里最小的那个按钮，才不会删到上一行。
+2. **「刷新」要有真东西可刷。** 订阅源走代理（`subscription_via_proxy=true`）时，假订阅源在 `127.0.0.1:8898`，请求却从内核代理出去——而测试节点指向文档保留网段，永远连不上。验收前必须把 `subscription_via_proxy` 关掉，否则刷新失败、`last_node_id` 不变，看起来像「没有接手」。
+3. **内容不变时 ID 也不变。** 同一份订阅原样再刷一次，行会被整体替换但 ID 依旧（`unique_suffix` 在同一毫秒内递增），此时不该出现接手动作；要验证接手，必须让节点的**位置或数量**变化（本次把四个节点倒序，过滤后仍在名单里的「香港 01」拿到新 ID）。
+4. **`store.json` 有 BOM，写回时要保留。** 用 `json.loads` 读、`json.dump` 写会把 BOM 丢掉，应用随后把整份 store 当成损坏——脚本里读原始字节、判 BOM、写回时补回 `ï»¿`。

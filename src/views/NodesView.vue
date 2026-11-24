@@ -38,6 +38,12 @@ const qrLink = ref('')
 const qrName = ref('')
 const actionError = ref<string | null>(null)
 const actionNote = ref<string | null>(null)
+/**
+ * Set when a delete took away the node the kernel was running: the backend
+ * stops it and hands the proxy back, and this says so instead of leaving a
+ * node that cannot be rendered looking like the running one.
+ */
+const stoppedNodeGone = ref(false)
 const pendingDelete = ref<Node_Serialize | null>(null)
 const deleting = ref(false)
 const startingId = ref<string | null>(null)
@@ -175,6 +181,14 @@ watch(
   () => settings.settings?.auto_test_minutes,
   (minutes) => armAutoTest(minutes),
   { immediate: true },
+)
+
+// The line describes one delete, so a kernel coming back up makes it stale.
+watch(
+  () => engine.running,
+  (running) => {
+    if (running) stoppedNodeGone.value = false
+  },
 )
 
 onMounted(() => {
@@ -358,13 +372,43 @@ async function confirmTag() {
   }
 }
 
+/**
+ * The id the kernel is running, as the backend last reported it.
+ *
+ * `last_node_id` is the fallback for the moment the status poll has not caught
+ * up yet: both name the same node right after a start.
+ */
+function runningNodeId(): string | null {
+  return engine.status?.node_id ?? settings.settings?.last_node_id ?? null
+}
+
+/**
+ * Say what a delete did to the kernel, and reload the settings it rewrote.
+ *
+ * The backend stops the kernel only when the node it runs is one of the ids
+ * that went away, so a hit here needs no guessing; a miss leaves the page
+ * exactly as it was.
+ */
+async function reportDelete(gone: string[], wasRunning: boolean, runningId: string | null) {
+  if (!wasRunning || !runningId || !gone.includes(runningId)) return
+  await engine.refreshStatus()
+  stoppedNodeGone.value = true
+  // `apply_delete` also forgot `last_node_id`, and the page still shows it.
+  await settings.load(true)
+}
+
 async function confirmBulkDelete() {
   deleting.value = true
   actionError.value = null
+  stoppedNodeGone.value = false
+  const ids = [...selected.value]
+  const wasRunning = engine.running
+  const runningId = runningNodeId()
   try {
-    await store.removeMany([...selected.value])
+    await store.removeMany(ids)
     bulkPending.value = false
     leaveSelection()
+    await reportDelete(ids, wasRunning, runningId)
   } catch (cause) {
     actionError.value = describeError(cause)
   } finally {
@@ -392,9 +436,13 @@ async function confirmDelete() {
   if (!target) return
   deleting.value = true
   actionError.value = null
+  stoppedNodeGone.value = false
+  const wasRunning = engine.running
+  const runningId = runningNodeId()
   try {
     await store.remove(target.id)
     pendingDelete.value = null
+    await reportDelete([target.id], wasRunning, runningId)
   } catch (cause) {
     actionError.value = describeError(cause)
   } finally {
@@ -679,6 +727,7 @@ function securityLabel(node: Node_Serialize): string {
     <p v-if="store.error" class="alert">{{ store.error }}</p>
     <p v-if="actionError" class="alert">{{ actionError }}</p>
     <p v-else-if="actionNote" class="notice">{{ actionNote }}</p>
+    <p v-if="stoppedNodeGone" class="notice">{{ t('nodes.stoppedNodeGone') }}</p>
     <p v-if="importNote" class="notice">{{ importNote }}</p>
 
     <div v-if="store.loading && !store.loaded" class="empty-state">

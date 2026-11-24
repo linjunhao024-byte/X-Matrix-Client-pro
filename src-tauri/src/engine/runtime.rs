@@ -191,6 +191,9 @@ pub struct EngineStatus {
     pub running: bool,
     pub kind: Option<EngineKind>,
     pub node_name: String,
+    /// The node this kernel was started with. A name is not enough: two nodes
+    /// may share one.
+    pub node_id: Option<String>,
     pub mixed_port: u16,
     pub api_port: u16,
     pub pid: u32,
@@ -213,6 +216,7 @@ impl Default for EngineStatus {
             running: false,
             kind: None,
             node_name: String::new(),
+            node_id: None,
             mixed_port: 0,
             api_port: 0,
             pid: 0,
@@ -254,6 +258,8 @@ pub struct EngineBinary {
 struct Running {
     kind: EngineKind,
     node_name: String,
+    /// The node this kernel was started with; see [`EngineStatus::node_id`].
+    node_id: String,
     handle: Box<dyn ProcessHandle>,
     endpoints: Endpoints,
     config_path: PathBuf,
@@ -405,6 +411,7 @@ impl EngineRuntime {
         *self.running.lock() = Some(Running {
             kind,
             node_name: node.name.clone(),
+            node_id: node.id.clone(),
             handle,
             endpoints,
             config_path: config_path.clone(),
@@ -422,6 +429,7 @@ impl EngineRuntime {
             running: true,
             kind: Some(kind),
             node_name: node.name.clone(),
+            node_id: Some(node.id.clone()),
             mixed_port: endpoints.mixed_port,
             api_port: endpoints.api_port,
             pid,
@@ -445,6 +453,26 @@ impl EngineRuntime {
         running.handle.kill()?;
         *guard = None;
         Ok(())
+    }
+
+    /// Re-point a running kernel at the id its node has now.
+    ///
+    /// A subscription refresh mints a fresh id for every row it imports, so the
+    /// same server comes back under a new id and the id the kernel was started
+    /// with names nothing. Adopting the new id keeps "which node is this kernel
+    /// running" true, so a later delete of that node still finds it — and the
+    /// kernel is not restarted just because a provider renamed a server.
+    ///
+    /// A no-op when nothing is running, or when the running kernel is on some
+    /// other node: moving an id that belongs to a different kernel would be a
+    /// lie about what is being proxied.
+    pub fn adopt_node_id(&self, from: &str, to: &str) {
+        let mut guard = self.running.lock();
+        if let Some(running) = guard.as_mut() {
+            if running.node_id == from {
+                running.node_id = to.to_string();
+            }
+        }
     }
 
     /// The exit code of a kernel that died on its own, drained on read.
@@ -495,6 +523,7 @@ impl EngineRuntime {
                 running: true,
                 kind: Some(running.kind),
                 node_name: running.node_name.clone(),
+                node_id: Some(running.node_id.clone()),
                 mixed_port: running.endpoints.mixed_port,
                 api_port: running.endpoints.api_port,
                 pid: running.handle.pid(),
@@ -798,7 +827,7 @@ fn now_ms() -> u64 {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::sync::Arc;
 
     use super::*;
@@ -898,12 +927,12 @@ mod tests {
         }
     }
 
-    struct Harness {
-        runtime: EngineRuntime,
+    pub(crate) struct Harness {
+        pub(crate) runtime: EngineRuntime,
         spawned: Arc<Mutex<Vec<(PathBuf, Vec<String>)>>>,
         killed: Arc<Mutex<Vec<u32>>>,
         exits: Arc<Mutex<Vec<Arc<Mutex<Option<i32>>>>>>,
-        dir: PathBuf,
+        pub(crate) dir: PathBuf,
     }
 
     impl Harness {
@@ -987,7 +1016,7 @@ four"
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    fn harness(ready: bool, fail: bool) -> Harness {
+    pub(crate) fn harness(ready: bool, fail: bool) -> Harness {
         // A per-harness counter, not a timestamp: tests run in parallel and a
         // shared directory makes one test delete another's files. The path is
         // anchored to the crate, never to `%TEMP%`, because the temp directory
@@ -1024,7 +1053,7 @@ four"
         }
     }
 
-    fn node() -> Node {
+    pub(crate) fn node() -> Node {
         Node {
             id: "n1".into(),
             name: "测试节点".into(),
@@ -1218,6 +1247,41 @@ four"
     }
 
     #[test]
+    fn a_running_kernel_adopts_the_new_id_of_its_own_node() {
+        let h = harness(true, false);
+        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        h.runtime
+            .start(EngineKind::Xray, &node(), endpoints, RunOptions::new())
+            .unwrap();
+
+        // A refresh re-imports the same server under a fresh id: the kernel
+        // follows that id so a later delete of the node still finds it.
+        h.runtime.adopt_node_id("n1", "n9");
+        let adopted = h.runtime.status();
+        assert_eq!(adopted.node_id.as_deref(), Some("n9"));
+        assert!(adopted.running, "adoption is a rename, not a restart");
+        assert_eq!(adopted.pid, 4242);
+        assert!(h.killed.lock().is_empty(), "the kernel was not touched");
+
+        // An id that belongs to another node is not ours to move.
+        h.runtime.adopt_node_id("n2", "n3");
+        assert_eq!(h.runtime.status().node_id.as_deref(), Some("n9"));
+
+        std::fs::remove_dir_all(&h.dir).ok();
+    }
+
+    #[test]
+    fn adopting_an_id_with_nothing_running_is_a_no_op() {
+        let h = harness(true, false);
+        h.runtime.adopt_node_id("n1", "n2");
+        let status = h.runtime.status();
+        assert!(!status.running);
+        assert_eq!(status.node_id, None);
+
+        std::fs::remove_dir_all(&h.dir).ok();
+    }
+
+    #[test]
     fn stop_kills_the_running_kernel() {
         let h = harness(true, false);
         let endpoints = Endpoints::new(7890, 9090).unwrap();
@@ -1270,6 +1334,43 @@ four"
         let status = h.runtime.status();
         assert!(!status.running);
         assert_eq!(status.log_level, LogLevel::Warn);
+
+        std::fs::remove_dir_all(&h.dir).ok();
+    }
+
+    #[test]
+    fn status_reports_the_node_the_kernel_was_started_with() {
+        let h = harness(true, false);
+        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let started = h
+            .runtime
+            .start(EngineKind::Xray, &node(), endpoints, RunOptions::new())
+            .unwrap();
+
+        // Both the start result and the polled status name the node id, so the
+        // UI can ask "is this the node the kernel runs?" without comparing
+        // names, which two nodes may share.
+        assert_eq!(started.node_id.as_deref(), Some("n1"));
+        assert_eq!(h.runtime.status().node_id.as_deref(), Some("n1"));
+
+        std::fs::remove_dir_all(&h.dir).ok();
+    }
+
+    #[test]
+    fn a_stopped_kernel_reports_no_node_id() {
+        let h = harness(true, false);
+        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        h.runtime
+            .start(EngineKind::Xray, &node(), endpoints, RunOptions::new())
+            .unwrap();
+
+        h.runtime.stop().unwrap();
+        // Nothing runs, so nothing is running a node: a leftover id would let
+        // the UI believe a deleted node still had a kernel on it.
+        let status = h.runtime.status();
+        assert!(!status.running);
+        assert_eq!(status.node_id, None);
+        assert_eq!(EngineStatus::default().node_id, None);
 
         std::fs::remove_dir_all(&h.dir).ok();
     }

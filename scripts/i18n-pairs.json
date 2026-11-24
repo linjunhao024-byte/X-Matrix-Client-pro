@@ -2020,6 +2020,11 @@
     "When sorting by latency, untested nodes go last"
   ],
   [
+    "nodes.stoppedNodeGone",
+    "删掉的节点正在被内核使用，内核已停止并交还系统代理",
+    "The kernel was using that node, so it has been stopped and the system proxy handed back"
+  ],
+  [
     "nodes.tag.action",
     "打标签",
     "Tag"
@@ -3493,6 +3498,11 @@
     "sub.status.ok",
     "正常",
     "OK"
+  ],
+  [
+    "sub.stoppedNodeGone",
+    "刷新后当前节点不在了，内核已停止并交还系统代理",
+    "The node the kernel was on is gone after this refresh, so the kernel has been stopped and the system proxy handed back"
   ],
   [
     "sub.tuning.exclude",

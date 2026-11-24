@@ -14,7 +14,9 @@
 pub mod geo;
 mod job;
 mod render;
-mod runtime;
+// Crate-visible so command tests can reuse the runtime fakes instead of
+// inventing a second set of them.
+pub(crate) mod runtime;
 mod singbox;
 pub mod stats;
 pub mod traffic_log;

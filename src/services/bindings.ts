@@ -395,6 +395,11 @@ export type EngineStatus_Deserialize = {
 	running: boolean,
 	kind?: EngineKind | null,
 	node_name: string,
+	/**
+	 *  The node this kernel was started with. A name is not enough: two nodes
+	 *  may share one.
+	 */
+	node_id?: string | null,
 	mixed_port: number,
 	api_port: number,
 	pid: number,
@@ -418,6 +423,11 @@ export type EngineStatus_Serialize = {
 	running: boolean,
 	kind: EngineKind | null,
 	node_name: string,
+	/**
+	 *  The node this kernel was started with. A name is not enough: two nodes
+	 *  may share one.
+	 */
+	node_id: string | null,
 	mixed_port: number,
 	api_port: number,
 	pid: number,

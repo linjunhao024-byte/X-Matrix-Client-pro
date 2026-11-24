@@ -8,9 +8,13 @@ import ToggleSwitch from '../components/ToggleSwitch.vue'
 import { t } from '../i18n'
 import { describeError, type Subscription_Serialize } from '../services/contract'
 import { formatBytesCompact, formatDay, formatNextRefresh, formatWhen } from '../services/format'
+import { useEngineStore } from '../stores/engine'
+import { useSettingsStore } from '../stores/settings'
 import { useSubscriptionsStore } from '../stores/subscriptions'
 
 const store = useSubscriptionsStore()
+const engine = useEngineStore()
+const settings = useSettingsStore()
 
 /** `0` = only when I ask, which is what "manual" means everywhere else too. */
 const intervals = [
@@ -51,6 +55,12 @@ const form = reactive({
 const formError = ref<string | null>(null)
 const saving = ref(false)
 const note = ref<string | null>(null)
+/**
+ * Set when the refresh took away the node the kernel was running: the backend
+ * stops it and hands the proxy back, and the page has to say so rather than
+ * let a kernel that is no longer up look like it still is.
+ */
+const stoppedNodeGone = ref(false)
 /**
  * Which route the last refresh took, when it was not the one the setting asked
  * for. Kept apart from `note`: that one counts nodes, this one is a caveat about
@@ -206,9 +216,30 @@ async function submit(): Promise<void> {
   }
 }
 
+/**
+ * Did the refresh just take the kernel's node away?
+ *
+ * A refresh mints new ids for the nodes it imports, so the id the kernel was
+ * started with never survives one; the backend stops a kernel that was on that
+ * node and forgets the id. Asking the backend afterwards is the honest check:
+ * this line only appears when a kernel really went down, never for a refresh
+ * that left the running node in place.
+ */
+async function kernelStopped(wasRunning: boolean, wasOn: string | null): Promise<boolean> {
+  if (!wasRunning || !wasOn) return false
+  await engine.refreshStatus()
+  if (engine.running) return false
+  // The backend also cleared `last_node_id`; the shell reads it from here.
+  await settings.load(true)
+  return true
+}
+
 async function refreshOne(subscription: Subscription_Serialize): Promise<void> {
   note.value = null
   routeNote.value = null
+  stoppedNodeGone.value = false
+  const wasRunning = engine.running
+  const wasOn = engine.status?.node_id ?? null
   try {
     const outcome = await store.refresh(subscription.id)
     const skipped = outcome.skipped?.length ?? 0
@@ -224,6 +255,7 @@ async function refreshOne(subscription: Subscription_Serialize): Promise<void> {
       }) +
       (skipped > 0 ? t('sub.note.skipped', { count: skipped }) : '') +
       (filtered > 0 ? t('sub.note.filtered', { count: filtered }) : '')
+    stoppedNodeGone.value = await kernelStopped(wasRunning, wasOn)
   } catch {
     /* store.error already carries the reason */
   }
@@ -232,6 +264,9 @@ async function refreshOne(subscription: Subscription_Serialize): Promise<void> {
 async function refreshAll(): Promise<void> {
   note.value = null
   routeNote.value = null
+  stoppedNodeGone.value = false
+  const wasRunning = engine.running
+  const wasOn = engine.status?.node_id ?? null
   try {
     const { imported, skipped, filtered, note: caveat } = await store.refreshAll()
     const head = imported > 0 ? t('sub.note.due', { count: imported }) : t('sub.note.noneDue')
@@ -240,6 +275,7 @@ async function refreshAll(): Promise<void> {
       (skipped > 0 ? t('sub.note.skipped', { count: skipped }) : '') +
       (filtered > 0 ? t('sub.note.filtered', { count: filtered }) : '')
     routeNote.value = caveat
+    stoppedNodeGone.value = await kernelStopped(wasRunning, wasOn)
   } catch {
     /* store.error already carries the reason */
   }
@@ -289,6 +325,7 @@ onBeforeUnmount(() => {
 
     <p v-if="store.error" class="alert">{{ store.error }}</p>
     <p v-if="note" class="notice">{{ note }}</p>
+    <p v-if="stoppedNodeGone" class="notice">{{ t('sub.stoppedNodeGone') }}</p>
     <p v-if="routeNote" class="alert alert-inline">{{ routeNote }}</p>
 
     <p v-if="store.loading && !store.loaded" class="muted small">

@@ -23,8 +23,8 @@ use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::sysproxy::ProxyGuard;
 
-type Runtime<'a> = State<'a, Arc<EngineRuntime>>;
-type Proxy<'a> = State<'a, Arc<ProxyGuard>>;
+pub(crate) type Runtime<'a> = State<'a, Arc<EngineRuntime>>;
+pub(crate) type Proxy<'a> = State<'a, Arc<ProxyGuard>>;
 type Traffic<'a> = State<'a, Arc<TrafficLog>>;
 
 /// Wall clock in unix seconds. The minute buckets are the user's minutes, so
@@ -53,7 +53,7 @@ fn endpoints_from(state: &AppState) -> AppResult<Endpoints> {
     Endpoints::new(settings.mixed_port, settings.api_port)
 }
 
-async fn run_blocking<T, F>(job: F) -> AppResult<T>
+pub(crate) async fn run_blocking<T, F>(job: F) -> AppResult<T>
 where
     T: Send + 'static,
     F: FnOnce() -> AppResult<T> + Send + 'static,
@@ -362,6 +362,34 @@ pub async fn engine_stop(
     .await?;
     crate::refresh_tray(&app);
     Ok(status)
+}
+
+/// Stop the kernel if it is running one of these nodes, and hand the system
+/// proxy back first so the machine is never left pointing at a dead port.
+///
+/// Called when a node the kernel was started with is about to stop existing —
+/// deleted by the user, or dropped by a subscription refresh that replaced the
+/// batch it came from. Left alone, the kernel would keep proxying through a node
+/// the UI can neither render nor switch to.
+///
+/// Returns whether a kernel was stopped: `false` means nothing was running, or
+/// the running node is not among `gone`, and the proxy was therefore not touched.
+pub(crate) fn stop_if_running_node(
+    runtime: &EngineRuntime,
+    proxy: &ProxyGuard,
+    gone: &[String],
+) -> AppResult<bool> {
+    let Some(running_id) = runtime.status().node_id else {
+        return Ok(false);
+    };
+    if !gone.iter().any(|id| id == &running_id) {
+        return Ok(false);
+    }
+    // Order matters, as in `engine_stop`: hand the proxy back before the port
+    // it points at disappears.
+    proxy.disable()?;
+    runtime.stop()?;
+    Ok(true)
 }
 
 /// One statistics sample. `None` means "nothing is running", which the UI shows
@@ -685,5 +713,129 @@ pub async fn node_delay(
 fn remember_real(state: &AppState, id: &str, delay_ms: Option<u32>) {
     if let Err(error) = state.record_probe(&id.to_string(), delay_ms, ProbeKind::Real) {
         eprintln!("记不住真实延迟：{error}");
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    use parking_lot::Mutex;
+
+    use super::stop_if_running_node;
+    use crate::engine::runtime::tests::{harness, node, Harness};
+    use crate::engine::{Endpoints, EngineKind, RunOptions};
+    use crate::error::AppResult;
+    use crate::sysproxy::{ProxyGuard, ProxyState, SystemProxy};
+
+    /// A backend that only remembers what it was told. `ProxyGuard` runs its
+    /// whole snapshot/restore dance against it, so the test sees "handed back"
+    /// without the real system proxy ever being read or written.
+    pub(crate) struct RecordingProxy {
+        pub(crate) state: Mutex<ProxyState>,
+        pub(crate) writes: Mutex<Vec<ProxyState>>,
+    }
+
+    impl SystemProxy for Arc<RecordingProxy> {
+        fn read(&self) -> AppResult<ProxyState> {
+            Ok(self.state.lock().clone())
+        }
+
+        fn write(&self, state: &ProxyState) -> AppResult<()> {
+            *self.state.lock() = state.clone();
+            self.writes.lock().push(state.clone());
+            Ok(())
+        }
+    }
+
+    /// A snapshot path inside the crate's target dir; the system temp dir is not
+    /// writable from every shell on this machine.
+    fn scratch(name: &str) -> PathBuf {
+        static SEQ: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("test-tmp")
+            .join("engine-commands");
+        std::fs::create_dir_all(&base).unwrap();
+        base.join(format!("{name}-{}-{seq}.json", std::process::id()))
+    }
+
+    pub(crate) fn proxy() -> (ProxyGuard, Arc<RecordingProxy>, PathBuf) {
+        let fake = Arc::new(RecordingProxy {
+            state: Mutex::new(ProxyState::off()),
+            writes: Mutex::new(Vec::new()),
+        });
+        let path = scratch("snapshot");
+        let guard = ProxyGuard::new(Box::new(fake.clone()), &path);
+        (guard, fake, path)
+    }
+
+    pub(crate) fn start_kernel(h: &Harness) {
+        h.runtime
+            .start(
+                EngineKind::Xray,
+                &node(),
+                Endpoints::new(7890, 9090).unwrap(),
+                RunOptions::new(),
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn a_deleted_running_node_stops_the_kernel_and_hands_the_proxy_back() {
+        let h = harness(true, false);
+        let (guard, fake, path) = proxy();
+        start_kernel(&h);
+        guard.enable_with_bypass("127.0.0.1", 7890, "").unwrap();
+        assert!(guard.is_active());
+
+        let stopped = stop_if_running_node(&h.runtime, &guard, &["n1".to_string()]).unwrap();
+
+        assert!(stopped);
+        // No kernel is left running a node that no longer exists ...
+        assert!(!h.runtime.status().running);
+        // ... and the machine is not left pointing at the port it was using.
+        assert!(!guard.is_active());
+        assert!(!fake.state.lock().enabled);
+        assert_eq!(fake.writes.lock().len(), 2, "enable, then restore");
+
+        std::fs::remove_dir_all(&h.dir).ok();
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn deleting_some_other_node_leaves_the_kernel_and_the_proxy_alone() {
+        let h = harness(true, false);
+        let (guard, fake, path) = proxy();
+        start_kernel(&h);
+        guard.enable_with_bypass("127.0.0.1", 7890, "").unwrap();
+
+        let stopped = stop_if_running_node(&h.runtime, &guard, &["n2".to_string()]).unwrap();
+
+        assert!(!stopped);
+        assert!(h.runtime.status().running);
+        assert!(guard.is_active());
+        assert_eq!(fake.writes.lock().len(), 1, "only the enable");
+
+        std::fs::remove_dir_all(&h.dir).ok();
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn a_stop_with_nothing_running_touches_nothing() {
+        let h = harness(true, false);
+        let (guard, fake, path) = proxy();
+
+        let stopped = stop_if_running_node(&h.runtime, &guard, &["n1".to_string()]).unwrap();
+
+        assert!(!stopped);
+        // The proxy was never ours, so a delete has no business writing it.
+        assert!(fake.writes.lock().is_empty());
+        assert!(!guard.is_active());
+
+        std::fs::remove_dir_all(&h.dir).ok();
+        let _ = std::fs::remove_file(&path);
     }
 }
