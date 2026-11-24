@@ -633,7 +633,7 @@ export const en: Record<string, string> = {
   "settings.hotkeysHint": "Work from any app; the window does not have to be open",
   "settings.hotkeysTitle": "Global shortcuts",
   "settings.language": "Language",
-  "settings.languageHint": "Takes effect immediately, no restart needed.",
+  "settings.languageHint": "Takes effect immediately, no restart needed. The tray menu and the kernel-exit notification follow too.",
   "settings.logLevel": "Kernel log level",
   "settings.logLevel.debug": "Debug",
   "settings.logLevel.info": "Info",

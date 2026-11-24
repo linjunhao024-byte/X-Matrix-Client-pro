@@ -63,6 +63,18 @@ pub fn labels(language: Language) -> Labels {
             global: "全局",
             direct: "直连",
         },
+        Language::ZhTw => Labels {
+            show: "顯示視窗",
+            start: "啟動內核",
+            stop: "停止內核",
+            quit: "結束 X-Matrix",
+            nodes: "節點",
+            modes: "代理模式",
+            empty_nodes: "還沒有節點",
+            rule: "規則",
+            global: "全域",
+            direct: "直連",
+        },
         Language::En => Labels {
             show: "Show window",
             start: "Start kernel",
@@ -315,6 +327,23 @@ mod tests {
             ("a".into(), "AAA".into()),
             ("b".into(), "BBB".into()),
         ]
+    }
+
+    #[test]
+    fn every_language_names_the_menu_in_its_own_words() {
+        // The three menus must actually differ: a missing arm would fall back to
+        // English or Chinese and look like a half-translated tray.
+        let zh = labels(Language::Zh);
+        let tw = labels(Language::ZhTw);
+        let en = labels(Language::En);
+        assert_eq!(zh.show, "显示窗口");
+        assert_eq!(tw.show, "顯示視窗");
+        assert_eq!(en.show, "Show window");
+        assert_eq!(tw.global, "全域");
+        assert_eq!(tw.quit, "結束 X-Matrix");
+        // Nothing may repeat another language's word for the same slot.
+        assert_ne!(tw.start, zh.start);
+        assert_ne!(tw.start, en.start);
     }
 
     #[test]

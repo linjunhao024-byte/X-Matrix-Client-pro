@@ -1022,3 +1022,38 @@ bash /d/tmp/shots/hotkey-accept.sh
 4. **被快捷键藏起来的窗口会从 UIA 树里消失。** `Get-Win` 返回 null，后面每一步都报「找不到」；要用 `ShowWindow(hwnd, SW_RESTORE)` + `SetForegroundWindow` 把窗口拉回来再继续。另外注册时必须带 `MOD_NOREPEAT`（0x4000），否则按住不放会连发。
 
 **一句实话**：本节证明「录进去的键真的注册上了、旧键真的失效、重启后仍然是新键、关掉就真的没有」，不证明所有键盘布局下都能录——验收只用过 `Ctrl+Alt+F9` 这种 ASCII 组合。
+
+## 42. 第三种语言是真的：选一下、重启、再换回来（2026-11-24，云电脑 cloudpc-test）
+
+**验法**：
+
+```bash
+bash /d/tmp/shots/lang-accept.sh
+```
+
+脚本启动应用后，先按当前语言找到「设置」页，点 `繁體中文`，回读 `store.json` 的 `language`、当页文字与按钮名；再点侧栏回首页，确认按钮叫 `啟動`；随后 `--quit` 重启，确认窗口一出来就是繁体（没碰过语言选择器）；最后点 `简体中文` 并核对首页按钮叫 `启动`。
+
+| 判据 | 证据（`lang-accept.txt`） | 结果 |
+|---|---|---|
+| 出厂是简体 | `store language before: 'zh'` | **通过** |
+| 选择器有三项 | `locale buttons: 简体中文 / 繁體中文 / English` | **通过** |
+| 点一下就落库 | `picked zh-tw: True` → `store language after zh-tw: 'zh-tw'` | **通过** |
+| 页面文字立刻换 | `save button is 儲存: True`、`texts zh-tw: X-Matrix \| 設定 \| 埠、模式與系統集成 \| 本地混合埠 \| …` | **通过** |
+| 侧栏与首页跟着换 | `home nav in zh-tw: True`、`start button in zh-tw: True`、`settings nav in zh-tw: True` | **通过** |
+| 提示语也换了词 | `save hint zh-tw: True`（含「托盤選單」） | **通过** |
+| 重启后仍是繁体 | `language after quit: 'zh-tw'` → `relaunched: True` → `after restart texts: X-Matrix \| 首頁 \| 運行狀態總覽 \| 未運行 …` | **通过** |
+| 重启后侧栏/首页仍是繁体 | `after restart home in zh-tw: True`、`after restart settings in zh-tw: True` | **通过** |
+| 还能换回简体 | `picked zh: True` → `store language after zh: 'zh'` → `save button is 保存: True`、`home nav back in zh: True` | **通过** |
+
+**三个设计理由**：
+- **一份键表三个译者。** `scripts/i18n-pairs.json` 每行四格 `[key, zh, en, tw]`，`gen_i18n.py` 是唯一写 `src/i18n/*.ts` 的人；繁体列由简体列机械转换（`zhconv` + 台湾用词表：`默认→預設`、`设置→設定`、`文件夹→資料夾`、`文件→檔案`、`端口→埠`、`保存→儲存`、`服务器→伺服器`、`配置→設定` …），不是逐键手翻。这样三份字典的键集永远一致，`i18n.test.ts` 能用 `keyDiff` 直接卡住漏译。
+- **语言是一个设置项，不是前端的私事。** 第一版只写了 `localStorage`，托盘菜单和内核退出通知（都在 Rust 里）一律说中文。现在选择器调 `set_language` 命令：写 `settings.language`、持久化、重建托盘；前端再镜像到 store，所以「设置页显示的语言」和「托盘说的话」不会打架。没走 `save_settings` 是因为它收整份设置文档，会把用户正在输入的端口半截值一起存下去。
+- **`zh-tw` 这个码要显式写。** Rust 的 `Language` 用 `#[serde(rename_all = "lowercase")]`，`ZhTw` 会被写成 `zhtw`，而前端字典键是 `zh-tw`；所以那一个变体单独 `#[serde(rename = "zh-tw")]`，并用注释（不是文档注释，specta 会把 `///` 抄进 bindings 导致契约检查失败）说明原因。
+
+**四个坑**：
+1. **语言 chip 不支持 `InvokePattern`。** 它是普通 `Button`，`GetCurrentPattern` 抛「不支持的模式」；必须按它自己的矩形真点一下（`Press` 里先 `Activate` 再点两次，第一次只负责聚焦）。
+2. **刚重启的窗口会先应答 UIA、再画第一帧。** 重启后立刻读文字会得到空表，看起来像「语言丢了」；`Wait-Text` 轮询到有文字为止（这次约 2 秒，冷启动时可能要 20 秒）。
+3. **首页按钮叫 `啟動`，不是 `啟動內核`。** `啟動內核` 是托盘菜单的措辞；用错签名会让「首页在繁体下正常」误判为失败。
+4. **不是所有译文都该跟简体不同。** 最初加了一条「繁体值不得等于简体值」的断言，`sub.status.ok`、`time.yesterday` 这类纯 ASCII/纯符号键当场命中——一样的字才是对的。现在只对少数 Taiwan 用词做点检（`首頁`、`儲存`、`按延遲`、`設定備份`）。
+
+**一句实话**：本节证明「选择器能落库、三处界面（设置页/侧栏/首页）立刻改用繁体、重启后仍然是繁体、还能换回简体」，不证明 750 条译文的中文质量——繁体列是机械转换加用词表，个别句子可能仍有大陆语序，需要母语者再读一遍。托盘菜单的繁体措辞由 `tray.rs` 的单测（`every_language_names_the_menu_in_its_own_words`）保证，本节没有真的去点托盘。

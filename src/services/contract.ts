@@ -143,6 +143,12 @@ export const api = {
     (await unwrap(commands.getSettings())) as Settings_Serialize,
   saveSettings: async (settings: Settings_Deserialize): Promise<Settings_Serialize> =>
     (await unwrap(commands.saveSettings(settings))) as Settings_Serialize,
+  /**
+   * Change only the language. The picker applies immediately, so it must not
+   * send the whole form: unsaved edits on the page would be saved with it.
+   */
+  setLanguage: async (language: Language): Promise<Language> =>
+    (await unwrap(commands.setLanguage(language))) as Language,
   autostartStatus: (): Promise<boolean> => unwrap(commands.autostartStatus()),
 
   importPreview: (text: string): Promise<ImportPreview_Serialize> => commands.importPreview(text),

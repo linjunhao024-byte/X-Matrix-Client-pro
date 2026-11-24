@@ -296,8 +296,14 @@ pub enum ProxyMode {
 #[serde(rename_all = "lowercase")]
 pub enum Language {
     Zh,
+    // Traditional Chinese with Taiwan wording. The rename is explicit because
+    // `rename_all` would spell it `zhtw`, and the front end keys dictionaries
+    // and `localStorage` by `zh-tw`.
+    #[serde(rename = "zh-tw")]
+    ZhTw,
     En,
 }
+
 
 impl Default for Settings {
     fn default() -> Self {
@@ -423,6 +429,17 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_language_codes_match_the_front_end_dictionaries() {
+        // `zh-tw` is spelled out in `#[serde(rename)]`; if that ever drifts, the
+        // store would hold a code the dictionary loader rejects.
+        assert_eq!(serde_json::to_string(&Language::Zh).unwrap(), "\"zh\"");
+        assert_eq!(serde_json::to_string(&Language::ZhTw).unwrap(), "\"zh-tw\"");
+        assert_eq!(serde_json::to_string(&Language::En).unwrap(), "\"en\"");
+        let parsed: Language = serde_json::from_str("\"zh-tw\"").unwrap();
+        assert_eq!(parsed, Language::ZhTw);
+    }
 
     #[test]
     fn closing_keeps_the_tunnel_unless_told_otherwise() {

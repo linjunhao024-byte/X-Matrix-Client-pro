@@ -45,5 +45,16 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  return { settings, loading, saving, error, loaded, load, save }
+  /**
+   * Persist the language alone, so the tray and the exit notification speak it
+   * too. Local storage keeps the UI side; the backend keeps the wording it has
+   * to print without the webview.
+   */
+  async function setLanguage(language: Settings_Serialize['language']) {
+    const saved = await api.setLanguage(language)
+    if (settings.value) settings.value = { ...settings.value, language: saved }
+    return saved
+  }
+
+  return { settings, loading, saving, error, loaded, load, save, setLanguage }
 })

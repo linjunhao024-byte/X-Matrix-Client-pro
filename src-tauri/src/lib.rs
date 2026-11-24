@@ -375,28 +375,38 @@ fn notify_engine_exit(app: &AppHandle, code: i32, released_proxy: bool) {
     use tauri_plugin_notification::NotificationExt;
 
     // Assembled here, so it cannot reuse `src/i18n/*`: the backend has no
-    // access to the webview bundle. Two languages ship, so two branches; any
-    // other value reads as Chinese, which is the product's default.
-    let english = app
+    // access to the webview bundle. One branch per language; a store without a
+    // language (or an unreadable one) reads as Simplified Chinese, the default.
+    let language = app
         .try_state::<AppState>()
-        .map(|state| state.settings.read().language == crate::domain::settings::Language::En)
-        .unwrap_or(false);
+        .map(|state| state.settings.read().language)
+        .unwrap_or(crate::domain::settings::Language::Zh);
     // The proxy sentence only appears when the watcher actually handed it back:
     // claiming "网络已恢复直连" after a failed restore would be a lie the user
     // discovers by trying to browse.
-    let (title, body) = if english {
-        let mut body =
-            format!("A kernel died on its own (code {code}). Open Logs to see what it said.");
-        if released_proxy {
-            body.push_str(" The system proxy was handed back, so the network goes direct again.");
+    let (title, body) = match language {
+        crate::domain::settings::Language::En => {
+            let mut body =
+                format!("A kernel died on its own (code {code}). Open Logs to see what it said.");
+            if released_proxy {
+                body.push_str(" The system proxy was handed back, so the network goes direct again.");
+            }
+            ("X-Matrix · kernel exited", body)
         }
-        ("X-Matrix · kernel exited", body)
-    } else {
-        let mut body = format!("内核意外退出（代码 {code}），点「日志」看它最后说了什么。");
-        if released_proxy {
-            body.push_str("系统代理已交还，网络已恢复直连。");
+        crate::domain::settings::Language::ZhTw => {
+            let mut body = format!("內核意外結束（代碼 {code}），點「日誌」看它最後說了什麼。");
+            if released_proxy {
+                body.push_str("系統代理已交還，網路已恢復直連。");
+            }
+            ("X-Matrix · 內核已結束", body)
         }
-        ("X-Matrix · 内核已退出", body)
+        crate::domain::settings::Language::Zh => {
+            let mut body = format!("内核意外退出（代码 {code}），点「日志」看它最后说了什么。");
+            if released_proxy {
+                body.push_str("系统代理已交还，网络已恢复直连。");
+            }
+            ("X-Matrix · 内核已退出", body)
+        }
     };
 
     // Log both outcomes: without the success line a silent toast setting on the

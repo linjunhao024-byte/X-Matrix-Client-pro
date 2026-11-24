@@ -142,6 +142,24 @@ const modes: { value: ProxyMode; labelKey: string }[] = [
  */
 const locales = availableLocales()
 
+/**
+ * Switch the interface language, and tell the backend about it.
+ *
+ * Two stores hold this on purpose: `localStorage` decides what the pages render
+ * (it has to be readable before the first paint), while `settings.language`
+ * decides what the tray menu and the kernel-exit notification say, since those
+ * are assembled in Rust with no webview to ask. This is the one place that
+ * writes both, so they can never disagree.
+ */
+async function chooseLocale(next: typeof locale.value): Promise<void> {
+  setLocale(next)
+  try {
+    await store.setLanguage(next)
+  } catch (cause) {
+    error.value = describeError(cause)
+  }
+}
+
 /** Kernel verbosity. `warn` is the default because a debug log grows fast. */
 /** `0` is "only when I press the button" — see `Settings::auto_test_minutes`. */
 const testIntervals: { value: number; labelKey: string }[] = [
@@ -759,7 +777,7 @@ async function save() {
             type="button"
             :class="{ active: locale === item.value }"
             :aria-pressed="locale === item.value"
-            @click="setLocale(item.value)"
+            @click="chooseLocale(item.value)"
           >
             {{ item.label }}
           </button>

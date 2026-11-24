@@ -8,7 +8,7 @@
 ## 0. 三句话现状
 
 1. 主体功能已追平 V2RayN / Clash 的日常面：双内核（Xray / sing-box）渲染与启停、系统代理接管与还原、订阅/整包导入、Clash 配置连同 **策略组与规则** 一起导入、运行中热切换节点与代理模式、托盘子菜单、日志页、hysteria2 / tuic、真实延迟（分组与节点）、流量历史落盘、一键断开全部 + 进程归属、测速预算与「选最快」、域名正则 / 域名分类匹配器、诊断包导出、全局快捷键。
-2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§41）。
+2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§42）。
 3. 交接时那处未提交的工作（N12 应用内更新检查）已经构建、真机验收并提交；此后又合入四件事：`--quit` 正常退出并删除托盘图标（§21）、GEO 数据文件卡片与镜像回退下载（§23）、测速记录落盘（§24）。工作区现在是干净的。
 
 ### 0.1 进度快照（交接这一刻的硬数字）
@@ -19,12 +19,12 @@
 | 未提交 | 无（§41 的改动已提交为 `9c78090`） |
 | 上一版未提交清单（留档） | `src-tauri/src/domain/settings.rs`、`src-tauri/src/engine/{mod,render,runtime,xray}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§39 分片）；再上一版：`src-tauri/src/engine/{mod,runtime}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§37 统一提示）；再上一版：`src-tauri/src/commands/settings.rs`、`src-tauri/src/commands/sysproxy.rs`、`src/stores/sysproxy.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`、`docs/ACCEPTANCE.md`（§36 系统代理即时生效） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库（HEAD 上这一条） |
-| IPC 命令 | **77**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
-| Rust 单测 | **366 passed**（`ARCHITECTURE.md:278` 已同步） |
-| 前端检查 | `npm run check` 全绿：vue-tsc / architecture / contract / vitest **95**（10 文件） |
-| i18n | **750** 键（`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
+| IPC 命令 | **80**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
+| Rust 单测 | **368 passed**（`ARCHITECTURE.md:278` 已同步） |
+| 前端检查 | `npm run check` 全绿：vue-tsc / architecture / contract / vitest **96**（10 文件） |
+| i18n | **750** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
 | 桌面产物 | 见 §1 表格（每次构建后刷新；当前 release 构建含 N12 + GEO + 测速落盘 + 退出通知） |
-| 验收文档 | `docs/ACCEPTANCE.md` §0–§41（§7 历史空缺，编号不连续但内容完整） |
+| 验收文档 | `docs/ACCEPTANCE.md` §0–§42（§7 历史空缺，编号不连续但内容完整） |
 | 云电脑 | 干净：`ProxyEnable=0x0`、无 X-Matrix/sing-box/xray 进程、无 `xm*` 计划任务 |
 
 **下一步的确定顺序**（做完一条打一个勾，别跳）：
@@ -35,7 +35,7 @@
 - [x] 4. `docs/ACCEPTANCE.md` 写到 §26
 - [x] 5. 提交（`fix(tray)` / `feat(update)` / `feat(geo,nodes)` / `feat(engine)` 各一条）
 - [x] 6. `FEED_URL` 已指向真实仓库 `linjunhao024-byte/X-Matrix-Client-pro`，`v0.1.0` 已发布并带 `X-Matrix.exe` 资产
-- [x] 7. 计数已同步：77 命令 / 366 单测 / 95 vitest / 750 i18n 键
+- [x] 7. 计数已同步：80 命令 / 368 单测 / 96 vitest / 750 i18n 键 × 3
 - [ ] 8. `bash /d/tmp/shots/cleanup.sh` 收尾云电脑
 
 ---
@@ -154,6 +154,7 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 | §39 | 分片：`tlsSettings.fragment`（`packets`/`length`/`interval`），只写进 TLS 分支 |
 | §40 | 改正在跑的节点：说出「内核还在用旧的一份」，一键按新配置重启 |
 | §41 | 全局快捷键可改可关：录制、保存即生效、两键不许相同 |
+| §42 | 第三种语言：机械转繁体 + 台湾用词表，选择器落库，托盘与通知跟着换 |
 
 已提交的提交序列（新→旧，14 条主体）：
 `5a44af3` 域名正则+geosite · `569a7ce` 流量历史 · `44b857b` 测速预算+选最快 · `42f85bd` 一键断开+进程名 · `f817726` 真实延迟 · `f3fc750` 订阅走代理 · `d892b9e` Clash 导入带组和规则 · `6851775` 托盘子菜单 · `f9a0406` H4 验收文档 · `14ddb20` hysteria2/tuic · `fdd0b8d` 运行中热切换 · `eb3f453` 日志页 · `79ccadd` 设计修复（粘右操作列、错误用红、焦点陷阱等）· `535124b` 快捷键与诊断包验收。
@@ -163,6 +164,8 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 ---
 
 ## 5. 最近完成的事（已提交、已真机验收）
+
+**第三种语言（2026-11-24，§42）**：此前只有简体与英文两份字典，`Language` 也只有 `Zh`/`En`。现在多了繁体（台湾用词）：`scripts/i18n-pairs.json` 每行四格 `[key, zh, en, tw]`，`python scripts/gen_i18n.py` 一次写 `src/i18n/{zh,en,tw}.ts`，繁体列由 `zhconv` 机械转换 + 用词表（`默认→預設`、`设置→設定`、`端口→埠`、`保存→儲存`、`配置→設定` …），不是逐键手翻，所以三份字典键集由 `i18n.test.ts` 的 `keyDiff` 卡死。`src/i18n/index.ts` 的 `Locale` 加 `'zh-tw'`，`applyDocumentLang` 写 `zh-TW`。后端 `Language` 加 `ZhTw` 并单独 `#[serde(rename = "zh-tw")]`（`rename_all = "lowercase"` 会拼成 `zhtw`，与前端字典键不一致）；`tray.rs` 与退出通知各有繁体分支。顺手补了一个协调性缺口：以前选择器只写 `localStorage`，`settings.language` 从不落库，于是托盘菜单和内核退出通知在英文界面下仍说中文——新增窄命令 `set_language`（写字段 + `persist()` + `refresh_tray`），前端 `chooseLocale()` 同时调它。真机证据（`lang-accept.txt`）：`picked zh-tw: True` → `store language after zh-tw: 'zh-tw'` → `save button is 儲存: True`、`texts zh-tw: … 設定 … 埠、模式與系統集成 …`、`home nav in zh-tw: True` → `language after quit: 'zh-tw'` → 重启后 `after restart texts: … 首頁 …`、`after restart home in zh-tw: True` → 换回 `store language after zh: 'zh'`、`home nav back in zh: True`。`cargo test --lib` 368，vitest 96，i18n 750×3。
 
 **快捷键（2026-11-24，§41）**：`Ctrl+Shift+X` / `Ctrl+Shift+W` 此前是 `src-tauri/src/hotkeys.rs` 里的常量，设置页只能读。现在两个键都是设置项（`Settings.hotkey_toggle` / `hotkey_window`，`#[serde(default)]` 指回同一批常量，老 store 照读），设置页用「点一下，再按下新的组合键」录制（`src/services/hotkey.ts` 的 `comboFromKeyPress()`），后端 `Combo::parse()` 宽松接受大小写与顺序、落库统一写法，`validate()` 拒绝空键、重复修饰键、多个真键，以及两个键相同（`两个快捷键不能相同（都是 {label}）`）。`save_settings` 末尾调 `hotkeys::apply()`，用 `PostMessageW(WM_APP_REREGISTER)` 把重注册交给热键消息线程，所以保存即生效、不用重启应用；注册失败只写日志不拦保存。真机证据：录 `Ctrl+Alt+F9` 保存后立刻 `kernels after new chord: xray#3652`，旧键 `kernels after old chord: xray#3652 (was xray#3652)` 无反应，重启后 `kernels after restart chord: xray#5940`，`关掉这一项` 后旧窗口键不再藏窗口，两个「恢复默认」把 chip 还原成 `Ctrl+Shift+X` / `Ctrl+Shift+W`。`cargo test --lib` 366（新增 9 条），vitest 95（新增 `hotkey.test.ts` 9 条）。验收过程中修掉一个真死锁：`window_proc` 持着 `BINDINGS` 锁再调 `register_all()`，而后者又去锁同一个 `std::sync::Mutex`。
 
@@ -282,7 +285,7 @@ scp -i /c/Users/83611/.ssh/id_ed25519_cpc 本地文件 Administrator@100.106.121
 
 1. `cd /d/GitHub-Warehouse/X-Matrix-Client-Pro && git status` —— 工作区应当干净；有改动先弄清是谁的。
 2. 读本文件的 §5 与 `docs/ACCEPTANCE.md` 的最后两节，对齐上下文。
-3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 357 passed）。
+3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 368 passed）。
 4. `cd .. && npm run check`（应为全绿）。
 5. 从 §6 表里挑一项（按性价比排序），**一项一提交**，提交信息用英文 `feat(...)/fix(...)/docs: ...`。
 6. 真机验证前先跑 `bash /d/tmp/shots/deploy-tray.sh <exe>`；远端被 `cleanup.sh` 清过的话，先 `scp x-act.ps1 uia2.ps1 ocr.ps1` 上去。

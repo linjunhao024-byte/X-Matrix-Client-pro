@@ -72,6 +72,16 @@ export const commands = {
 	getSettings: () => typedError<Settings_Serialize, AppError>(__TAURI_INVOKE("get_settings")),
 	saveSettings: (settings: Settings_Deserialize) => typedError<Settings_Serialize, AppError>(__TAURI_INVOKE("save_settings", { settings })),
 	/**
+	 *  Change only the language.
+	 * 
+	 *  The settings page applies a language the moment it is clicked, so it cannot
+	 *  route through `save_settings`: that command takes the whole document, and
+	 *  sending a form that still holds unsaved edits (a port half typed, say) would
+	 *  save those too. This writes the one field and rebuilds the tray, whose menu
+	 *  wording follows it.
+	 */
+	setLanguage: (language: Language) => typedError<Language, AppError>(__TAURI_INVOKE("set_language", { language })),
+	/**
 	 *  Cheap liveness probe for the contract layer: if this renders, the whole
 	 *  Rust -> bindings.ts -> Vue chain is wired correctly.
 	 */
@@ -658,7 +668,7 @@ export type ImportPreview_Serialize = {
 	rules: string[],
 };
 
-export type Language = "zh" | "en";
+export type Language = "zh" | "zh-tw" | "en";
 
 /**
  *  One row of a batch latency run.

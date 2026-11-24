@@ -1,10 +1,10 @@
 /**
  * A very small translation layer.
  *
- * Deliberately not `vue-i18n`: the app needs `t()` and two locales, and a
- * hand-written dictionary keeps the key set testable (`i18n.test.ts` asserts
- * `zh` and `en` have exactly the same keys, so a half-translated screen fails
- * the build instead of shipping).
+ * Deliberately not `vue-i18n`: the app needs `t()` and a handful of locales, and
+ * a hand-written dictionary keeps the key set testable (`i18n.test.ts` asserts
+ * every locale has exactly the same keys, so a half-translated screen fails the
+ * build instead of shipping).
  *
  * `t()` reads `locale` during render, so switching language re-renders every
  * component that uses it - no reload, no event bus.
@@ -12,11 +12,15 @@
 import { ref } from 'vue'
 
 import { en } from './en'
+import { tw } from './tw'
 import { zh } from './zh'
 
-export type Locale = 'zh' | 'en'
+export type Locale = 'zh' | 'zh-tw' | 'en'
 
-const messages: Record<Locale, Record<string, string>> = { zh, en }
+/** The languages the settings page offers, each named in itself. */
+const LOCALES: Locale[] = ['zh', 'zh-tw', 'en']
+
+const messages: Record<Locale, Record<string, string>> = { zh, 'zh-tw': tw, en }
 
 export const locale = ref<Locale>('zh')
 
@@ -24,14 +28,15 @@ export const locale = ref<Locale>('zh')
 const STORAGE_KEY = 'xm.ui.locale'
 
 function isLocale(value: unknown): value is Locale {
-  return value === 'zh' || value === 'en'
+  return LOCALES.includes(value as Locale)
 }
 
 function applyDocumentLang(next: Locale): void {
   // Screen readers and spell checkers both read this. Guarded because the
   // dictionary tests run in Node, where there is no document.
   if (typeof document !== 'undefined') {
-    document.documentElement.lang = next === 'zh' ? 'zh-CN' : 'en'
+    document.documentElement.lang =
+      next === 'zh' ? 'zh-CN' : next === 'zh-tw' ? 'zh-TW' : 'en'
   }
 }
 
@@ -70,8 +75,10 @@ export function initLocale(): void {
 }
 
 export function availableLocales(): { value: Locale; label: string }[] {
+  // Each language names itself, so these labels are not translated.
   return [
     { value: 'zh', label: '简体中文' },
+    { value: 'zh-tw', label: '繁體中文' },
     { value: 'en', label: 'English' },
   ]
 }
@@ -98,4 +105,4 @@ export function keyDiff(a: Record<string, string>, b: Record<string, string>): s
   return [...missing.map((key) => `missing:${key}`), ...extra.map((key) => `extra:${key}`)]
 }
 
-export { en, messages, zh }
+export { en, messages, tw, zh }

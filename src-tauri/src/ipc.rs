@@ -26,6 +26,7 @@ pub fn builder() -> Builder<tauri::Wry> {
         commands::settings::autostart_status,
         commands::settings::get_settings,
         commands::settings::save_settings,
+        commands::settings::set_language,
         commands::system::app_info,
         commands::system::app_paths,
         commands::system::app_open_data_dir,

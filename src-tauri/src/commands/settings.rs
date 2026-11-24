@@ -5,6 +5,7 @@ use tauri::{AppHandle, State};
 
 use crate::autostart::{AutoStart, WindowsAutoStart};
 use crate::commands::engine::Proxy;
+use crate::domain::settings::Language;
 use crate::domain::Settings;
 use crate::engine::{EngineKind, EngineRuntime};
 use crate::error::{AppError, AppResult};
@@ -157,6 +158,31 @@ pub fn save_settings(
     // setting is a reason to rebuild it.
     crate::refresh_tray(&app);
     Ok(settings)
+}
+
+/// Change only the language.
+///
+/// The settings page applies a language the moment it is clicked, so it cannot
+/// route through `save_settings`: that command takes the whole document, and
+/// sending a form that still holds unsaved edits (a port half typed, say) would
+/// save those too. This writes the one field and rebuilds the tray, whose menu
+/// wording follows it.
+#[tauri::command]
+#[specta::specta]
+pub fn set_language(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    language: Language,
+) -> AppResult<Language> {
+    {
+        let mut settings = state.settings.write();
+        if settings.language != language {
+            settings.language = language;
+        }
+    }
+    state.persist()?;
+    crate::refresh_tray(&app);
+    Ok(language)
 }
 
 #[cfg(test)]

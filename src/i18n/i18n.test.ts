@@ -1,15 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
-import { availableLocales, en, keyDiff, locale, setLocale, t, zh } from './index'
+import { availableLocales, en, keyDiff, locale, setLocale, t, tw, zh } from './index'
 
 describe('i18n', () => {
-  it('keeps exactly the same keys in both dictionaries', () => {
+  it('keeps exactly the same keys in every dictionary', () => {
     expect(keyDiff(zh, en)).toEqual([])
+    expect(keyDiff(zh, tw)).toEqual([])
   })
 
   it('has no empty translation', () => {
     for (const [name, table] of [
       ['zh', zh],
+      ['zh-tw', tw],
       ['en', en],
     ] as const) {
       for (const [key, value] of Object.entries(table)) {
@@ -30,12 +32,25 @@ describe('i18n', () => {
   it('switches locale and back', () => {
     setLocale('en')
     expect(t('nav.home')).toBe('Home')
+    setLocale('zh-tw')
+    expect(t('nav.home')).toBe('首頁')
     setLocale('zh')
     expect(t('nav.home')).toBe('首页')
     expect(locale.value).toBe('zh')
   })
 
-  it('offers both locales', () => {
-    expect(availableLocales().map((item) => item.value)).toEqual(['zh', 'en'])
+  it('offers every locale, each named in itself', () => {
+    expect(availableLocales().map((item) => item.value)).toEqual(['zh', 'zh-tw', 'en'])
+    expect(availableLocales().map((item) => item.label)).toEqual(['简体中文', '繁體中文', 'English'])
+  })
+
+  it('speaks Taiwan in the Traditional column', () => {
+    // Spot checks on the words a straight character conversion gets wrong:
+    // these are the substitutions the phrase table exists for.
+    expect(tw['nav.home']).toBe('首頁')
+    expect(tw['engine.stale']).toContain('儲存')
+    expect(tw['settings.hotkeySaveHint']).toContain('儲存')
+    expect(tw['nodes.sort.latency']).toBe('按延遲')
+    expect(tw['about.caps.backup']).toBe('設定備份')
   })
 })
