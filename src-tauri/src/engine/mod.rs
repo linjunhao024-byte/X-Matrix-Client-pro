@@ -186,6 +186,12 @@ pub struct RenderInput<'a> {
     /// Resolvers the kernel should use instead of the system ones. Empty means
     /// "leave DNS alone", which is also what a fresh install gets.
     pub dns_servers: Vec<crate::domain::settings::DnsEntry>,
+    /// Multiplex every connection over one link to the server. Off by default,
+    /// because it is a trade: fewer handshakes on a lossy link, a queue on a
+    /// clean one.
+    pub mux_enabled: bool,
+    /// Streams per multiplexed link; only read when [`RenderInput::mux_enabled`].
+    pub mux_concurrency: u16,
 }
 
 impl<'a> RenderInput<'a> {
@@ -203,6 +209,8 @@ impl<'a> RenderInput<'a> {
             rule_set_dir: None,
             probe_url: crate::domain::settings::DEFAULT_TEST_URL.to_string(),
             dns_servers: Vec::new(),
+            mux_enabled: false,
+            mux_concurrency: 8,
         }
     }
 
@@ -217,6 +225,8 @@ impl<'a> RenderInput<'a> {
         self.log_level = options.log_level;
         self.probe_url = options.probe_url;
         self.dns_servers = options.dns_servers;
+        self.mux_enabled = options.mux_enabled;
+        self.mux_concurrency = options.mux_concurrency;
         self
     }
 
@@ -246,6 +256,17 @@ impl<'a> RenderInput<'a> {
     pub fn listen_address(&self) -> &'static str {
         if self.allow_lan { "0.0.0.0" } else { "127.0.0.1" }
     }
+
+    /// The stream count one multiplexed outbound may carry, or `None` when the
+    /// user left multiplexing off.
+    ///
+    /// Both kernels distinguish "no mux block" from `enabled: false`, so the
+    /// renderers take this one value and omit the block entirely when it is
+    /// `None`. Keeping the decision here means the two renderers cannot spell
+    /// the off case differently.
+    pub fn mux_streams(&self) -> Option<u16> {
+        if self.mux_enabled { Some(self.mux_concurrency) } else { None }
+    }
 }
 
 /// Everything besides the node itself that shapes a rendered config.
@@ -271,6 +292,10 @@ pub struct RunOptions<'a> {
     /// must survive exactly as the user wrote it — the parsed list cannot
     /// round-trip whitespace or a trailing comma.
     pub dns_servers_raw: String,
+    /// Multiplex every connection over one link to the server.
+    pub mux_enabled: bool,
+    /// Streams per multiplexed link; only read when [`RunOptions::mux_enabled`].
+    pub mux_concurrency: u16,
 }
 
 impl<'a> RunOptions<'a> {
@@ -286,6 +311,8 @@ impl<'a> RunOptions<'a> {
             probe_url: crate::domain::settings::DEFAULT_TEST_URL.to_string(),
             dns_servers: Vec::new(),
             dns_servers_raw: String::new(),
+            mux_enabled: false,
+            mux_concurrency: 8,
         }
     }
 
@@ -302,6 +329,8 @@ impl<'a> RunOptions<'a> {
             probe_url: settings.test_url.clone(),
             dns_servers: settings.dns_entries().unwrap_or_default(),
             dns_servers_raw: settings.dns_servers.clone(),
+            mux_enabled: settings.mux_enabled,
+            mux_concurrency: settings.mux_concurrency,
         }
     }
 

@@ -86,6 +86,15 @@ pub struct Settings {
     /// resolver". Only literals are accepted: a hostname here would need the
     /// system resolver to resolve the resolver, which is how DNS loops start.
     pub dns_servers: String,
+    /// Multiplex several logical connections over one kernel-to-server link.
+    /// Off by default: it helps on lossy or heavily-shaped links and hurts on a
+    /// clean one, so the user opts in rather than inheriting a surprise.
+    #[serde(default)]
+    pub mux_enabled: bool,
+    /// How many streams one multiplexed link may carry. Only meaningful when
+    /// `mux_enabled`; both kernels treat it as an upper bound, not a promise.
+    #[serde(default = "default_mux_concurrency")]
+    pub mux_concurrency: u16,
     /// Come up with the window hidden, tray only. For people who launch this at
     /// login and never want to see it.
     pub start_minimized: bool,
@@ -106,6 +115,15 @@ pub const DEFAULT_TEST_TIMEOUT_MS: u32 = 3_000;
 /// Two at a time. Sequential is the honest default, but a list of thirty nodes
 /// at three seconds each is ninety seconds of watching nothing happen.
 pub const DEFAULT_TEST_CONCURRENCY: u32 = 2;
+
+/// Eight streams per multiplexed link when the user turns it on.
+///
+/// Both kernels default to a similar number, and it is a starting point rather
+/// than a target: too few wastes the handshake that mux was meant to amortise,
+/// too many lets one lossy link stall every stream at once.
+fn default_mux_concurrency() -> u16 {
+    8
+}
 
 /// One resolver the user asked for.
 ///
@@ -241,6 +259,8 @@ impl Default for Settings {
             subscription_user_agent: String::new(),
             subscription_via_proxy: false,
             dns_servers: String::new(),
+            mux_enabled: false,
+            mux_concurrency: default_mux_concurrency(),
             start_minimized: false,
             close_to_tray: true,
         }
@@ -277,6 +297,13 @@ impl Settings {
         // stop meaning anything, which is the one thing a latency test must not do.
         if !(1..=16).contains(&self.test_concurrency) {
             return Err("test_concurrency must be between 1 and 16".into());
+        }
+        // Xray accepts any positive number here, but 128 is where the per-link
+        // bookkeeping stops being worth it and every stream inherits the same
+        // stalled link. Zero would silently disable the feature the user just
+        // switched on, so it is refused instead of reinterpreted.
+        if !(1..=128).contains(&self.mux_concurrency) {
+            return Err("mux_concurrency must be between 1 and 128".into());
         }
         self.dns_entries()?;
         Ok(())
@@ -421,5 +448,39 @@ mod tests {
         let loaded: Settings = serde_json::from_str(old).expect("old store must still load");
         assert!(loaded.xray_binary.is_empty());
         assert!(loaded.singbox_binary.is_empty());
+    }
+
+    #[test]
+    fn an_older_store_without_mux_still_loads() {
+        // Multiplexing is opt-in, so a store written before it existed must
+        // read as "off, eight streams": a missing field must not turn the
+        // feature on, and it must not make the whole document unreadable.
+        let old = r#"{"mixed_port":7890,"api_port":9090,"allow_lan":false,
+            "mode":"rule","system_proxy":false,"auto_start":false,"language":"zh",
+            "auto_connect":false,"log_level":"warn","auto_test_minutes":0,
+            "test_timeout_ms":3000,"test_concurrency":2,"proxy_bypass":"",
+            "test_url":"http://www.gstatic.com/generate_204",
+            "subscription_user_agent":"","subscription_via_proxy":false,
+            "dns_servers":"","start_minimized":false,"close_to_tray":true}"#;
+        let loaded: Settings = serde_json::from_str(old).expect("old store must still load");
+        assert!(!loaded.mux_enabled);
+        assert_eq!(loaded.mux_concurrency, 8);
+        let defaults = Settings::default();
+        assert!(!defaults.mux_enabled);
+        assert_eq!(defaults.mux_concurrency, 8);
+    }
+
+    #[test]
+    fn mux_concurrency_must_be_between_one_and_one_hundred_twenty_eight() {
+        // Zero would leave the user with a feature that silently does nothing,
+        // and past 128 the streams share one stalled link rather than gain.
+        let s = Settings { mux_concurrency: 0, ..Default::default() };
+        assert!(s.validate().is_err());
+        let s = Settings { mux_concurrency: 129, ..Default::default() };
+        assert!(s.validate().is_err());
+        let s = Settings { mux_enabled: true, mux_concurrency: 8, ..Default::default() };
+        assert!(s.validate().is_ok());
+        let s = Settings { mux_concurrency: 128, ..Default::default() };
+        assert!(s.validate().is_ok());
     }
 }

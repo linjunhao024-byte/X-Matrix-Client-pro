@@ -130,12 +130,13 @@ impl Engine for XrayEngine {
 /// Xray `urltest` group behaves like `select` pinned to the first member, and
 /// the UI says so.
 fn xray_outbounds(input: &RenderInput<'_>) -> AppResult<Vec<Value>> {
-    let mut outbounds = vec![xray_outbound(input.node, "proxy")?];
+    let mux = input.mux_streams();
+    let mut outbounds = vec![xray_outbound(input.node, "proxy", mux)?];
     for group in input.active_groups() {
         // A group whose nodes were all deleted is skipped rather than emitted
         // pointing at nothing — the kernel would refuse the whole config.
         if let Some(node) = input.member_node(group) {
-            outbounds.push(xray_outbound(node, &group.tag())?);
+            outbounds.push(xray_outbound(node, &group.tag(), mux)?);
         }
     }
     outbounds.push(json!({ "protocol": "freedom", "tag": "direct" }));
@@ -145,7 +146,11 @@ fn xray_outbounds(input: &RenderInput<'_>) -> AppResult<Vec<Value>> {
 
 /// One proxy outbound. `tag` is `proxy` for the active node and `group:<id>`
 /// for a group's copy of a member.
-fn xray_outbound(node: &Node, tag: &str) -> AppResult<Value> {
+///
+/// `mux_streams` is `Some(n)` only when the user turned multiplexing on; Xray
+/// treats a missing `mux` block and `"mux": {"enabled": false}` differently
+/// enough in the logs that emitting nothing is the honest "off".
+fn xray_outbound(node: &Node, tag: &str, mux_streams: Option<u16>) -> AppResult<Value> {
     let (protocol, settings) = match &node.protocol {
         Protocol::Vless { uuid, flow } => {
             let mut user = json!({ "id": uuid, "encryption": "none" });
@@ -209,12 +214,18 @@ fn xray_outbound(node: &Node, tag: &str) -> AppResult<Value> {
         }
     };
 
-    Ok(json!({
+    let mut outbound = json!({
         "tag": tag,
         "protocol": protocol,
         "settings": settings,
         "streamSettings": xray_stream_settings(&node.transport, &node.security),
-    }))
+    });
+    // `mux` sits beside `settings`, not inside it: Xray's outbound schema puts
+    // the multiplexing policy at the same level as the protocol payload.
+    if let Some(streams) = mux_streams {
+        outbound["mux"] = json!({ "enabled": true, "concurrency": streams });
+    }
+    Ok(outbound)
 }
 
 #[cfg(test)]

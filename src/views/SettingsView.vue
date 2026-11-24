@@ -42,14 +42,15 @@ function dnsList(raw: string): string {
  * The i18n keys of every saved setting the running kernel was started with
  * differently.
  *
- * Ports, the log level, LAN sharing and the resolver list are all baked into
- * the rendered config at start, so saving a new value changes only the
- * document until the kernel restarts; "已保存" alone would look broken. One
+ * Ports, the log level, LAN sharing, the resolver list and multiplexing are all
+ * baked into the rendered config at start, so saving a new value changes only
+ * the document until the kernel restarts; "已保存" alone would look broken. One
  * notice for all of them, in panel order, so the page never stacks near
  * duplicates. A stopped kernel has nothing stale — the next start renders the
  * saved settings anyway — and an unloaded document cannot be compared.
  * Deliberately compares the saved settings, not `draft`: a value the user typed
- * but has not saved is not a divergence yet.
+ * but has not saved is not a divergence yet. The stream cap only counts while
+ * both sides multiplex: with the feature off it is not part of the config.
  */
 const staleItems = computed<string[]>(() => {
   const saved = store.settings
@@ -62,6 +63,12 @@ const staleItems = computed<string[]>(() => {
   }
   if (saved.log_level !== status.log_level) items.push('settings.stale.itemLog')
   if (saved.allow_lan !== status.allow_lan) items.push('settings.stale.itemLan')
+  if (
+    saved.mux_enabled !== status.mux_enabled ||
+    (saved.mux_enabled && saved.mux_concurrency !== status.mux_concurrency)
+  ) {
+    items.push('settings.stale.itemMux')
+  }
   if (dnsList(saved.dns_servers) !== dnsList(status.dns_servers)) {
     items.push('settings.stale.itemDns')
   }
@@ -434,6 +441,25 @@ async function save() {
           :label="t('settings.closeToTray')"
           :description="t('settings.closeToTrayHint')"
         />
+      </section>
+
+      <section class="surface-plain panel">
+        <h2 class="section-title">{{ t('settings.mux') }}</h2>
+        <ToggleSwitch v-model="draft.mux_enabled" :label="t('settings.mux')" />
+        <div class="divider" />
+        <label class="field">
+          <span class="field-label">{{ t('settings.muxConcurrency') }}</span>
+          <input
+            v-model.number="draft.mux_concurrency"
+            class="input input-narrow"
+            type="number"
+            min="1"
+            max="128"
+            step="1"
+            :disabled="!draft.mux_enabled"
+          />
+        </label>
+        <p class="field-hint">{{ t('settings.muxHint') }}</p>
       </section>
 
       <section class="surface-plain panel">

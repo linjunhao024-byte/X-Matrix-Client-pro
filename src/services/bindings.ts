@@ -427,6 +427,19 @@ export type EngineStatus_Deserialize = {
 	 *  settings; empty means the kernel uses the system resolver.
 	 */
 	dns_servers: string,
+	/**
+	 *  Whether the running kernel multiplexes connections. Baked into the
+	 *  rendered config, so the settings page needs it to tell a saved change
+	 *  from one the kernel actually honours, same as
+	 *  [`EngineStatus::log_level`].
+	 */
+	mux_enabled: boolean,
+	/**
+	 *  The stream cap the running kernel was started with. Only meaningful
+	 *  while [`EngineStatus::mux_enabled`]; a stopped kernel reports the
+	 *  default instead of the last used value.
+	 */
+	mux_concurrency: number,
 };
 
 /**  What the UI shows about the runtime. */
@@ -466,6 +479,19 @@ export type EngineStatus_Serialize = {
 	 *  settings; empty means the kernel uses the system resolver.
 	 */
 	dns_servers: string,
+	/**
+	 *  Whether the running kernel multiplexes connections. Baked into the
+	 *  rendered config, so the settings page needs it to tell a saved change
+	 *  from one the kernel actually honours, same as
+	 *  [`EngineStatus::log_level`].
+	 */
+	mux_enabled: boolean,
+	/**
+	 *  The stream cap the running kernel was started with. Only meaningful
+	 *  while [`EngineStatus::mux_enabled`]; a stopped kernel reports the
+	 *  default instead of the last used value.
+	 */
+	mux_concurrency: number,
 };
 
 /**
@@ -1141,6 +1167,17 @@ export type Settings_Deserialize = {
 	 */
 	dns_servers?: string,
 	/**
+	 *  Multiplex several logical connections over one kernel-to-server link.
+	 *  Off by default: it helps on lossy or heavily-shaped links and hurts on a
+	 *  clean one, so the user opts in rather than inheriting a surprise.
+	 */
+	mux_enabled?: boolean,
+	/**
+	 *  How many streams one multiplexed link may carry. Only meaningful when
+	 *  `mux_enabled`; both kernels treat it as an upper bound, not a promise.
+	 */
+	mux_concurrency?: number,
+	/**
 	 *  Come up with the window hidden, tray only. For people who launch this at
 	 *  login and never want to see it.
 	 */
@@ -1262,6 +1299,17 @@ export type Settings_Serialize = {
 	 *  system resolver to resolve the resolver, which is how DNS loops start.
 	 */
 	dns_servers: string,
+	/**
+	 *  Multiplex several logical connections over one kernel-to-server link.
+	 *  Off by default: it helps on lossy or heavily-shaped links and hurts on a
+	 *  clean one, so the user opts in rather than inheriting a surprise.
+	 */
+	mux_enabled: boolean,
+	/**
+	 *  How many streams one multiplexed link may carry. Only meaningful when
+	 *  `mux_enabled`; both kernels treat it as an upper bound, not a promise.
+	 */
+	mux_concurrency: number,
 	/**
 	 *  Come up with the window hidden, tray only. For people who launch this at
 	 *  login and never want to see it.

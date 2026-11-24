@@ -158,7 +158,8 @@ impl Engine for SingBoxEngine {
 /// gets its own `node:<id>` outbound for the group to point at. A node shared
 /// by two groups is emitted once.
 fn singbox_outbounds(input: &RenderInput<'_>) -> AppResult<Vec<Value>> {
-    let mut outbounds = vec![singbox_outbound(input.node, "proxy")?];
+    let mux = input.mux_streams();
+    let mut outbounds = vec![singbox_outbound(input.node, "proxy", mux)?];
     let mut emitted: HashSet<String> = HashSet::new();
 
     for group in input.active_groups() {
@@ -170,7 +171,7 @@ fn singbox_outbounds(input: &RenderInput<'_>) -> AppResult<Vec<Value>> {
             };
             let tag = format!("node:{}", node.id);
             if emitted.insert(tag.clone()) {
-                outbounds.push(singbox_outbound(node, &tag)?);
+                outbounds.push(singbox_outbound(node, &tag, mux)?);
             }
             if !members.contains(&tag) {
                 members.push(tag);
@@ -207,7 +208,10 @@ fn singbox_outbounds(input: &RenderInput<'_>) -> AppResult<Vec<Value>> {
 
 /// One proxy outbound: `proxy` for the active node, `node:<id>` for a group
 /// member.
-fn singbox_outbound(node: &Node, tag: &str) -> AppResult<Value> {
+///
+/// `mux_streams` is `Some(n)` only when the user turned multiplexing on;
+/// sing-box spells the feature `multiplex` and its stream cap `max_streams`.
+fn singbox_outbound(node: &Node, tag: &str, mux_streams: Option<u16>) -> AppResult<Value> {
     let mut out = Map::new();
     out.insert("tag".into(), json!(tag));
     out.insert("server".into(), json!(node.server));
@@ -287,6 +291,16 @@ fn singbox_outbound(node: &Node, tag: &str) -> AppResult<Value> {
         // the outbound unless `tls.enabled` is true, even when the user
         // imported a share link that names no TLS at all.
         out.insert("tls".into(), json!({ "enabled": true }));
+    }
+
+    // `multiplex` is a flat sibling of `tls` on the outbound. `smux` is the
+    // wire protocol both kernels speak, and sing-box names the stream cap
+    // `max_streams` rather than Xray's `concurrency`.
+    if let Some(streams) = mux_streams {
+        out.insert(
+            "multiplex".into(),
+            json!({ "enabled": true, "protocol": "smux", "max_streams": streams }),
+        );
     }
 
     Ok(Value::Object(out))

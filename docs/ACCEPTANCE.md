@@ -882,3 +882,32 @@
 **两个坑**：
 1. **`status === null` 必须一起挡。** 早期写法是 `engine.status?.allow_lan`，状态还没拉回来时 `undefined !== false`，四项会一起变成「旧设置」，页面刚打开就闪一条提示。现在的 guard 是 `!engine.running || !store.loaded || saved === null || status === null`。
 2. **改完四项要按顺序等界面。** 端口是 `Spinner`（`SetValue` 后约 500ms 才落到 `draft`）、日志级别是 `Button`（不支持 `InvokePattern`，要滚动到可见再点矩形中心）、局域网连接是开关按钮、DNS 是 `Edit`——四个控件的驱动方式各不相同；全部改完再按一次「保存」，否则前面的改动会被后一次保存前的 `draft` 覆盖。
+## 38. 多路复用：一条开关同时把手伸进两个内核（2026-11-24，云电脑 cloudpc-test）
+
+**验法**：`bash /d/tmp/shots/mux-accept.sh`（读 store 里的 `mux_enabled`/`mux_concurrency` → 首页启动内核 → 确认渲染配置里没有 mux 块 → 设置页打开「多路复用」、连接数改成 12 → 保存 → 读提示行 → 点「用新设置重启内核」→ 读 pid、注册表、`configs/xray.json` 里的 mux 块 → 关掉开关再保存、再重启，确认块消失 → 停止内核）。
+
+V2rayN 和 Clash 都把 mux 当普通开关放在设置里；本项目此前完全没有这个概念（`Node` 结构里没有 mux 字段，两个渲染器也没写过 `mux`/`multiplex`）。这里把它做成**全局设置**而不是逐节点参数：它影响的是「这个内核怎么和服务器说话」，和端口、日志级别属于同一层，也就顺带进了 §37 的那一条提示。
+
+| 判据 | 验法 | 结果 |
+|---|---|---|
+| 开关打开、连接数改 12 能存下来 | `store after save: mux=true concurrency=12` | **通过** |
+| 提示里点名多路复用 | `stale: 内核还在用旧设置：多路复用`（`item mux: True`） | **通过** |
+| 提示带一键重启 | `restart button: True` | **通过** |
+| 重启真的换了进程 | `pids before=8600 after=1676` | **通过** |
+| 重启后提示自己消失 | `stale after restart: 0` | **通过** |
+| Xray 配置里出现 mux 块 | `render mux enabled: 4`、`render mux concurrency 12: 4` | **通过** |
+| 关掉开关保存后需要重启才生效 | `stale back: 1` | **通过** |
+| 重启后 mux 块整体消失 | `render mux keys restored: 0` | **通过** |
+| 系统代理不受影响 | `proxy now: ProxyEnable=1 ProxyServer=127.0.0.1:7890` | **通过** |
+| 停止后一切归零 | `after stop: ProxyEnable=0 ProxyServer=`，`kernels after stop: 0` | **通过** |
+
+**三个设计理由**：
+- **「要不要写这块」只在一处决定。** `RenderInput::mux_streams() -> Option<u16>` 是唯一的判断点：`None` 表示用户没开，两个渲染器就不写这个块；`Some(n)` 才写。两个内核对这个块的拼法压根不同（Xray 用 `"mux": {"enabled": true, "concurrency": n}`，sing-box 用 `"multiplex": {"enabled": true, "protocol": "smux", "max_streams": n}`），但「开/关」这件事只有一个答案源，避免一个内核开了另一个没开。
+- **关的时候整块不写，而不是写 `enabled: false`。** 两个内核都把 `enabled: false` 当成「用户显式关掉」并保留其余字段，配置里凭空多一块会让「内核用的是什么」比实际更难读；「没写」才是「没这个概念」。验收里 `render mux keys restored: 0` 就是这个意思。
+- **连接数跟着开关一起校验，范围 1..=128。** 0 会让用户以为开了却什么都不做，128 之后每条流都挂在同一条可能卡住的链路上；`validate()` 直接拒掉而不是悄悄改成默认值——存进去的东西必须是用户看到的那个。
+
+**两个坑**：
+1. **开关在 UIA 里是 `Button`，但 `Buttons-Named` 返回的是包装对象。** 直接把它交给 `GetCurrentPattern` 会抛「[PSCustomObject] 不包含名为 GetCurrentPattern 的方法」；要么取 `.El`，要么让调用方统一拿元素本身。另外这个面板在页面下方，点之前必须 `ScrollItemPattern.ScrollIntoView()`，否则点到的坐标落在别的面板上。
+2. **连接数输入框在开关关闭时是 `disabled`。** 先设数字再开开关会报「对于未启用的元素，不允许执行此操作」，正确的顺序是「开开关 → 再 SetValue」；反过来关的时候也一样，先关再改数字不会自动保存。
+
+**一句实话**：本节证明的是「开关 → 渲染配置 → 重启后生效」这条链路，不证明 mux 真的让连接更快——那要看线路，云电脑上只有一个跑不通的测试节点，测不出来。

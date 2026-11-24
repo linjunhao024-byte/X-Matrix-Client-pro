@@ -2960,6 +2960,21 @@
     "Rule mode follows your rules, global sends everything through the proxy, direct bypasses every node."
   ],
   [
+    "settings.mux",
+    "多路复用",
+    "Multiplexing"
+  ],
+  [
+    "settings.muxConcurrency",
+    "同时复用的连接数",
+    "Concurrent streams"
+  ],
+  [
+    "settings.muxHint",
+    "把多条连接复用到同一条内核链路。链路丢包或被限速时更快，干净线路上反而更慢。",
+    "Reuse one kernel-to-server link for many connections. Faster on lossy or shaped links, slower on a clean one."
+  ],
+  [
     "settings.ports",
     "端口",
     "Ports"
@@ -3028,6 +3043,11 @@
     "settings.stale.itemLan",
     "局域网连接",
     "LAN access"
+  ],
+  [
+    "settings.stale.itemMux",
+    "多路复用",
+    "multiplexing"
   ],
   [
     "settings.stale.itemDns",

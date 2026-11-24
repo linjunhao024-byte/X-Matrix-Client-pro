@@ -8,7 +8,7 @@
 ## 0. 三句话现状
 
 1. 主体功能已追平 V2RayN / Clash 的日常面：双内核（Xray / sing-box）渲染与启停、系统代理接管与还原、订阅/整包导入、Clash 配置连同 **策略组与规则** 一起导入、运行中热切换节点与代理模式、托盘子菜单、日志页、hysteria2 / tuic、真实延迟（分组与节点）、流量历史落盘、一键断开全部 + 进程归属、测速预算与「选最快」、域名正则 / 域名分类匹配器、诊断包导出、全局快捷键。
-2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§37）。
+2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§38）。
 3. 交接时那处未提交的工作（N12 应用内更新检查）已经构建、真机验收并提交；此后又合入四件事：`--quit` 正常退出并删除托盘图标（§21）、GEO 数据文件卡片与镜像回退下载（§23）、测速记录落盘（§24）。工作区现在是干净的。
 
 ### 0.1 进度快照（交接这一刻的硬数字）
@@ -16,15 +16,15 @@
 | 项 | 值 |
 |---|---|
 | 代码 HEAD | `e6cd578`「feat(settings): one notice for every setting the running kernel is behind on」（= 最后一个**已提交**的功能，含 §37） |
-| 未提交 | 无（§37 的改动已提交为 `e6cd578`） |
+| 未提交 | 无（§38 多路复用的改动已提交） |
 | 上一版未提交清单（留档） | `src-tauri/src/engine/{mod,runtime}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§37 统一提示）；再上一版：`src-tauri/src/commands/settings.rs`、`src-tauri/src/commands/sysproxy.rs`、`src/stores/sysproxy.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`、`docs/ACCEPTANCE.md`（§36 系统代理即时生效） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库（HEAD 上这一条） |
 | IPC 命令 | **77**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
-| Rust 单测 | **344 passed**（`ARCHITECTURE.md:278` 已同步） |
+| Rust 单测 | **348 passed**（`ARCHITECTURE.md:278` 已同步） |
 | 前端检查 | `npm run check` 全绿：vue-tsc / architecture / contract / vitest **78**（8 文件） |
-| i18n | **736** 键（`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
+| i18n | **740** 键（`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
 | 桌面产物 | 见 §1 表格（每次构建后刷新；当前 release 构建含 N12 + GEO + 测速落盘 + 退出通知） |
-| 验收文档 | `docs/ACCEPTANCE.md` §0–§37（§7 历史空缺，编号不连续但内容完整） |
+| 验收文档 | `docs/ACCEPTANCE.md` §0–§38（§7 历史空缺，编号不连续但内容完整） |
 | 云电脑 | 干净：`ProxyEnable=0x0`、无 X-Matrix/sing-box/xray 进程、无 `xm*` 计划任务 |
 
 **下一步的确定顺序**（做完一条打一个勾，别跳）：
@@ -35,7 +35,7 @@
 - [x] 4. `docs/ACCEPTANCE.md` 写到 §26
 - [x] 5. 提交（`fix(tray)` / `feat(update)` / `feat(geo,nodes)` / `feat(engine)` 各一条）
 - [x] 6. `FEED_URL` 已指向真实仓库 `linjunhao024-byte/X-Matrix-Client-pro`，`v0.1.0` 已发布并带 `X-Matrix.exe` 资产
-- [x] 7. 计数已同步：77 命令 / 344 单测 / 78 vitest / 736 i18n 键
+- [x] 7. 计数已同步：77 命令 / 348 单测 / 78 vitest / 740 i18n 键
 - [ ] 8. `bash /d/tmp/shots/cleanup.sh` 收尾云电脑
 
 ---
@@ -54,8 +54,8 @@
 | 桌面产物 | `/c/Users/83611/Desktop/X-Matrix.exe`、`/c/Users/83611/Desktop/X-Matrix_0.1.0_x64-setup.exe` |
 | 当前桌面产物版本 | exe **9,823,232 B @10:32**、NSIS **3,181,050 B @10:32**（= N9 那一次构建，**不含 N12**） |
 
-**计数基线（改动后记得同步文档）**：命令 **77**、`cargo test --lib` **344**、vitest **78**（8 个文件）、i18n **736** 键。
-> `README.md:81` 与 `ARCHITECTURE.md:277-278` 已同步为 77 条命令 / 344 项测试。
+**计数基线（改动后记得同步文档）**：命令 **77**、`cargo test --lib` **348**、vitest **78**（8 个文件）、i18n **740** 键。
+> `README.md:81` 与 `ARCHITECTURE.md:277-278` 已同步为 77 条命令 / 348 项测试。
 
 命令数核算法：
 
@@ -150,6 +150,7 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 | §35 | 节点没了就停内核：删除即停、刷新换 ID 则跟随、代理同时交还 |
 | §36 | 保存系统代理开关/例外清单时，正在跑的内核立刻接管或交还 |
 | §37 | 一条提示说全「内核还在用旧设置」：端口、日志级别、局域网连接、DNS |
+| §38 | 多路复用：一条全局开关同时写进 Xray 的 `mux` 与 sing-box 的 `multiplex` |
 
 已提交的提交序列（新→旧，14 条主体）：
 `5a44af3` 域名正则+geosite · `569a7ce` 流量历史 · `44b857b` 测速预算+选最快 · `42f85bd` 一键断开+进程名 · `f817726` 真实延迟 · `f3fc750` 订阅走代理 · `d892b9e` Clash 导入带组和规则 · `6851775` 托盘子菜单 · `f9a0406` H4 验收文档 · `14ddb20` hysteria2/tuic · `fdd0b8d` 运行中热切换 · `eb3f453` 日志页 · `79ccadd` 设计修复（粘右操作列、错误用红、焦点陷阱等）· `535124b` 快捷键与诊断包验收。
@@ -159,6 +160,8 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 ---
 
 ## 5. 最近完成的事（已提交、已真机验收）
+
+**多路复用（2026-11-24，§38）**：V2rayN/Clash 都有 mux，本项目此前连字段都没有。做成全局设置（`Settings.mux_enabled` / `mux_concurrency`，`#[serde(default)]` 老 store 照读）而不是逐节点参数，因为它和端口、日志级别一样属于「内核怎么说话」这一层，顺带接进了 §37 的那一条提示（`settings.stale.itemMux`）。两个渲染器都从 `RenderInput::mux_streams() -> Option<u16>` 取唯一答案：`None` 就整块不写，`Some(n)` 时 Xray 写 `"mux": {"enabled": true, "concurrency": n}`、sing-box 写 `"multiplex": {"enabled": true, "protocol": "smux", "max_streams": n}`；`EngineStatus` 也带上这两个值，所以设置页能说出「内核还在用旧设置：多路复用」。真机证据：`store after save: mux=true concurrency=12` → `stale: 内核还在用旧设置：多路复用` → 重启 `xray#8600→#1676` → `render mux enabled: 4`、`render mux concurrency 12: 4`、`stale after restart: 0` → 关掉再保存 `stale back: 1` → 重启 `render mux keys restored: 0` → 停止后 `ProxyEnable=0`、内核 0。`cargo test --lib` 348（新增 4 条）。本节只证明「开关 → 渲染配置 → 重启生效」，不证明 mux 真的更快。
 
 **一条提示说全四件事（2026-11-24，§37）**：设置页原本有两条几乎一样的提示（端口、日志级别），而同样写进渲染配置的「允许局域网连接」和「DNS」一个字都不说。现在 `EngineStatus` 多带 `allow_lan` 与 `dns_servers`（`start()` 在 `with_options` 之前抄进 `Running`，DNS 保留设置原文 `RunOptions::dns_servers_raw`，因为解析后的列表拿不回空格/尾逗号），`SettingsView.vue` 的 `staleItems` 按面板顺序列出四项、`staleMessage` 用「、」拼成一句，页面只剩一个 `<StaleConfig>` + 一个「用新设置重启内核」。真机证据：`stale: 内核还在用旧设置：端口、日志级别、局域网连接、DNS`（`stale lines: 1`）→ 重启 `xray#9072→#8968` → `proxy now: ProxyServer=127.0.0.1:7891`、`render loglevel: warning`、`render dns has 9.9.9.9: True`、`render lan listen 0.0.0.0: True` → `stale after restart: 0` → 停止后 `ProxyEnable=0`、内核 0。`cargo test --lib` 344（新增 2 条）。
 
@@ -270,7 +273,7 @@ scp -i /c/Users/83611/.ssh/id_ed25519_cpc 本地文件 Administrator@100.106.121
 
 1. `cd /d/GitHub-Warehouse/X-Matrix-Client-Pro && git status` —— 工作区应当干净；有改动先弄清是谁的。
 2. 读本文件的 §5 与 `docs/ACCEPTANCE.md` 的最后两节，对齐上下文。
-3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 344 passed）。
+3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 348 passed）。
 4. `cd .. && npm run check`（应为全绿）。
 5. 从 §6 表里挑一项（按性价比排序），**一项一提交**，提交信息用英文 `feat(...)/fix(...)/docs: ...`。
 6. 真机验证前先跑 `bash /d/tmp/shots/deploy-tray.sh <exe>`；远端被 `cleanup.sh` 清过的话，先 `scp x-act.ps1 uia2.ps1 ocr.ps1` 上去。

@@ -215,6 +215,15 @@ pub struct EngineStatus {
     /// The resolver list the running kernel was started with, verbatim from the
     /// settings; empty means the kernel uses the system resolver.
     pub dns_servers: String,
+    /// Whether the running kernel multiplexes connections. Baked into the
+    /// rendered config, so the settings page needs it to tell a saved change
+    /// from one the kernel actually honours, same as
+    /// [`EngineStatus::log_level`].
+    pub mux_enabled: bool,
+    /// The stream cap the running kernel was started with. Only meaningful
+    /// while [`EngineStatus::mux_enabled`]; a stopped kernel reports the
+    /// default instead of the last used value.
+    pub mux_concurrency: u16,
 }
 
 impl Default for EngineStatus {
@@ -233,6 +242,8 @@ impl Default for EngineStatus {
             log_level: LogLevel::Warn,
             allow_lan: false,
             dns_servers: String::new(),
+            mux_enabled: false,
+            mux_concurrency: 8,
         }
     }
 }
@@ -281,6 +292,12 @@ struct Running {
     /// The resolver list this kernel was started with; see
     /// [`EngineStatus::dns_servers`].
     dns_servers: String,
+    /// The multiplexing opt-in this kernel was started with; see
+    /// [`EngineStatus::mux_enabled`].
+    mux_enabled: bool,
+    /// The stream cap this kernel was started with; see
+    /// [`EngineStatus::mux_concurrency`].
+    mux_concurrency: u16,
     /// True once [`EngineRuntime::stop`] asked this kernel to go away. Set
     /// before the kill because a kill that reports an error can still have
     /// taken the process down: either way the exit was the user's decision, not
@@ -387,12 +404,14 @@ impl EngineRuntime {
 
         // The log level is rendered into the config, so the options are the
         // only place it exists before the config is written — read it before
-        // `with_options` consumes them. Same for the two DNS/LAN settings: the
+        // `with_options` consumes them. Same for the DNS/LAN/mux settings: the
         // UI compares them with the saved ones, and the rendered config cannot
         // give the original text back.
         let log_level = options.log_level;
         let allow_lan = options.allow_lan;
         let dns_servers = options.dns_servers_raw.clone();
+        let mux_enabled = options.mux_enabled;
+        let mux_concurrency = options.mux_concurrency;
         let mut input = RenderInput::new(node, endpoints).with_options(options);
         if kind == EngineKind::SingBox {
             input = input.with_rule_set_dir(&rule_set_dir);
@@ -438,6 +457,8 @@ impl EngineRuntime {
             log_level,
             allow_lan,
             dns_servers: dns_servers.clone(),
+            mux_enabled,
+            mux_concurrency,
             expected: false,
         });
         *self.last_exit_code.lock() = None;
@@ -460,6 +481,8 @@ impl EngineRuntime {
             log_level,
             allow_lan,
             dns_servers,
+            mux_enabled,
+            mux_concurrency,
         })
     }
 
@@ -556,6 +579,8 @@ impl EngineRuntime {
                 log_level: running.log_level,
                 allow_lan: running.allow_lan,
                 dns_servers: running.dns_servers.clone(),
+                mux_enabled: running.mux_enabled,
+                mux_concurrency: running.mux_concurrency,
             },
         }
     }
@@ -1409,6 +1434,59 @@ four"
         assert!(!status.running);
         assert!(!status.allow_lan);
         assert_eq!(status.dns_servers, "");
+
+        std::fs::remove_dir_all(&h.dir).ok();
+    }
+
+    #[test]
+    fn status_reports_the_mux_the_kernel_was_started_with() {
+        let h = harness(true, false);
+        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let options = RunOptions {
+            mux_enabled: true,
+            mux_concurrency: 16,
+            ..RunOptions::new()
+        };
+        let started = h
+            .runtime
+            .start(EngineKind::Xray, &node(), endpoints, options)
+            .unwrap();
+
+        // Multiplexing is baked into the rendered config as well, so the
+        // settings page can tell an applied change from a saved one only if
+        // the runtime remembers what it started with.
+        assert!(started.mux_enabled);
+        assert_eq!(started.mux_concurrency, 16);
+        let status = h.runtime.status();
+        assert!(status.mux_enabled);
+        assert_eq!(status.mux_concurrency, 16);
+
+        std::fs::remove_dir_all(&h.dir).ok();
+    }
+
+    #[test]
+    fn a_stopped_kernel_reports_no_mux() {
+        let h = harness(true, false);
+        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let options = RunOptions {
+            mux_enabled: true,
+            mux_concurrency: 32,
+            ..RunOptions::new()
+        };
+        h.runtime
+            .start(EngineKind::Xray, &node(), endpoints, options)
+            .unwrap();
+
+        h.runtime.stop().unwrap();
+        // Nothing runs, so no link is being multiplexed and no stream cap is
+        // in force: both fall back to the default rather than the last used
+        // value, which would read as a live setting the kernel never got.
+        let status = h.runtime.status();
+        assert!(!status.running);
+        assert!(!status.mux_enabled);
+        assert_eq!(status.mux_concurrency, 8);
+        assert!(!EngineStatus::default().mux_enabled);
+        assert_eq!(EngineStatus::default().mux_concurrency, 8);
 
         std::fs::remove_dir_all(&h.dir).ok();
     }
