@@ -647,6 +647,8 @@ export const en: Record<string, string> = {
   "settings.restoreProxy": "Restore system proxy",
   "settings.stalePort": "Saved, but the kernel is still listening on the old ports",
   "settings.stalePortApply": "Restart the kernel on the new ports",
+  "settings.staleLog": "Saved, but the kernel is still logging at the old level",
+  "settings.staleLogApply": "Restart the kernel with the new level",
   "settings.startMinimized": "Start hidden",
   "settings.startMinimizedHint": "Useful with launch at login: appear in the tray only",
   "settings.subAgent": "Subscription User-Agent",

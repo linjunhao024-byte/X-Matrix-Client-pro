@@ -3010,6 +3010,16 @@
     "Restart the kernel on the new ports"
   ],
   [
+    "settings.staleLog",
+    "日志级别已改，内核还在用旧级别",
+    "Saved, but the kernel is still logging at the old level"
+  ],
+  [
+    "settings.staleLogApply",
+    "用新级别重启内核",
+    "Restart the kernel with the new level"
+  ],
+  [
     "settings.startMinimized",
     "启动时隐藏窗口",
     "Start hidden"

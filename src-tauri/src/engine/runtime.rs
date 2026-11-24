@@ -30,6 +30,7 @@ use specta::Type;
 use super::job::KillOnCloseJob;
 use super::{Endpoints, EngineKind, LoadedRuleSet, RenderInput, RunOptions, StatsChannel};
 use crate::domain::node::Node;
+use crate::domain::settings::LogLevel;
 use crate::error::{AppError, AppResult};
 
 /// How long a kernel gets to open its control port.
@@ -200,6 +201,10 @@ pub struct EngineStatus {
     /// Set when a kernel exited on its own, so the UI can explain the stop
     /// instead of silently flipping to "not running".
     pub last_exit_code: Option<i32>,
+    /// The level the running kernel was started with. The log level is baked
+    /// into the rendered config, so the UI needs this to tell a saved-but-not-
+    /// applied change from an applied one.
+    pub log_level: LogLevel,
 }
 
 impl Default for EngineStatus {
@@ -214,6 +219,7 @@ impl Default for EngineStatus {
             config_path: String::new(),
             started_at_ms: 0,
             last_exit_code: None,
+            log_level: LogLevel::Warn,
         }
     }
 }
@@ -252,6 +258,8 @@ struct Running {
     endpoints: Endpoints,
     config_path: PathBuf,
     started_at_ms: u64,
+    /// The level this kernel was started with; see [`EngineStatus::log_level`].
+    log_level: LogLevel,
     /// True once [`EngineRuntime::stop`] asked this kernel to go away. Set
     /// before the kill because a kill that reports an error can still have
     /// taken the process down: either way the exit was the user's decision, not
@@ -356,6 +364,10 @@ impl EngineRuntime {
             write_rule_set_files(&rule_set_dir, options.rule_sets)?;
         }
 
+        // The log level is rendered into the config, so the options are the
+        // only place it exists before the config is written — read it before
+        // `with_options` consumes them.
+        let log_level = options.log_level;
         let mut input = RenderInput::new(node, endpoints).with_options(options);
         if kind == EngineKind::SingBox {
             input = input.with_rule_set_dir(&rule_set_dir);
@@ -397,6 +409,7 @@ impl EngineRuntime {
             endpoints,
             config_path: config_path.clone(),
             started_at_ms,
+            log_level,
             expected: false,
         });
         *self.last_exit_code.lock() = None;
@@ -415,6 +428,7 @@ impl EngineRuntime {
             config_path: config_path.to_string_lossy().into_owned(),
             started_at_ms,
             last_exit_code: None,
+            log_level,
         })
     }
 
@@ -487,6 +501,7 @@ impl EngineRuntime {
                 config_path: running.config_path.to_string_lossy().into_owned(),
                 started_at_ms: running.started_at_ms,
                 last_exit_code: None,
+                log_level: running.log_level,
             },
         }
     }
@@ -1212,6 +1227,50 @@ four"
         h.runtime.stop().unwrap();
         assert_eq!(*h.killed.lock(), vec![4242]);
         assert!(h.runtime.stats_channel().is_none());
+        std::fs::remove_dir_all(&h.dir).ok();
+    }
+
+    #[test]
+    fn status_reports_the_level_the_kernel_was_started_with() {
+        let h = harness(true, false);
+        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let options = RunOptions {
+            log_level: LogLevel::Debug,
+            ..RunOptions::new()
+        };
+        let started = h
+            .runtime
+            .start(EngineKind::Xray, &node(), endpoints, options)
+            .unwrap();
+
+        // Both the start result and the polled status carry the level the
+        // config was rendered with, so the settings page can compare it with
+        // the saved value.
+        assert_eq!(started.log_level, LogLevel::Debug);
+        assert_eq!(h.runtime.status().log_level, LogLevel::Debug);
+
+        std::fs::remove_dir_all(&h.dir).ok();
+    }
+
+    #[test]
+    fn a_stopped_kernel_reports_the_default_level() {
+        let h = harness(true, false);
+        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let options = RunOptions {
+            log_level: LogLevel::Debug,
+            ..RunOptions::new()
+        };
+        h.runtime
+            .start(EngineKind::Xray, &node(), endpoints, options)
+            .unwrap();
+
+        h.runtime.stop().unwrap();
+        // Nothing runs, so no level is applied: the UI must fall back to the
+        // domain default rather than claim the debug kernel is still alive.
+        let status = h.runtime.status();
+        assert!(!status.running);
+        assert_eq!(status.log_level, LogLevel::Warn);
+
         std::fs::remove_dir_all(&h.dir).ok();
     }
 

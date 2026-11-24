@@ -770,3 +770,32 @@
 2. **`ValuePattern.SetValue` 之后要等一拍再保存。** 立即点「保存」偶尔会存到旧值（前端 `v-model` 还没回写）；脚本里固定 `Start-Sleep -Milliseconds 500`。
 3. **提示文案必须用子串判断。** UIA 读回的中文会被截断（`端口已改` 完整，但长句会掉字），整串比对会假失败。
 4. **改端口这条路径只有在 `system_proxy=true` 时才动注册表。** 如果 store 里关掉了系统代理，重启内核不会写 `ProxyServer`；判据要先读 store，别把「没接管」当成「没生效」。
+
+## 34. 改了日志级别、内核还在用旧级别：同一句话说在另一个位置（2026-11-24，云电脑 cloudpc-test）
+
+**验法**：`bash /d/tmp/shots/log-accept.sh`（部署 → 首页点「启动」→ 进设置页点与当前值不同的级别（store 是 `debug` 就点「警告」）→ 保存 → 读提示与按钮 → 点「用新级别重启内核」→ 读内核渲染出来的 `configs/xray.json` 的 `loglevel` 与 PID → 再点回原级别走一遍 → 停止内核收尾）。
+
+日志级别和端口是同一类谎话：设置页显示「已保存」，可内核进程里还是启动时那一份。区别是端口能被注册表看见，日志级别只能从**内核真正读到的配置**里看见，所以判据直接读 `%APPDATA%\com.xmatrix.client\configs\xray.json`。
+
+| 判据 | 验法 | 结果 |
+|---|---|---|
+| 启动时记下的级别就是渲染出来的级别 | `store level: debug`，启动后 `render at start: debug` | **通过** |
+| 改成另一个级别后页面说出来 | 点「警告」保存 → `saved level: warn`、`notice present: True` | **通过** |
+| 话旁边就有动作 | 同屏出现按钮 `用新级别重启内核` | **通过** |
+| 按钮真的换了内核的级别 | 重启后 `render after restart: warning`（`xray.json` 的 `loglevel`） | **通过** |
+| 换的是新进程 | `pids before=xray#1224 after=xray#2868` | **通过** |
+| 提示自己消失 | 重启后 `notice cleared: True` | **通过** |
+| 改回去同样成立 | 点「调试」保存 → `notice back: True` → 重启 → `render restored: debug`、`store restored: debug` | **通过** |
+| 停止内核后收尾干净 | 点「停止」→ `kernels after stop:`（空） | **通过** |
+| 内核没在跑时不打扰 | `staleLog` 以 `engine.running` 为前提；未启动时改级别保存不出现提示 | **通过**（`npm run check`：78 tests） |
+
+**三个设计理由**：
+- **内核自己说出它用的级别，而不是回头再读一遍设置。** `EngineStatus.log_level` 来自 `Running.log_level`——那是 `start()` 当时塞进 `RenderInput` 的那个值；如果改成「重新读 settings」，设置一存两边就永远相等，这个提示会在最需要它的时候消失。
+- **不比「输入框草稿」，只比「存下来的设置」。** 用户在设置页来回点级别只是在挑，只有点「保存」才算数；比草稿会让提示在挑的过程中反复闪。
+- **同一个组件、同一套复位逻辑，第三处复用。** 端口、日志级别、规则页用的都是 `StaleConfig`；文案靠 prop 覆盖，`started_at_ms` 监听不变，于是「任何方式重启都清提示」这条性质自动对三处都成立。
+
+**四个坑**：
+1. **级别按钮不支持 `InvokePattern`。** `GetCurrentPattern(InvokePattern)` 直接抛「不支持的模式」，鼠标点也没用——必须先 `ScrollItemPattern.ScrollIntoView()`（这一节在页面很下面，`y≈4856`），再按最新 rect 的**中心**点；直接点旧坐标会落在别处。
+2. **点一个和当前值相同的按钮不算「改了」。** 第一次跑验收时 store 已经是 `warn`，脚本又点了「警告」——值没变，提示当然不出现；这不是 bug，是判据写错了。脚本要先读 store，再点**另一个**级别。
+3. **渲染出来的拼写和我们存的不一样。** 我们存 `warn`，xray 写的是 `"loglevel": "warning"`；比对要做映射（`warn → warning`），否则「重启成功」会被判成失败。
+4. **`store.json` 带 BOM，`ConvertFrom-Json` 会直接报错。** `Get-Content -Raw | ConvertFrom-Json` 抛「传入的对象无效，应为“:”或“}”」；用 `[IO.File]::ReadAllText` + 正则抠 `"log_level"` 才稳。

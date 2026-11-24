@@ -405,6 +405,12 @@ export type EngineStatus_Deserialize = {
 	 *  instead of silently flipping to "not running".
 	 */
 	last_exit_code?: number | null,
+	/**
+	 *  The level the running kernel was started with. The log level is baked
+	 *  into the rendered config, so the UI needs this to tell a saved-but-not-
+	 *  applied change from an applied one.
+	 */
+	log_level: LogLevel,
 };
 
 /**  What the UI shows about the runtime. */
@@ -422,6 +428,12 @@ export type EngineStatus_Serialize = {
 	 *  instead of silently flipping to "not running".
 	 */
 	last_exit_code: number | null,
+	/**
+	 *  The level the running kernel was started with. The log level is baked
+	 *  into the rendered config, so the UI needs this to tell a saved-but-not-
+	 *  applied change from an applied one.
+	 */
+	log_level: LogLevel,
 };
 
 /**

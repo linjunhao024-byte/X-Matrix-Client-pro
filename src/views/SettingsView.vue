@@ -45,6 +45,21 @@ const stalePorts = computed(
       store.settings.api_port !== engine.status?.api_port),
 )
 
+/**
+ * True when the saved log level is not the one the running kernel uses.
+ *
+ * Like the ports, the level is baked into the config at start: saving a new
+ * 日志级别 while a kernel runs changes the document only, and the log keeps
+ * its old verbosity until the next start. A stopped kernel has nothing stale.
+ */
+const staleLog = computed(
+  () =>
+    engine.running &&
+    store.loaded &&
+    store.settings !== null &&
+    store.settings.log_level !== engine.status?.log_level,
+)
+
 const modes: { value: ProxyMode; labelKey: string }[] = [
   { value: 'rule', labelKey: 'settings.mode.rule' },
   { value: 'global', labelKey: 'settings.mode.global' },
@@ -447,6 +462,12 @@ async function save() {
         </div>
         <p class="field-hint">{{ t('settings.kernel.note') }}</p>
       </section>
+
+      <StaleConfig
+        :show="staleLog"
+        :message="t('settings.staleLog')"
+        :apply-label="t('settings.staleLogApply')"
+      />
 
       <section class="surface-plain panel">
         <h2 class="section-title">{{ t('settings.logLevel') }}</h2>

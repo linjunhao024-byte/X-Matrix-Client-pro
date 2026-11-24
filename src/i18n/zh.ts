@@ -647,6 +647,8 @@ export const zh: Record<string, string> = {
   "settings.restoreProxy": "还原系统代理",
   "settings.stalePort": "端口已改，内核还在旧端口上跑",
   "settings.stalePortApply": "用新端口重启内核",
+  "settings.staleLog": "日志级别已改，内核还在用旧级别",
+  "settings.staleLogApply": "用新级别重启内核",
   "settings.startMinimized": "启动时隐藏窗口",
   "settings.startMinimizedHint": "开机自启配合使用时有用：只在托盘里出现，不弹窗",
   "settings.subAgent": "订阅 User-Agent",
