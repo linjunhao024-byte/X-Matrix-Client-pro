@@ -101,7 +101,17 @@ const staleItems = computed<string[]>(() => {
 
   const items: string[] = []
   if (saved.mode !== status.mode) items.push('settings.stale.itemMode')
-  if (saved.mixed_port !== status.mixed_port || saved.api_port !== status.api_port) {
+  // `http_port`/`socks_port` are 0 in the store when they follow the mixed
+  // port, but the status always reports the effective numbers: resolve the
+  // saved side before comparing, or a default install reads as stale forever.
+  const savedHttp = saved.http_port || saved.mixed_port
+  const savedSocks = saved.socks_port || saved.mixed_port
+  if (
+    saved.mixed_port !== status.mixed_port ||
+    saved.api_port !== status.api_port ||
+    savedHttp !== status.http_port ||
+    savedSocks !== status.socks_port
+  ) {
     items.push('settings.stale.itemPorts')
   }
   if (saved.log_level !== status.log_level) items.push('settings.stale.itemLog')
@@ -425,6 +435,22 @@ async function save() {
             <span class="field-hint">{{ t('settings.apiHint') }}</span>
           </label>
         </div>
+        <div class="grid port-split">
+          <label class="field">
+            <span class="field-label">{{ t('settings.httpPort') }}</span>
+            <input v-model.number="draft.http_port" class="input input-narrow" type="number" min="0" max="65535" />
+          </label>
+          <label class="field">
+            <span class="field-label">{{ t('settings.socksPort') }}</span>
+            <input v-model.number="draft.socks_port" class="input input-narrow" type="number" min="0" max="65535" />
+          </label>
+        </div>
+        <p class="field-hint port-hint">
+          {{ t('settings.portSplitHint') }}
+          <span v-if="engine.running && engine.status" class="mono port-now">
+            HTTP {{ engine.status.http_port }} · SOCKS {{ engine.status.socks_port }}
+          </span>
+        </p>
       </section>
 
       <section class="surface-plain panel">
@@ -839,6 +865,19 @@ async function save() {
   min-height: 0;
   overflow-y: auto;
   padding: 24px 32px 40px;
+}
+
+.port-split {
+  margin-top: 14px;
+}
+
+.port-hint {
+  margin-top: 6px;
+}
+
+.port-now {
+  margin-left: 8px;
+  color: var(--text-secondary);
 }
 
 .hotkey-row {

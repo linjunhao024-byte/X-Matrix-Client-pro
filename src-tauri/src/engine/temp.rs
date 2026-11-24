@@ -165,7 +165,7 @@ pub(crate) fn attempt(
         files: vec![config_path, stderr_path.clone()],
     };
 
-    let address = SocketAddr::from(([127, 0, 0, 1], endpoints.mixed_port));
+    let address = SocketAddr::from(([127, 0, 0, 1], endpoints.proxy_port()));
     let deadline = Instant::now() + timeout;
     let mut ready = false;
     let mut exit_status = None;
@@ -190,11 +190,11 @@ pub(crate) fn attempt(
         return Attempt::NotStarted(not_ready_error(
             read_stderr(&stderr_path),
             exit_status,
-            endpoints.mixed_port,
+            endpoints.proxy_port(),
         ));
     }
 
-    match latency::http_latency_via_proxy_with_timeout(endpoints.mixed_port, url, timeout) {
+    match latency::http_latency_via_proxy_with_timeout(endpoints.proxy_port(), url, timeout) {
         Ok(ms) => Attempt::Measured(ms),
         Err(error) => Attempt::Failed(error),
     }
@@ -229,6 +229,10 @@ fn probe_config(
 }
 
 /// Two ports nobody else is using, for one kernel's inbound and control API.
+///
+/// The one-shot kernel never splits HTTP and SOCKS — it exists for a single
+/// HTTP latency probe — so both split ports stay `0` and resolve to the mixed
+/// port.
 fn free_endpoints() -> AppResult<Endpoints> {
     let mixed_port = free_port()?;
     let mut api_port = free_port()?;
@@ -236,7 +240,7 @@ fn free_endpoints() -> AppResult<Endpoints> {
     // is closed, and a kernel cannot bind both on one port.
     for _ in 0..8 {
         if api_port != mixed_port {
-            return Endpoints::new(mixed_port, api_port);
+            return Endpoints::new(mixed_port, 0, 0, api_port);
         }
         api_port = free_port()?;
     }
@@ -355,7 +359,7 @@ mod tests {
             let config = probe_config(
                 *kind,
                 &node(),
-                Endpoints::new(7890, 9090).unwrap(),
+                Endpoints::new(7890, 0, 0, 9090).unwrap(),
                 "http://example.com/probe",
             )
             .unwrap();

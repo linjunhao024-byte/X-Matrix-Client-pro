@@ -133,10 +133,24 @@ pub fn save_settings(
                 // The *running* kernel's port, never the saved one: a port
                 // edited in the same save only takes effect on the next start,
                 // and pointing the registry at it now would send every request
-                // into a port nothing listens on.
-                let port = match status.mixed_port {
-                    0 => settings.mixed_port,
-                    port => port,
+                // into a port nothing listens on. With a split this is the
+                // kernel's HTTP inbound, not its mixed port.
+                let port = if status.http_port != 0 {
+                    status.http_port
+                } else {
+                    // A running kernel always reports resolved ports, so this
+                    // is only reachable if that invariant ever breaks; falling
+                    // back to the saved pair (resolved the same way the
+                    // renderer resolves it) beats hijacking the machine into
+                    // port 0.
+                    crate::engine::Endpoints::new(
+                        settings.mixed_port,
+                        settings.http_port,
+                        settings.socks_port,
+                        settings.api_port,
+                    )
+                    .map(|endpoints| endpoints.proxy_port())
+                    .unwrap_or(settings.mixed_port)
                 };
                 // The settings are already saved when this fails: the error
                 // tells the user why the machine state did not follow, instead

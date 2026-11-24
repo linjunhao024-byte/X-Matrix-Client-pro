@@ -10,23 +10,23 @@
 ## 0. 三句话现状
 
 1. 主体功能已追平 V2RayN / Clash 的日常面：双内核（Xray / sing-box）渲染与启停、系统代理接管与还原、订阅/整包导入、Clash 配置连同 **策略组与规则** 一起导入、运行中热切换节点与代理模式、托盘子菜单、日志页、hysteria2 / tuic、真实延迟（分组与节点）、流量历史落盘、一键断开全部 + 进程归属、测速预算与「选最快」、域名正则 / 域名分类匹配器、诊断包导出、全局快捷键。
-2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§48）。
+2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§49）。
 3. 交接时那处未提交的工作（N12 应用内更新检查）已经构建、真机验收并提交；此后又合入四件事：`--quit` 正常退出并删除托盘图标（§21）、GEO 数据文件卡片与镜像回退下载（§23）、测速记录落盘（§24）。工作区现在是干净的。
 
 ### 0.1 进度快照（交接这一刻的硬数字）
 
 | 项 | 值 |
 |---|---|
-| 代码 HEAD | 「feat(sysproxy): a PAC script as the second way to take the system proxy over」，含 §48（S2 PAC）——就是 `git log --oneline -- src-tauri/src/sysproxy/pac.rs` 的第一条；再往前：`6fd790f`（§47）、`ca53381`（§46） |
-| 未提交 | 无。§48（S2 PAC）的代码、构建、真机验收、`docs/ACCEPTANCE.md` §48 与 `docs/PARITY-PLAN.md` 都在同一次提交里（见 §0.4） |
+| 代码 HEAD | 「feat(engine): give HTTP and SOCKS their own listeners when asked」，含 §49（S8 分离端口）——就是 `git log --oneline -- src-tauri/src/engine/mod.rs` 的第一条；再往前：`a794438`（§48）、`6fd790f`（§47） |
+| 未提交 | 无。§49（S8 分离端口）的代码、构建、真机验收、`docs/ACCEPTANCE.md` §49 与 `docs/PARITY-PLAN.md` 都在同一次提交里（见 §0.5） |
 | 上一版未提交清单（留档） | `src-tauri/src/domain/settings.rs`、`src-tauri/src/engine/{mod,render,runtime,xray}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§39 分片）；再上一版：`src-tauri/src/engine/{mod,runtime}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§37 统一提示）；再上一版：`src-tauri/src/commands/settings.rs`、`src-tauri/src/commands/sysproxy.rs`、`src/stores/sysproxy.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`、`docs/ACCEPTANCE.md`（§36 系统代理即时生效） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库；之后每次收尾都跟着更新 |
 | IPC 命令 | **81**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
-| Rust 单测 | **394 passed**（`ARCHITECTURE.md:278` 已同步） |
+| Rust 单测 | **402 passed**（`ARCHITECTURE.md:278` 已同步） |
 | 前端检查 | `npm run check` 全绿：vue-tsc / architecture / contract / vitest **98**（10 文件） |
-| i18n | **764** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
-| 桌面产物 | 桌面上的旧副本**已不存在**；唯一产物是 `src-tauri/target/release/x-matrix.exe`（10,466,816 B @2026-11-25 04:05，md5 `2f66e09124a2d5c937e2677c9d7e03ed`，含 §21–§48 全部改动） |
-| 验收文档 | `docs/ACCEPTANCE.md` §0–§48（§7 历史空缺，编号不连续但内容完整） |
+| i18n | **768** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
+| 桌面产物 | 桌面上的旧副本**已不存在**；唯一产物是 `src-tauri/target/release/x-matrix.exe`（10,478,592 B @2026-11-25 06:17:47，md5 `78edb76e1e0b8111ae965abbc97e49db`，含 §21–§49 全部改动） |
+| 验收文档 | `docs/ACCEPTANCE.md` §0–§49（§7 历史空缺，编号不连续但内容完整） |
 | 云电脑 | 干净：`ProxyEnable=0x0`、无 X-Matrix/sing-box/xray 进程、无 `xm*` 计划任务 |
 
 **下一步的确定顺序**（做完一条打一个勾，别跳）：
@@ -37,10 +37,11 @@
 - [x] 4. `docs/ACCEPTANCE.md` 写到 §26
 - [x] 5. 提交（`fix(tray)` / `feat(update)` / `feat(geo,nodes)` / `feat(engine)` 各一条）
 - [x] 6. `FEED_URL` 已指向真实仓库 `linjunhao024-byte/X-Matrix-Client-pro`，`v0.1.0` 已发布并带 `X-Matrix.exe` 资产
-- [x] 7. 计数已同步：81 命令 / 394 单测 / 98 vitest / 764 i18n 键 × 3
+- [x] 7. 计数已同步：81 命令 / 402 单测 / 98 vitest / 768 i18n 键 × 3
 - [x] 8. `bash /d/tmp/shots/cleanup.sh` 收尾云电脑（2026-11-24 23:55 再跑一次：`ProxyEnable 0x0`、无 `xm*` 任务）
 - [x] 9. §47 订阅刷新后前端握着死 ID：补丁 → 构建 → 云电脑两轮对比验收 → 写 §47 → 提交（2026-11-25 02:36）
-- [x] 10. §48（S2）PAC 自动配置：生成脚本 + 注册表互斥 + 回环/私网兜底 → 构建 → 云电脑验收 → 写 §48 → 提交（2026-11-25 04:20）；后续 S8/S10/S11/S9/S3/S6/S5/S4/S1/S7 见 `docs/PARITY-PLAN.md`
+- [x] 10. §48（S2）PAC 自动配置：生成脚本 + 注册表互斥 + 回环/私网兜底 → 构建 → 云电脑验收 → 写 §48 → 提交（2026-11-25 04:20）；后续 S10/S11/S9/S3/S6/S5/S4/S1/S7 见 `docs/PARITY-PLAN.md`
+- [x] 11. §49（S8）HTTP 与 SOCKS 分离端口：`Endpoints` 一处决议 + 两个渲染器 + 界面生效值 → 构建 → 云电脑三阶段验收 → 写 §49 → 提交（2026-11-25 06:5x）
 
 ### 0.2 这个窗口（2026-11-24）新完成的六件事
 
@@ -72,6 +73,14 @@
 - **验收**：`bash /d/tmp/shots/48-pac-accept.sh`（配套 `mk_48_pac.py` 生成 PS 驱动、`pac-check.js` 是 cscript/JScript 5.8 harness）在云电脑上跑通：`AutoConfigURL` 出现/消失/还原、14 个 host 的判定（含 `172.32.0.1 → PROXY` 反例）、关掉 PAC 后 `ProxyEnable=1 ProxyServer=127.0.0.1:7890`、内核没被打断。细节与判据表见 `docs/ACCEPTANCE.md` §48。
 - **计数**：命令 81（不变）、Rust **394**、vitest 98、i18n **764**（+6）。
 
+### 0.5 §49（S8）HTTP 与 SOCKS 分离端口（已完成，2026-11-25）
+
+- **为什么做**：`docs/PARITY-PLAN.md` 的第 2 项。以前只有一个 `mixed` 入站，HTTP 与 SOCKS 挤在 7890；Clash 与 v2rayN 都允许分端口，而「给别人用的」永远是 HTTP 那个。
+- **做了什么**：`Settings.http_port` / `socks_port`（`#[serde(default)]`，0 = 跟 `mixed_port` 一样）；生效端口只在 `Endpoints::new(mixed_port, http_port, socks_port, api_port)` 决议一次，对外给 `http_port` / `socks_port` / `proxy_port()`；`EngineStatus` 加两个生效值。渲染：相等时仍一个 `mixed`（tag `socks`，形状与旧版一字不差），不等时 `socks` + `http` 两个入站（Xray http 带 `sniffing.destOverride ["http","tls"]`、`allowTransparent:false`；sing-box SOCKS 带 `udp:true`）。接管系统代理、PAC、订阅抓取、真实延迟、临时内核、诊断全改用 `proxy_port()`。界面：设置页两个数字框 + 提示 + 生效值行 `HTTP 7891 · SOCKS 7892`；首页在分离时把「入站端口」换成「入站端口（HTTP / SOCKS）」。
+- **真机跑出来一个设计错位**：分离后没有进程再 bind `mixed_port`，但校验还拿「`mixed_port` 低于 1024 / 等于控制端口」去否决启动——等于因为一个没被使用的数字拒绝合法启动。已给这两条检查加 `!split` 前置，并加单测 `a_leftover_mixed_port_cannot_block_a_split_start` 守住两边。
+- **验收**：`bash /d/tmp/shots/49-split-accept.sh`（`mk_49_split.py` 生成三阶段 PS 驱动）＋ `49-ui-accept.sh`（`mk_49_ui.py`，只读界面）在云电脑上跑通：默认单 `mixed` 7890、分离 `socks`7892/`http`7891 且 `ProxyServer=127.0.0.1:7891`、非法端口在渲染前被拦且不起内核不接管、停止后按快照还原。细节见 `docs/ACCEPTANCE.md` §49。
+- **计数**：命令 81（不变）、Rust **402**（+8：子代理 5 + 我 3）、vitest 98、i18n **768**（+4）。
+
 ---
 
 ## 1. 项目坐标与命令
@@ -86,10 +95,10 @@
 | 后端测试 | `cd src-tauri && cargo test --lib` |
 | 契约重生成 | `npm run gen:contract`（改了命令签名就必须跑，`check:contract` 会拦） |
 | 桌面产物 | `/c/Users/83611/Desktop/X-Matrix.exe`、`/c/Users/83611/Desktop/X-Matrix_0.1.0_x64-setup.exe` |
-| 当前构建产物 | `src-tauri/target/release/x-matrix.exe` **10,466,816 B @2026-11-25 04:05，md5 `2f66e09124a2d5c937e2677c9d7e03ed`**（含 §21–§48）；桌面副本已不在，需要时自己 `cp` 过去 |
+| 当前构建产物 | `src-tauri/target/release/x-matrix.exe` **10,478,592 B @2026-11-25 06:17:47，md5 `78edb76e1e0b8111ae965abbc97e49db`**（含 §21–§49）；桌面副本已不在，需要时自己 `cp` 过去 |
 
-**计数基线（改动后记得同步文档）**：命令 **81**、`cargo test --lib` **394**、vitest **98**（10 个文件）、i18n **764** 键。
-> `README.md:81` 与 `ARCHITECTURE.md:277-278` 已同步为 81 条命令 / 394 项测试。
+**计数基线（改动后记得同步文档）**：命令 **81**、`cargo test --lib` **402**、vitest **98**（10 个文件）、i18n **768** 键。
+> `README.md:81` 与 `ARCHITECTURE.md:277-278` 已同步为 81 条命令 / 402 项测试。
 
 命令数核算法：
 
@@ -334,7 +343,7 @@ scp -i /c/Users/83611/.ssh/id_ed25519_cpc 本地文件 Administrator@100.106.121
 
 1. `cd /d/GitHub-Warehouse/X-Matrix-Client-Pro && git status` —— 工作区应当干净；有改动先弄清是谁的。
 2. 读本文件的 §5 与 `docs/ACCEPTANCE.md` 的最后两节，对齐上下文。
-3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 394 passed）。
+3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 402 passed）。
 4. `cd .. && npm run check`（应为全绿）。
 5. 从 §6 表里挑一项（按性价比排序），**一项一提交**，提交信息用英文 `feat(...)/fix(...)/docs: ...`。
 6. 真机验证前先跑 `bash /d/tmp/shots/deploy-tray.sh <exe>`；远端被 `cleanup.sh` 清过的话，先 `scp x-act.ps1 uia2.ps1 ocr.ps1` 上去。

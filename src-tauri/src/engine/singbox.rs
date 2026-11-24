@@ -134,12 +134,7 @@ impl Engine for SingBoxEngine {
                 "timestamp": true,
             },
             "dns": dns,
-            "inbounds": [{
-                "type": "mixed",
-                "tag": "socks",
-                "listen": input.listen_address(),
-                "listen_port": endpoints.mixed_port,
-            }],
+            "inbounds": singbox_inbounds(input, endpoints),
             "outbounds": outbounds,
             "route": Value::Object(route),
             "experimental": {
@@ -149,6 +144,39 @@ impl Engine for SingBoxEngine {
             },
         }))
     }
+}
+
+/// The inbound listeners.
+///
+/// Without a split this is the single `mixed` listener, exactly the shape this
+/// config has always had: SOCKS5 and HTTP on one port, tag `socks`. With a
+/// split each protocol gets its own listener — `socks` (UDP relay on, because a
+/// SOCKS5 client expects UDP ASSOCIATE to keep working) and `http` (no `udp`:
+/// sing-box has no UDP semantics for an HTTP inbound).
+fn singbox_inbounds(input: &RenderInput<'_>, endpoints: Endpoints) -> Vec<Value> {
+    if !endpoints.split() {
+        return vec![json!({
+            "type": "mixed",
+            "tag": "socks",
+            "listen": input.listen_address(),
+            "listen_port": endpoints.proxy_port(),
+        })];
+    }
+    vec![
+        json!({
+            "type": "socks",
+            "tag": "socks",
+            "listen": input.listen_address(),
+            "listen_port": endpoints.socks_port,
+            "udp": true,
+        }),
+        json!({
+            "type": "http",
+            "tag": "http",
+            "listen": input.listen_address(),
+            "listen_port": endpoints.http_port,
+        }),
+    ]
 }
 
 /// All outbounds for this run.
@@ -326,7 +354,7 @@ mod tests {
     }
 
     fn render(node: &Node) -> Value {
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         SingBoxEngine
             .render_config(&RenderInput::new(node, endpoints))
             .unwrap()
@@ -362,6 +390,33 @@ mod tests {
         // sing-box has no `streamSettings` nesting — the whole point of the
         // separate renderer.
         assert!(out.get("streamSettings").is_none());
+    }
+
+    #[test]
+    fn split_inbounds_give_socks_and_http_their_own_listeners() {
+        let endpoints = Endpoints::new(7890, 7891, 7892, 9090).unwrap();
+        let n = node(
+            Protocol::Trojan {
+                password: "pw".into(),
+            },
+            Transport::Tcp,
+            Security::None,
+        );
+        let cfg = SingBoxEngine
+            .render_config(&RenderInput::new(&n, endpoints))
+            .unwrap();
+        let inbounds = cfg["inbounds"].as_array().unwrap();
+        assert_eq!(inbounds.len(), 2);
+        // The two entries are the SOCKS and HTTP listeners, tags unchanged so
+        // rules that referenced `socks` keep working.
+        assert_eq!(inbounds[0]["type"], json!("socks"));
+        assert_eq!(inbounds[0]["tag"], json!("socks"));
+        assert_eq!(inbounds[0]["listen_port"], json!(7892));
+        assert_eq!(inbounds[0]["udp"], json!(true));
+        assert_eq!(inbounds[1]["type"], json!("http"));
+        assert_eq!(inbounds[1]["tag"], json!("http"));
+        assert_eq!(inbounds[1]["listen_port"], json!(7891));
+        assert!(inbounds[1].get("udp").is_none());
     }
 
     #[test]
@@ -454,7 +509,7 @@ mod tests {
             },
             Security::None,
         );
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         assert!(SingBoxEngine
             .render_config(&RenderInput::new(&n, endpoints))
             .is_err());
@@ -470,7 +525,7 @@ mod tests {
 
     #[test]
     fn stats_channel_is_the_clash_api() {
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         assert_eq!(
             SingBoxEngine.stats_channel(endpoints),
             StatsChannel::ClashApi { port: 9090 }
@@ -563,7 +618,7 @@ mod tests {
         let (first, second) = two_nodes();
         let nodes = vec![first.clone(), second.clone()];
         let groups = vec![group("g1", GroupKind::Select, &["n1", "n2"])];
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         let input = RenderInput::new(&first, endpoints)
             .with_options(RunOptions::new().with_catalog(&nodes, &groups));
 
@@ -584,7 +639,7 @@ mod tests {
         let (first, second) = two_nodes();
         let nodes = vec![first.clone(), second.clone()];
         let groups = vec![group("g1", GroupKind::UrlTest, &["n1", "n2"])];
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         let input = RenderInput::new(&first, endpoints)
             .with_options(RunOptions::new().with_catalog(&nodes, &groups));
 
@@ -606,7 +661,7 @@ mod tests {
             probe_url: "http://cp.cloudflare.com/".into(),
             ..RunOptions::new().with_catalog(&nodes, &groups)
         };
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         let config = SingBoxEngine
             .render_config(&RenderInput::new(&nodes[0], endpoints).with_options(options))
             .unwrap();
@@ -627,7 +682,7 @@ mod tests {
             group("g1", GroupKind::Select, &["n1", "n2"]),
             group("g2", GroupKind::Select, &["n1"]),
         ];
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         let input = RenderInput::new(&first, endpoints)
             .with_options(RunOptions::new().with_catalog(&nodes, &groups));
 
@@ -651,7 +706,7 @@ mod tests {
             Transport::Tcp,
             Security::None,
         );
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         let mut input = RenderInput::new(&first, endpoints);
         input.dns_servers = vec![
             crate::domain::settings::DnsEntry::Plain("1.1.1.1".into()),
@@ -679,7 +734,7 @@ mod tests {
             Transport::Tcp,
             Security::None,
         );
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         let mut input = RenderInput::new(&first, endpoints);
         input.dns_servers = vec![
             crate::domain::settings::DnsEntry::Dot {

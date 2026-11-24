@@ -561,8 +561,10 @@ fn set_tray_tooltip(app: &AppHandle) {
         .try_state::<Arc<EngineRuntime>>()
         .map(|runtime| runtime.status())
         .unwrap_or_default();
+    // The HTTP inbound, i.e. the port the system proxy and a browser would
+    // use; with a split the configured mixed port is not listening.
     let tooltip = if status.running {
-        format!("X-Matrix · {} · :{}", status.node_name, status.mixed_port)
+        format!("X-Matrix · {} · :{}", status.node_name, status.http_port)
     } else {
         "X-Matrix · 未连接".to_string()
     };

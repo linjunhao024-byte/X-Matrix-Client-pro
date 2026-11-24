@@ -48,9 +48,18 @@ pub(crate) fn lookup_node(state: &AppState, node_id: &str) -> AppResult<Node> {
 }
 
 /// Ports come from the user's settings, validated before anything is spawned.
+///
+/// The `0 = follow mixed_port` fallback lives in [`Endpoints::new`], not here:
+/// rendering, takeover and the port preflight then all read the same resolved
+/// number instead of each redoing the fallback.
 fn endpoints_from(state: &AppState) -> AppResult<Endpoints> {
     let settings = state.settings.read().clone();
-    Endpoints::new(settings.mixed_port, settings.api_port)
+    Endpoints::new(
+        settings.mixed_port,
+        settings.http_port,
+        settings.socks_port,
+        settings.api_port,
+    )
 }
 
 pub(crate) async fn run_blocking<T, F>(job: F) -> AppResult<T>
@@ -149,7 +158,9 @@ pub async fn proxy_speed(state: State<'_, AppState>, runtime: Runtime<'_>) -> Ap
                 "内核没在运行，测不到速度；先启动内核".to_string(),
             ));
         }
-        status.mixed_port
+        // The HTTP inbound: that is what an HTTP probe (and the system proxy)
+        // talks to. It equals `mixed_port` unless the two protocols are split.
+        status.http_port
     };
     let url = {
         let settings = state.settings.read();
@@ -259,7 +270,16 @@ pub fn start_engine(
     // switch. Checking from idle is the case that matters anyway — the user
     // just closed another client, or forgot to.
     if !runtime.status().running {
-        crate::net::ports::ensure_free(request.endpoints.mixed_port, "混合端口")?;
+        // A split gives the kernel two inbound ports, so the preflight has to
+        // cover both — and each refusal names the port it actually refused,
+        // instead of telling the user about a "mixed port" that no longer
+        // exists.
+        if request.endpoints.split() {
+            crate::net::ports::ensure_free(request.endpoints.http_port, "HTTP 端口")?;
+            crate::net::ports::ensure_free(request.endpoints.socks_port, "SOCKS 端口")?;
+        } else {
+            crate::net::ports::ensure_free(request.endpoints.mixed_port, "混合端口")?;
+        }
         crate::net::ports::ensure_free(request.endpoints.api_port, "控制端口")?;
     }
     let options = RunOptions::from_settings(&request.settings, &request.rules)
@@ -271,14 +291,16 @@ pub fn start_engine(
         let applied = if request.settings.pac_enabled {
             // The script encodes the port itself, so it is rendered from the
             // endpoint that is actually listening — not from the saved setting.
+            // With a split that endpoint is the HTTP one: a PAC script hands
+            // the browser `PROXY host:port`, which it resolves over HTTP.
             let script = crate::sysproxy::pac::render(
-                request.endpoints.mixed_port,
+                request.endpoints.proxy_port(),
                 bypass,
                 &crate::sysproxy::pac::direct_patterns(&request.rules),
             );
-            proxy.enable_pac(request.endpoints.mixed_port, bypass, &script)
+            proxy.enable_pac(request.endpoints.proxy_port(), bypass, &script)
         } else {
-            proxy.enable_with_bypass("127.0.0.1", request.endpoints.mixed_port, bypass)
+            proxy.enable_with_bypass("127.0.0.1", request.endpoints.proxy_port(), bypass)
         };
         if let Err(error) = applied {
             let _ = runtime.stop();
@@ -533,7 +555,9 @@ pub async fn proxy_latency(
             "内核没在运行，测不到真实延迟；先启动内核".to_string(),
         ));
     }
-    let port = status.mixed_port;
+    // The HTTP inbound, not the configured mixed port: with a split the mixed
+    // port has no listener and the probe would fail on a healthy kernel.
+    let port = status.http_port;
     // The probe URL is a setting because gstatic is blocked on some networks —
     // a latency button that always fails is worse than no button.
     let url = {
@@ -735,7 +759,7 @@ pub(crate) mod tests {
 
     use parking_lot::Mutex;
 
-    use super::stop_if_running_node;
+    use super::{start_engine, stop_if_running_node, StartRequest};
     use crate::engine::runtime::tests::{harness, node, Harness};
     use crate::engine::{Endpoints, EngineKind, RunOptions};
     use crate::error::AppResult;
@@ -789,7 +813,7 @@ pub(crate) mod tests {
             .start(
                 EngineKind::Xray,
                 &node(),
-                Endpoints::new(7890, 9090).unwrap(),
+                Endpoints::new(7890, 0, 0, 9090).unwrap(),
                 RunOptions::new(),
             )
             .unwrap();
@@ -833,6 +857,95 @@ pub(crate) mod tests {
 
         std::fs::remove_dir_all(&h.dir).ok();
         let _ = std::fs::remove_file(&path);
+    }
+
+    /// A port the OS says is free right now.
+    ///
+    /// `start_engine` preflights by really binding, so a hard-coded 7891 would
+    /// make these tests flaky on a machine where something else listens there.
+    fn free_port() -> u16 {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.local_addr().unwrap().port()
+    }
+
+    fn split_request(http_port: u16, socks_port: u16, pac: bool) -> StartRequest {
+        let mut settings = crate::domain::Settings::default();
+        settings.system_proxy = true;
+        settings.pac_enabled = pac;
+        StartRequest {
+            kind: EngineKind::Xray,
+            node: node(),
+            endpoints: Endpoints::new(7890, http_port, socks_port, free_port()).unwrap(),
+            settings,
+            rules: vec![],
+            nodes: vec![node()],
+            groups: vec![],
+            rule_sets: vec![],
+        }
+    }
+
+    #[test]
+    fn a_split_takeover_points_the_system_proxy_at_the_http_port() {
+        let h = harness(true, false);
+        let (guard, fake, path) = proxy();
+        // start_engine takes the guard by Arc: the app state owns one too.
+        let guard = Arc::new(guard);
+        let http_port = free_port();
+        let socks_port = free_port();
+
+        let status = start_engine(&h.runtime, &guard, split_request(http_port, socks_port, false)).unwrap();
+
+        // The status still reports what the user configured ...
+        assert_eq!(status.mixed_port, 7890);
+        // ... and the effective ports the kernel really bound.
+        assert_eq!(status.http_port, http_port);
+        assert_eq!(status.socks_port, socks_port);
+
+        let writes = fake.writes.lock();
+        assert_eq!(writes.len(), 1, "one takeover write");
+        assert!(writes[0].enabled);
+        // The system proxy speaks HTTP, so it must be pointed at the HTTP
+        // inbound, never at the mixed port that no longer listens.
+        assert_eq!(writes[0].server, format!("127.0.0.1:{http_port}"));
+        assert!(!writes[0].server.contains(&socks_port.to_string()));
+
+        std::fs::remove_dir_all(&h.dir).ok();
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn a_split_pac_takeover_encodes_the_http_port() {
+        let h = harness(true, false);
+        let fake = Arc::new(RecordingProxy {
+            state: Mutex::new(ProxyState::off()),
+            writes: Mutex::new(Vec::new()),
+        });
+        let snapshot = scratch("snapshot-pac");
+        let pac_path = scratch("pac").with_extension("pac");
+        let guard = Arc::new(ProxyGuard::new(Box::new(fake.clone()), &snapshot, pac_path.clone()));
+        let http_port = free_port();
+        let socks_port = free_port();
+
+        let status = start_engine(&h.runtime, &guard, split_request(http_port, socks_port, true)).unwrap();
+        assert_eq!(status.http_port, http_port);
+
+        // `enable_pac` already refuses a script whose PROXY directive names a
+        // different port, so reaching the file at all proves agreement; read it
+        // to pin *which* port the pair agreed on.
+        let script = std::fs::read_to_string(&pac_path).unwrap();
+        assert!(
+            script.contains(&format!("PROXY 127.0.0.1:{http_port}; DIRECT")),
+            "PAC script must forward into the HTTP inbound: {script}"
+        );
+        assert!(!script.contains(&socks_port.to_string()));
+
+        let writes = fake.writes.lock();
+        assert_eq!(writes.len(), 1, "one takeover write");
+        assert!(!writes[0].server.contains(':'), "PAC mode uses AutoConfigURL");
+
+        std::fs::remove_dir_all(&h.dir).ok();
+        let _ = std::fs::remove_file(&snapshot);
+        let _ = std::fs::remove_file(&pac_path);
     }
 
     #[test]

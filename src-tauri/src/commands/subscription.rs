@@ -77,7 +77,12 @@ fn fetch_route(state: &AppState, engine_running: bool) -> (Option<u16>, Option<S
         return (None, None);
     }
     if engine_running {
-        return (Some(settings.mixed_port), None);
+        // A subscription fetch is an HTTP client, so it has to go through the
+        // HTTP inbound; with a split the configured mixed port has no listener
+        // at all. `resolve_port` is the same `0 = follow mixed_port` rule the
+        // renderer uses.
+        let port = crate::engine::Endpoints::resolve_port(settings.mixed_port, settings.http_port);
+        return (Some(port), None);
     }
     (
         None,
@@ -694,7 +699,7 @@ proxies:
             .start(
                 EngineKind::Xray,
                 &running,
-                Endpoints::new(7890, 9090).unwrap(),
+                Endpoints::new(7890, 0, 0, 9090).unwrap(),
                 RunOptions::new(),
             )
             .unwrap();
@@ -735,7 +740,7 @@ proxies:
             .start(
                 EngineKind::Xray,
                 &manual,
-                Endpoints::new(7890, 9090).unwrap(),
+                Endpoints::new(7890, 0, 0, 9090).unwrap(),
                 RunOptions::new(),
             )
             .unwrap();

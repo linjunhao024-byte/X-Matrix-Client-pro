@@ -277,10 +277,13 @@ pub async fn exit_ip(app: AppHandle) -> AppResult<ExitIp> {
     // Read what the request needs while still on the IPC thread; no lock guard
     // has to survive the `await`.
     let (via, proxy) = {
-        let running = app.state::<Arc<EngineRuntime>>().status().running;
-        let mixed_port = app.state::<AppState>().settings.read().mixed_port;
-        if running {
-            ("proxy", Some(mixed_port))
+        let status = app.state::<Arc<EngineRuntime>>().status();
+        // The running kernel's HTTP inbound: that is the port that speaks HTTP,
+        // and with a split it is not the configured mixed port. Taken from the
+        // status, not the saved settings, so an unsaved port edit cannot send
+        // this probe into a port nothing listens on.
+        if status.running {
+            ("proxy", Some(status.http_port))
         } else {
             ("direct", None)
         }

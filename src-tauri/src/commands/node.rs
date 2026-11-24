@@ -628,7 +628,7 @@ mod tests {
             .start(
                 EngineKind::Xray,
                 &crate::engine::runtime::tests::node(),
-                Endpoints::new(7890, 9090).unwrap(),
+                Endpoints::new(7890, 0, 0, 9090).unwrap(),
                 RunOptions::new(),
             )
             .unwrap();

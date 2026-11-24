@@ -159,6 +159,23 @@ const engineLabel = computed(() => {
   return kind === 'xray' ? 'Xray' : 'sing-box'
 })
 
+/**
+ * The inbound side is either one mixed port or two split ones. Keep the old
+ * "入站端口 / 7890" wording when the two protocols share a port, and switch to
+ * "HTTP 7891 / SOCKS 7892" only when the settings actually split them.
+ */
+const inboundFact = computed(() => {
+  const status = engine.status
+  if (!status) return { label: t('home.fact.mixed'), value: '—' }
+  if (status.http_port === status.socks_port) {
+    return { label: t('home.fact.mixed'), value: String(status.http_port) }
+  }
+  return {
+    label: t('home.fact.inboundSplit'),
+    value: `${status.http_port} / ${status.socks_port}`,
+  }
+})
+
 const runningNodeName = computed(() => engine.status?.node_name || '—')
 
 const canStart = computed(() => !engine.running && !engine.busy && selectedNodeId.value !== '')
@@ -561,7 +578,7 @@ async function stopEngine() {
 
       <dl v-if="engine.status?.running" class="facts">
         <div><dt>PID</dt><dd class="mono">{{ engine.status.pid }}</dd></div>
-        <div><dt>{{ t('home.fact.mixed') }}</dt><dd class="mono">{{ engine.status.mixed_port }}</dd></div>
+        <div><dt>{{ inboundFact.label }}</dt><dd class="mono">{{ inboundFact.value }}</dd></div>
         <div><dt>{{ t('home.fact.api') }}</dt><dd class="mono">{{ engine.status.api_port }}</dd></div>
         <div class="fact-wide"><dt>{{ t('home.fact.config') }}</dt><dd class="mono ellipsis">{{ engine.status.config_path }}</dd></div>
       </dl>

@@ -724,7 +724,7 @@ mod rule_tests {
     }
 
     fn input<'a>(node: &'a Node, rules: &'a [RoutingRule]) -> RenderInput<'a> {
-        let mut input = RenderInput::new(node, Endpoints::new(7890, 9090).unwrap());
+        let mut input = RenderInput::new(node, Endpoints::new(7890, 0, 0, 9090).unwrap());
         input.rules = rules;
         input
     }

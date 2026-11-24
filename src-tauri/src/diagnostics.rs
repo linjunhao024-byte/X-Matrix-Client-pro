@@ -336,7 +336,19 @@ pub fn collect(state: &AppState, runtime: &EngineRuntime, proxy: &ProxyGuard) ->
                     .unwrap_or_else(|| "—".into()),
             ),
             ("节点".into(), status.node_name.clone()),
-            ("入站端口".into(), status.mixed_port.to_string()),
+            // Both listeners, not just the configured mixed port: after a split
+            // the reader needs to know which number to hand to a browser and
+            // which to a SOCKS-only client.
+            (
+                "入站端口".into(),
+                match (status.http_port, status.socks_port) {
+                    (0, _) | (_, 0) => status.mixed_port.to_string(),
+                    (http_port, socks_port) if http_port == socks_port => {
+                        format!("{http_port}（HTTP + SOCKS）")
+                    }
+                    (http_port, socks_port) => format!("HTTP {http_port} / SOCKS {socks_port}"),
+                },
+            ),
             ("控制端口".into(), status.api_port.to_string()),
             (
                 "上次退出码".into(),

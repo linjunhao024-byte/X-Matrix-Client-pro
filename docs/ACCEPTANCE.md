@@ -1299,3 +1299,54 @@ app stderr 同步佐证：托盘行从 `模式 rule · 内核运行中` 重新�
 **一句实话**：这一条证明的是「PAC 落地、互斥、还原、以及脚本对各 host 的判定」。没证明的部分：① Windows 真的按这份脚本分流了浏览器的流量（那要用一台能上外网的机器、加一条只走代理的域名去看出口 IP，本机规则禁止我在这台机器上装代理客户端，测试机又不通外网）；② `.pac` 文件在退出应用后不删（只还原注册表），所以应用目录里会留下一个孤儿脚本——下次接管会覆盖它，不影响正确性，但清理逻辑是有意省掉的；③ 内核没跑时拨开关只在界面上提示「下次启动内核生效」，不写注册表。
 
 命令数 81（不变）、Rust 单测 **394**（+17，PAC 生成 12 项 + `sysproxy` 里 PAC 接管 5 项）、vitest **98**（不变）、i18n **764** 键 × 3（+6）。
+
+## 49. HTTP 与 SOCKS 可以分两个端口，但「给别人用的」永远是 HTTP 那个（2026-11-25，云电脑 cloudpc-test）
+
+**要证的事**（S8，`docs/PARITY-PLAN.md`）：
+
+1. 默认不动（`http_port = socks_port = 0`）时，渲染出来的配置**一个字都不变**：还是一个 `mixed` 入站、tag 仍叫 `socks`、端口还是 7890；
+2. 设成两个不同端口时，两个入站各听各的：`socks` → SOCKS 端口、`http` → HTTP 端口，系统代理指向 **HTTP** 那个；
+3. 校验只在真用到的地方拦：分离后 `mixed_port` 不再是一个监听口，它的值（低于 1024、或等于控制端口）不能拿来否决一次启动；而真正要 bind 的两个端口、以及控制端口仍要 ≥1024 且互不相同；
+4. 界面把两件事都说清：设置页能填两个端口并显示**生效值**（`HTTP 7891 · SOCKS 7892`），首页那一行在分离时换成「入站端口（HTTP / SOCKS）」、不分时保持原来的「入站端口」。
+
+**验法**：两个脚本，一个查机器、一个查界面。
+
+- `bash /d/tmp/shots/49-split-accept.sh [exe] [label]`（新增；沿用 §47/§48 的部署骨架）——**三个应用会话**，因为 store 只在启动时读一次：
+  - `split`：钉 `http_port=7891`、`socks_port=7892`、`api_port=9090`；
+  - `unsplit`：钉 `0/0`、`api_port=9090`；
+  - `invalid`：钉 `http_port=9090`（与控制端口相同）、`socks_port=0`。
+  每轮由 `49-split.ps1`（`mk_49_split.py` 生成，UTF-8 BOM + CRLF，`-Phase` 参数）驱动：等窗/激活 → 记注册表与内核 PID → 节点页行内「启动」→ 13 秒后记注册表 / 告警 / 把最近 6 分钟内写过、且内容含 `"port"` 的 `*.json` 收进 `cfg-<phase>` 目录 → 首页 → 首页文字 → 「停止」→ 记还原结果。
+- `bash /d/tmp/shots/49-ui-accept.sh [label]`（`mk_49_ui.py` 生成；端口可用 `PIN_HTTP`/`PIN_SOCKS` 覆盖）——只查界面：启动内核后走首页与设置页，把带「端口/入站/HTTP/SOCKS」字样的文字、以及窗口里每个非空 Edit 的值记下来，再停止并核对还原。
+
+本次二进制 `src-tauri/target/release/x-matrix.exe`（10,478,592 B @2026-11-25 06:17:47，md5 `78edb76e1e0b8111ae965abbc97e49db`）。
+
+**判据与结果**：
+
+| 判据 | 结果 |
+|---|---|
+| 默认（`0/0`）的配置形状 | `configs/xray.json`（3924 B）：`xray inbound: type=mixed tag=socks port=7890 listen=127.0.0.1`，**只有一个入站**，与改动前同形同名 |
+| 默认时的接管端口 | `ProxyEnable=1 ProxyServer=127.0.0.1:7890`（内核 `xray#2752`） |
+| 分离（`7891/7892`）的配置形状 | `configs/xray.json`（4273 B）：`socks` → `port 7892 protocol socks listen 127.0.0.1`、`http` → `port 7891 protocol http listen 127.0.0.1`，两个入站；**没有任何入站听 7890** |
+| 分离时的接管端口 | `ProxyEnable=1 ProxyServer=127.0.0.1:7891`（内核 `xray#6376`）——系统代理跟着 HTTP 走，不是 SOCKS |
+| 分离时的界面（首页） | `home port texts: 入站端口（HTTP / SOCKS） || 控制端口`（不再是一个「入站端口 7890」） |
+| 分离时的界面（设置页） | `HTTP 端口`、`SOCKS 端口` 两个标签 + `留 0 表示与混合端口相同；填成两个不同端口就分开监听，系统代理指向 HTTP 端口` + 生效值行 `HTTP 7891 · SOCKS 7892` |
+| 不分时的界面 | 首页仍叫 `入站端口`；设置页生效值行 `HTTP 7890 · SOCKS 7890`（同一个数不撒谎成两个） |
+| 非法（`http_port` = `api_port` = 9090） | 节点页告警只有一句 `HTTP 端口与控制端口不能相同`；`kernels after start:` **空**（没起内核）；`reg after start: ProxyEnable=0 ProxyServer= AutoConfigURL=`（**没接管系统代理**）；`configs/xray.json` 还是上一轮那份，没被重写（拒绝发生在渲染之前） |
+| 停止后 | `kernels after stop:` 空、`reg after stop: ProxyEnable=0 ProxyServer= AutoConfigURL=`（按快照还原） |
+
+**四个设计理由**：
+
+- **生效端口只有一处决议。** `Endpoints::new(mixed_port, http_port, socks_port, api_port)` 把 `0 = 跟混合端口一样` 这条规则收进 `resolve_port`，并对外只给三个数：`http_port` / `socks_port` / `proxy_port()`。改之前 `mixed_port` 被六个地方各读一次（渲染、接管、订阅抓取、测速、临时内核、诊断），只要有一处留旧值，界面就会「显示 7891、实际接管 7890」。现在渲染器、接管、预检、订阅、测速全从同一个 `Endpoints` 取，`mixed_port` 只作为回退基值存在。
+- **tag 不许改，只加一个。** 分离后 SOCKS 仍在 `socks` tag 上，HTTP 新开 `http`；内核路由规则里引用 `inboundTag: "socks"` 的那部分（用户以前配的规则、默认规则）不会因为这次分离而失效。sing-box 的 SOCKS 入站保留 `udp: true`（SOCKS5 客户端指望 UDP ASSOCIATE 还能用），HTTP 入站没有 `udp` 键；Xray 的 http 入站保留 `sniffing.destOverride = ["http","tls"]` 且 `allowTransparent: false`。
+- **「给别人用的端口」一律取 HTTP 那个。** 系统代理的 `ProxyServer`、PAC 里的 `PROXY host:port`、订阅抓取、真实延迟探测都是 HTTP 语义；SOCKS 端口的数字填进 `ProxyServer` 会让整套代理看起来「已接管但连不上」。所以 `proxy_port()` 返回 `http_port`，不分时它恰好等于 `mixed_port`，调用点的代码不用分叉。
+- **`mixed_port` 降级成基值之后，校验也要跟着降级。** 分离后没有进程 bind `mixed_port`，此时还拿它低于 1024 去拦启动，等于「因为一个没被使用的数字拒绝一次完全合法的启动」。真机验收里就用 `http=9090` 证明了相反的那一条：真正冲突的端口会被拦（`HTTP 端口与控制端口不能相同`），且拦在内核启动与系统代理接管之前。单测 `a_leftover_mixed_port_cannot_block_a_split_start` 同时守住两边（`Endpoints::new(80, 7891, 7892, 9090)` 通过、`Endpoints::new(80, 0, 0, 9090)` 报错）。
+
+**五个坑**：
+
+1. **「内核还在用旧设置」必须比生效值。** 设置页原来只比 `saved.mixed_port !== status.mixed_port`；加了两个新字段后若照抄成 `saved.http_port !== status.http_port`，**默认安装会永远显示「陈旧」**——store 里是 `0`（表示跟随），status 里是已经决议过的 `7890`。正确做法是先 `saved.http_port || saved.mixed_port` 再比（`src/views/SettingsView.vue:104` 一带）。
+2. **`<input type="number">` 的值在 UIA 里读不到。** 驱动脚本的 `Edit-Values` 只拿到绕过列表、分片长度/间隔、测试地址、UA、DNS 六项，三个端口框一个都没有——WebView2 把数字输入暴露成自绘控件，`ValuePattern` 拿不到当前值。所以「输入框里显示 7891」这件事没有机器证据，界面证据只有三样交叉：两个标签存在、生效值行 `HTTP 7891 · SOCKS 7892`、以及配置文件/注册表里真的是 7891。
+3. **导航签名要挑页面独有的。** `Navigate-Robust '首页' 'sing-box'` 会**假通过**：节点页也有一个 `sing-box` 按钮。第一轮三阶段的 `home texts` 抓到的其实是节点列表，`stop clicked: False` 也是因为人根本不在首页（内核一直跑着没收）。换成首页独有的 `真实延迟` 后一次就对，`stop clicked: True`、`kernels after stop:` 空。§48 那次没暴露这个问题，只因为当时只读注册表、没读首页文字。
+4. **三个阶段必须是三个应用会话。** `settings.load()` 只在启动时读一次 store；会话内改盘上的 store 不会进内存。想验「换端口重新生效」，只能退出应用、改文件、再起——这也是为什么脚本里 `pin()` 之后要 `xmquit` 一次。
+5. **配置文件不止一个地方。** 正式配置在 `%APPDATA%\com.xmatrix.client\configs\<kernel>.json`，一次性探测（真实延迟）的临时内核配置在 `%TEMP%`。扫的时候两处都要扫，并且按「内容含 `"port"`」过滤，否则会把 `store.json` 也当成配置收走。
+
+**一句实话**：这一条证的是「端口决议、两个渲染器的形状、接管跟着 HTTP、校验拦在渲染之前、以及界面上两个分支的文字」。没证的：① 真正的 HTTP / SOCKS 请求能不能穿过这两个入站（测试机不通外网，只能看配置和注册表）；② sing-box 的分离渲染只有单测 `split_inbounds_give_socks_and_http_their_own_listeners`，没在真机上起过 sing-box 分离态；③ 半分离（`http=7891, socks=0`）也只有单测 `endpoints_resolve_zero_split_ports_to_the_mixed_port` 守着，真机没跑过这一种组合。

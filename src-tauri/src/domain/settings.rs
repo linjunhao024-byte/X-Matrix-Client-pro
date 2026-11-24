@@ -11,6 +11,18 @@ use specta::Type;
 pub struct Settings {
     /// Local mixed inbound (HTTP + SOCKS) port.
     pub mixed_port: u16,
+    /// HTTP inbound port when HTTP and SOCKS get their own listeners.
+    ///
+    /// `0` means "the same as [`Settings::mixed_port`]", which is the default
+    /// and keeps the single mixed inbound. A non-zero value splits the two:
+    /// software that only speaks `socks5://` and a system proxy that must be
+    /// an HTTP address can then both be served without a second client.
+    #[serde(default)]
+    pub http_port: u16,
+    /// SOCKS inbound port when the two protocols are split; `0` means "the
+    /// same as [`Settings::mixed_port`]", exactly like [`Settings::http_port`].
+    #[serde(default)]
+    pub socks_port: u16,
     /// Control/API port used by the engine for stats & connections.
     pub api_port: u16,
     pub allow_lan: bool,
@@ -315,6 +327,8 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             mixed_port: 7890,
+            http_port: 0,
+            socks_port: 0,
             api_port: 9090,
             allow_lan: false,
             mode: ProxyMode::Rule,
@@ -359,6 +373,27 @@ impl Settings {
         }
         if self.mixed_port == self.api_port {
             return Err("mixed_port and api_port must differ".into());
+        }
+        // A split is optional, so `0` is not a port: it means "follow
+        // mixed_port" and is only checked once resolved. Anything else has to
+        // be a real port the kernel can bind without elevation.
+        if self.http_port != 0 && self.http_port < 1024 {
+            return Err("http_port must be >= 1024 (or 0 to follow mixed_port)".into());
+        }
+        if self.socks_port != 0 && self.socks_port < 1024 {
+            return Err("socks_port must be >= 1024 (or 0 to follow mixed_port)".into());
+        }
+        // The same resolution `Endpoints::new` performs, so a document that
+        // saves here cannot fail the engine's own check a moment later. Two
+        // equal effective ports are not an error: that is simply "not split",
+        // served by one mixed inbound like before.
+        let http = if self.http_port == 0 { self.mixed_port } else { self.http_port };
+        let socks = if self.socks_port == 0 { self.mixed_port } else { self.socks_port };
+        if http == self.api_port {
+            return Err("http_port and api_port must differ".into());
+        }
+        if socks == self.api_port {
+            return Err("socks_port and api_port must differ".into());
         }
         let test_url = self.test_url.trim();
         if test_url.is_empty() {
@@ -727,5 +762,64 @@ mod tests {
             ..Default::default()
         };
         assert!(s.validate().is_ok());
+    }
+
+    #[test]
+    fn an_older_store_without_split_ports_still_loads() {
+        // Split ports arrived after this document was written, so both fields
+        // are missing. They must read as `0` — "one mixed inbound, as before" —
+        // instead of making the store unreadable or guessing a second port.
+        let old = r#"{"mixed_port":7890,"api_port":9090,"allow_lan":false,
+            "mode":"rule","system_proxy":false,"auto_start":false,"language":"zh",
+            "auto_connect":false,"log_level":"warn","auto_test_minutes":0,
+            "test_timeout_ms":3000,"test_concurrency":2,"proxy_bypass":"",
+            "test_url":"http://www.gstatic.com/generate_204",
+            "subscription_user_agent":"","subscription_via_proxy":false,
+            "dns_servers":"","start_minimized":false,"close_to_tray":true}"#;
+        let loaded: Settings = serde_json::from_str(old).expect("old store must still load");
+        assert_eq!(loaded.http_port, 0);
+        assert_eq!(loaded.socks_port, 0);
+        // And a split document must survive the round trip with its values.
+        let split = Settings {
+            http_port: 7891,
+            socks_port: 7892,
+            ..Default::default()
+        };
+        let text = serde_json::to_string(&split).expect("serialise");
+        let back: Settings = serde_json::from_str(&text).expect("read back");
+        assert_eq!(back.http_port, 7891);
+        assert_eq!(back.socks_port, 7892);
+    }
+
+    #[test]
+    fn split_ports_are_validated_at_save_time() {
+        // The defaults are a legal document: no split, one mixed inbound.
+        assert!(Settings::default().validate().is_ok());
+
+        // A real split is legal, and so is two equal non-zero ports — that is
+        // just "not split", served by one listener on that port.
+        let split = Settings { http_port: 7891, socks_port: 7892, ..Default::default() };
+        assert!(split.validate().is_ok());
+        let same = Settings { http_port: 7891, socks_port: 7891, ..Default::default() };
+        assert!(same.validate().is_ok());
+
+        // A port below 1024 needs elevation, so it must be refused before the
+        // kernel tries and dies with only its own log to explain it. `0` keeps
+        // its meaning of "follow mixed_port" and is never a privileged port.
+        let low_http = Settings { http_port: 80, ..Default::default() };
+        assert!(low_http.validate().is_err());
+        let low_socks = Settings { socks_port: 80, ..Default::default() };
+        assert!(low_socks.validate().is_err());
+
+        // The control port is served by the same process, so a collision means
+        // one of the two listeners cannot bind.
+        let http_is_api = Settings { http_port: 9090, ..Default::default() };
+        assert!(http_is_api.validate().is_err());
+        let socks_is_api = Settings { socks_port: 9090, ..Default::default() };
+        assert!(socks_is_api.validate().is_err());
+
+        // Landing on the mixed port is the same as not splitting, not a clash.
+        let http_is_mixed = Settings { http_port: 7890, ..Default::default() };
+        assert!(http_is_mixed.validate().is_ok());
     }
 }

@@ -107,17 +107,69 @@ impl EngineKind {
 /// whereas settings hold the user's intent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Endpoints {
-    /// Local mixed inbound (SOCKS5 + HTTP on the same port).
+    /// Local mixed inbound (SOCKS5 + HTTP on the same port), as configured.
+    ///
+    /// Kept verbatim so the UI can keep reporting the port the user typed; when
+    /// [`Endpoints::split`] is true nothing actually listens here.
     pub mixed_port: u16,
+    /// Effective HTTP inbound port. Never `0`: a `0` in the settings means
+    /// "same as `mixed_port`" and is resolved here.
+    pub http_port: u16,
+    /// Effective SOCKS inbound port. Never `0`, resolved like
+    /// [`Endpoints::http_port`].
+    pub socks_port: u16,
     /// Statistics / control endpoint: Xray expvar HTTP, or sing-box Clash API.
     pub api_port: u16,
 }
 
 impl Endpoints {
-    pub fn new(mixed_port: u16, api_port: u16) -> AppResult<Self> {
-        if mixed_port < 1024 {
+    /// The `0 = follow mixed_port` rule, in one place.
+    ///
+    /// Public because a few callers only need the *port* and have no business
+    /// validating a whole endpoint set — a subscription fetch or the tray
+    /// tooltip, for instance. Sharing this function is what keeps them from
+    /// drifting from what the renderer actually binds.
+    pub fn resolve_port(mixed_port: u16, configured: u16) -> u16 {
+        if configured == 0 {
+            mixed_port
+        } else {
+            configured
+        }
+    }
+
+    /// Resolve the ports a kernel will really bind.
+    ///
+    /// This is the single place that turns the settings' `0 = follow
+    /// mixed_port` into a number, so the renderers, the system-proxy takeover
+    /// and the port preflight cannot each invent their own fallback. Validation
+    /// runs on the *resolved* values: an unset split port is judged as the
+    /// mixed port it becomes.
+    pub fn new(
+        mixed_port: u16,
+        http_port: u16,
+        socks_port: u16,
+        api_port: u16,
+    ) -> AppResult<Self> {
+        let http_port = Self::resolve_port(mixed_port, http_port);
+        let socks_port = Self::resolve_port(mixed_port, socks_port);
+        let split = http_port != socks_port;
+        // `mixed_port` only becomes a listener in the un-split shape; once the
+        // protocols are split it is just the base the two ports fall back to.
+        // Judging a leftover value there would refuse a start over a number
+        // nothing binds, so the mixed checks only run when it is really used.
+        if !split && mixed_port < 1024 {
             return Err(AppError::InvalidInput(format!(
                 "入站端口 {mixed_port} 低于 1024，需要管理员权限才能监听"
+            )));
+        }
+        if http_port < 1024 {
+            return Err(AppError::InvalidInput(format!(
+                "HTTP 端口 {http_port} 低于 1024，需要管理员权限才能监听"
+            )));
+        }
+        if socks_port < 1024 {
+            return Err(AppError::InvalidInput(format!(
+                "SOCKS 端口 {socks_port} 低于 1024，需要管理员权限才能监听"
             )));
         }
         if api_port < 1024 {
@@ -125,15 +177,46 @@ impl Endpoints {
                 "控制端口 {api_port} 低于 1024"
             )));
         }
-        if mixed_port == api_port {
+        if !split && mixed_port == api_port {
             return Err(AppError::InvalidInput(
                 "入站端口与控制端口不能相同".to_string(),
             ));
         }
+        // Two equal effective ports are the un-split case, already covered by
+        // the check above; only a split can put HTTP or SOCKS on the API port.
+        if http_port == api_port {
+            return Err(AppError::InvalidInput(
+                "HTTP 端口与控制端口不能相同".to_string(),
+            ));
+        }
+        if socks_port == api_port {
+            return Err(AppError::InvalidInput(
+                "SOCKS 端口与控制端口不能相同".to_string(),
+            ));
+        }
         Ok(Self {
             mixed_port,
+            http_port,
+            socks_port,
             api_port,
         })
+    }
+
+    /// Whether HTTP and SOCKS got their own listeners.
+    ///
+    /// False is the historical shape: one `mixed` inbound on the resolved port.
+    pub fn split(&self) -> bool {
+        self.http_port != self.socks_port
+    }
+
+    /// The port every "point this at our proxy" caller must use.
+    ///
+    /// That is the HTTP inbound: the system proxy, PAC scripts, the
+    /// subscription fetch and the latency probes all speak HTTP through it. It
+    /// equals `mixed_port` whenever the two protocols are not split, which is
+    /// why those callers used to read `mixed_port` directly.
+    pub fn proxy_port(&self) -> u16 {
+        self.http_port
     }
 }
 
@@ -444,15 +527,69 @@ mod tests {
 
     #[test]
     fn endpoints_reject_privileged_ports() {
-        assert!(Endpoints::new(7890, 9090).is_ok());
-        assert!(Endpoints::new(80, 9090).is_err());
-        assert!(Endpoints::new(7890, 80).is_err());
+        assert!(Endpoints::new(7890, 0, 0, 9090).is_ok());
+        assert!(Endpoints::new(80, 0, 0, 9090).is_err());
+        assert!(Endpoints::new(7890, 0, 0, 80).is_err());
+        // A split port below 1024 is just as unbindable as the mixed one.
+        assert!(Endpoints::new(7890, 80, 0, 9090).is_err());
+        assert!(Endpoints::new(7890, 0, 80, 9090).is_err());
     }
 
     #[test]
     fn endpoints_reject_identical_ports() {
         // The most common real mistake: one port doing double duty.
-        assert!(Endpoints::new(7890, 7890).is_err());
+        assert!(Endpoints::new(7890, 0, 0, 7890).is_err());
+        assert!(Endpoints::new(7890, 9090, 7891, 9090).is_err());
+        assert!(Endpoints::new(7890, 7891, 9090, 9090).is_err());
+    }
+
+    #[test]
+    fn endpoints_resolve_zero_split_ports_to_the_mixed_port() {
+        // The default: nothing split, everything falls back, one listener.
+        let unsplit = Endpoints::new(7890, 0, 0, 9090).unwrap();
+        assert_eq!(unsplit.http_port, 7890);
+        assert_eq!(unsplit.socks_port, 7890);
+        assert_eq!(unsplit.proxy_port(), 7890);
+        assert!(!unsplit.split());
+
+        // A half-set pair is still a split: the unset half follows mixed_port.
+        let half = Endpoints::new(7890, 7891, 0, 9090).unwrap();
+        assert_eq!(half.http_port, 7891);
+        assert_eq!(half.socks_port, 7890);
+        assert!(half.split());
+        assert_eq!(half.proxy_port(), 7891);
+
+        // Equal non-zero values mean "not split", not an error.
+        let same = Endpoints::new(7890, 7891, 7891, 9090).unwrap();
+        assert!(!same.split());
+        assert_eq!(same.proxy_port(), 7891);
+
+        // Split exactly as the task book's example: 7890 mixed, 7891 HTTP,
+        // 7892 SOCKS.
+        let split = Endpoints::new(7890, 7891, 7892, 9090).unwrap();
+        assert_eq!(split.http_port, 7891);
+        assert_eq!(split.socks_port, 7892);
+        assert_eq!(split.proxy_port(), 7891);
+        assert!(split.split());
+    }
+
+    #[test]
+    fn a_leftover_mixed_port_cannot_block_a_split_start() {
+        // Nothing listens on `mixed_port` once the protocols are split, so a
+        // value that would be refused on its own (out of range, or equal to
+        // the API port) must not stop a start that binds elsewhere.
+        let low = Endpoints::new(80, 7891, 7892, 9090).unwrap();
+        assert_eq!(low.http_port, 7891);
+        assert_eq!(low.socks_port, 7892);
+        assert!(low.split());
+
+        let clashing = Endpoints::new(9090, 7891, 7892, 9090).unwrap();
+        assert!(clashing.split());
+
+        // The two ports that do listen are still judged.
+        assert!(Endpoints::new(80, 0, 0, 9090).is_err());
+        assert!(Endpoints::new(9090, 0, 0, 9090).is_err());
+        assert!(Endpoints::new(7890, 9090, 7892, 9090).is_err());
     }
 
     #[test]

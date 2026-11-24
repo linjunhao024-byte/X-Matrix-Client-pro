@@ -38,6 +38,11 @@ PAC 只表达**能表达的**：绕过列表 + 规则里「直连」的域名类
 `Settings` 增加 `http_port` / `socks_port`（缺省 0 = 继续用 mixed 单端口）。Xray 渲染拆 `http` + `socks` 两个 inbound，sing-box 同理；端口预检、`ProxyServer` 仍用 HTTP 端口；订阅「走代理」用 HTTP 端口。
 判据：两条端口都起得来、系统代理指向 HTTP 端口、SOCKS 端口能单独握手。
 
+**结果（2026-11-25）**：已实现并真机验收（见 `docs/ACCEPTANCE.md` §49）。实际做出来的比原计划多两条：
+- 生效端口收进 `Endpoints` 一处决议（`0 = 跟 mixed 一样`），对外只给 `http_port` / `socks_port` / `proxy_port()`；渲染、接管、订阅抓取、真实延迟、临时内核、诊断全从它取，`mixed_port` 降级为回退基值。
+- 分离后 SOCKS 仍占 `socks` tag，HTTP 新开 `http` tag（引用旧 tag 的用户规则不受影响）；`mixed_port` 在分离态不再被 bind，因此「低于 1024 / 等于控制端口」两条检查加了 `!split` 前置——否则一个没被使用的数字会否决完全合法的启动。
+- 老实说明：真机只验了 Xray 的两种形态（单 `mixed` 入站 / `socks`+`http` 两入站），sing-box 的分离渲染只有单测；测试机不通外网，「两个端口各自握手成功」这件事没有机器证据；半分离（只填一个）只有单测。
+
 ### S10 · 强调色 / 主题
 主题仍是 light/dark/system，另加强调色（若干预设 + 自定义 hex），落在 `src/styles/tokens.css` 的语义变量上，由 `data-accent` 切换；对比度必须可读。
 判据：切换后主按钮/选中态跟随变化、深色下可读、刷新后保持、`python /c/Users/83611/check-design.py` 无 error。
@@ -80,7 +85,7 @@ sing-box `tun` 入站（`auto_route`、`strict_route`、`stack: system`），需
 | 项 | 状态 | 提交 | 验收 |
 |---|---|---|---|
 | S2 PAC | **已完成**（2026-11-25） | 与 `src-tauri/src/sysproxy/pac.rs` 同一次提交（`git log --oneline -- src-tauri/src/sysproxy/pac.rs` 最新一条） | `docs/ACCEPTANCE.md` §48；真机脚本 `D:\tmp\shots\48-pac-accept.sh` |
-| S8 分离端口 | 未开始 | — | — |
+| S8 分离端口 | **已完成**（2026-11-25） | 与 `src-tauri/src/engine/mod.rs` 同一次提交（`git log --oneline -- src-tauri/src/engine/mod.rs` 最新一条） | `docs/ACCEPTANCE.md` §49；真机脚本 `D:	mp\shots9-split-accept.sh`、`49-ui-accept.sh` |
 | S10 主题 | 未开始 | — | — |
 | S11 进程选择器 | 未开始 | — | — |
 | S9 回退/负载组 | 未开始 | — | — |

@@ -405,6 +405,20 @@ export type EngineStatus_Deserialize = {
 	 */
 	node_id?: string | null,
 	mixed_port: number,
+	/**
+	 *  The HTTP inbound the running kernel actually listens on.
+	 * 
+	 *  Equal to [`EngineStatus::mixed_port`] unless the settings split the two
+	 *  protocols (`0` there means "follow `mixed_port`"). This is the port the
+	 *  system proxy and every probe point at, so the UI shows it instead of
+	 *  making the reader redo the fallback.
+	 */
+	http_port: number,
+	/**
+	 *  The SOCKS inbound the running kernel actually listens on; resolved the
+	 *  same way as [`EngineStatus::http_port`].
+	 */
+	socks_port: number,
 	api_port: number,
 	pid: number,
 	config_path: string,
@@ -486,6 +500,20 @@ export type EngineStatus_Serialize = {
 	 */
 	node_id: string | null,
 	mixed_port: number,
+	/**
+	 *  The HTTP inbound the running kernel actually listens on.
+	 * 
+	 *  Equal to [`EngineStatus::mixed_port`] unless the settings split the two
+	 *  protocols (`0` there means "follow `mixed_port`"). This is the port the
+	 *  system proxy and every probe point at, so the UI shows it instead of
+	 *  making the reader redo the fallback.
+	 */
+	http_port: number,
+	/**
+	 *  The SOCKS inbound the running kernel actually listens on; resolved the
+	 *  same way as [`EngineStatus::http_port`].
+	 */
+	socks_port: number,
 	api_port: number,
 	pid: number,
 	config_path: string,
@@ -1148,6 +1176,20 @@ export type Settings = Settings_Serialize | Settings_Deserialize;
 export type Settings_Deserialize = {
 	/**  Local mixed inbound (HTTP + SOCKS) port. */
 	mixed_port?: number,
+	/**
+	 *  HTTP inbound port when HTTP and SOCKS get their own listeners.
+	 * 
+	 *  `0` means "the same as [`Settings::mixed_port`]", which is the default
+	 *  and keeps the single mixed inbound. A non-zero value splits the two:
+	 *  software that only speaks `socks5://` and a system proxy that must be
+	 *  an HTTP address can then both be served without a second client.
+	 */
+	http_port?: number,
+	/**
+	 *  SOCKS inbound port when the two protocols are split; `0` means "the
+	 *  same as [`Settings::mixed_port`]", exactly like [`Settings::http_port`].
+	 */
+	socks_port?: number,
 	/**  Control/API port used by the engine for stats & connections. */
 	api_port?: number,
 	allow_lan?: boolean,
@@ -1318,6 +1360,20 @@ export type Settings_Deserialize = {
 export type Settings_Serialize = {
 	/**  Local mixed inbound (HTTP + SOCKS) port. */
 	mixed_port: number,
+	/**
+	 *  HTTP inbound port when HTTP and SOCKS get their own listeners.
+	 * 
+	 *  `0` means "the same as [`Settings::mixed_port`]", which is the default
+	 *  and keeps the single mixed inbound. A non-zero value splits the two:
+	 *  software that only speaks `socks5://` and a system proxy that must be
+	 *  an HTTP address can then both be served without a second client.
+	 */
+	http_port: number,
+	/**
+	 *  SOCKS inbound port when the two protocols are split; `0` means "the
+	 *  same as [`Settings::mixed_port`]", exactly like [`Settings::http_port`].
+	 */
+	socks_port: number,
 	/**  Control/API port used by the engine for stats & connections. */
 	api_port: number,
 	allow_lan: boolean,

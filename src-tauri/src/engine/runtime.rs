@@ -197,6 +197,16 @@ pub struct EngineStatus {
     /// may share one.
     pub node_id: Option<String>,
     pub mixed_port: u16,
+    /// The HTTP inbound the running kernel actually listens on.
+    ///
+    /// Equal to [`EngineStatus::mixed_port`] unless the settings split the two
+    /// protocols (`0` there means "follow `mixed_port`"). This is the port the
+    /// system proxy and every probe point at, so the UI shows it instead of
+    /// making the reader redo the fallback.
+    pub http_port: u16,
+    /// The SOCKS inbound the running kernel actually listens on; resolved the
+    /// same way as [`EngineStatus::http_port`].
+    pub socks_port: u16,
     pub api_port: u16,
     pub pid: u32,
     pub config_path: String,
@@ -255,6 +265,8 @@ impl Default for EngineStatus {
             node_name: String::new(),
             node_id: None,
             mixed_port: 0,
+            http_port: 0,
+            socks_port: 0,
             api_port: 0,
             pid: 0,
             config_path: String::new(),
@@ -528,6 +540,8 @@ impl EngineRuntime {
             node_name: node.name.clone(),
             node_id: Some(node.id.clone()),
             mixed_port: endpoints.mixed_port,
+            http_port: endpoints.http_port,
+            socks_port: endpoints.socks_port,
             api_port: endpoints.api_port,
             pid,
             config_path: config_path.to_string_lossy().into_owned(),
@@ -630,6 +644,8 @@ impl EngineRuntime {
                 node_name: running.node_name.clone(),
                 node_id: Some(running.node_id.clone()),
                 mixed_port: running.endpoints.mixed_port,
+                http_port: running.endpoints.http_port,
+                socks_port: running.endpoints.socks_port,
                 api_port: running.endpoints.api_port,
                 pid: running.handle.pid(),
                 config_path: running.config_path.to_string_lossy().into_owned(),
@@ -1107,7 +1123,9 @@ pub(crate) mod tests {
     }
 
     pub(crate) struct Harness {
-        pub(crate) runtime: EngineRuntime,
+        /// Behind an `Arc` because `start_engine` takes the runtime the same way
+        /// the app state holds it; tests then call it exactly like production.
+        pub(crate) runtime: Arc<EngineRuntime>,
         spawned: Arc<Mutex<Vec<(PathBuf, Vec<String>)>>>,
         killed: Arc<Mutex<Vec<u32>>>,
         exits: Arc<Mutex<Vec<Arc<Mutex<Option<i32>>>>>>,
@@ -1224,7 +1242,7 @@ four"
         );
 
         Harness {
-            runtime,
+            runtime: Arc::new(runtime),
             spawned,
             killed,
             exits,
@@ -1250,7 +1268,7 @@ four"
     #[test]
     fn start_writes_the_config_before_spawning() {
         let h = harness(true, false);
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         let status = h
             .runtime
             .start(EngineKind::Xray, &node(), endpoints, RunOptions::new())
@@ -1322,7 +1340,7 @@ four"
             .start(
                 EngineKind::Xray,
                 &node(),
-                Endpoints::new(7890, 9090).unwrap(),
+                Endpoints::new(7890, 0, 0, 9090).unwrap(),
                 RunOptions::new(),
             )
             .unwrap();
@@ -1383,7 +1401,7 @@ four"
     #[test]
     fn a_kernel_that_never_becomes_ready_is_killed() {
         let h = harness(false, false);
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         let err = h
             .runtime
             .start(EngineKind::SingBox, &node(), endpoints, RunOptions::new())
@@ -1403,7 +1421,7 @@ four"
     #[test]
     fn starting_again_stops_the_previous_kernel() {
         let h = harness(true, false);
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         h.runtime
             .start(EngineKind::Xray, &node(), endpoints, RunOptions::new())
             .unwrap();
@@ -1428,7 +1446,7 @@ four"
     #[test]
     fn a_running_kernel_adopts_the_new_id_of_its_own_node() {
         let h = harness(true, false);
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         h.runtime
             .start(EngineKind::Xray, &node(), endpoints, RunOptions::new())
             .unwrap();
@@ -1463,7 +1481,7 @@ four"
     #[test]
     fn stop_kills_the_running_kernel() {
         let h = harness(true, false);
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         h.runtime
             .start(EngineKind::Xray, &node(), endpoints, RunOptions::new())
             .unwrap();
@@ -1476,7 +1494,7 @@ four"
     #[test]
     fn status_reports_the_level_the_kernel_was_started_with() {
         let h = harness(true, false);
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         let options = RunOptions {
             log_level: LogLevel::Debug,
             ..RunOptions::new()
@@ -1498,7 +1516,7 @@ four"
     #[test]
     fn status_reports_the_mode_the_kernel_was_started_with() {
         let h = harness(true, false);
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         let options = RunOptions {
             mode: ProxyMode::Global,
             ..RunOptions::new()
@@ -1519,7 +1537,7 @@ four"
     #[test]
     fn a_stopped_kernel_reports_the_default_level() {
         let h = harness(true, false);
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         let options = RunOptions {
             log_level: LogLevel::Debug,
             ..RunOptions::new()
@@ -1541,7 +1559,7 @@ four"
     #[test]
     fn status_reports_the_lan_and_dns_the_kernel_was_started_with() {
         let h = harness(true, false);
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         let options = RunOptions {
             allow_lan: true,
             dns_servers_raw: "1.1.1.1, 8.8.8.8".into(),
@@ -1567,7 +1585,7 @@ four"
     #[test]
     fn a_stopped_kernel_reports_no_lan_and_no_dns() {
         let h = harness(true, false);
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         let options = RunOptions {
             allow_lan: true,
             dns_servers_raw: "1.1.1.1".into(),
@@ -1591,7 +1609,7 @@ four"
     #[test]
     fn status_reports_the_mux_the_kernel_was_started_with() {
         let h = harness(true, false);
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         let options = RunOptions {
             mux_enabled: true,
             mux_concurrency: 16,
@@ -1617,7 +1635,7 @@ four"
     #[test]
     fn a_stopped_kernel_reports_no_mux() {
         let h = harness(true, false);
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         let options = RunOptions {
             mux_enabled: true,
             mux_concurrency: 32,
@@ -1644,7 +1662,7 @@ four"
     #[test]
     fn status_reports_the_fragment_the_kernel_was_started_with() {
         let h = harness(true, false);
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         let options = RunOptions {
             fragment_enabled: true,
             fragment_length: "120-240".into(),
@@ -1672,7 +1690,7 @@ four"
     #[test]
     fn status_reports_the_probe_address_the_kernel_was_started_with() {
         let h = harness(true, false);
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         let options = RunOptions {
             probe_url: "http://probe.example.com/generate_204".into(),
             ..RunOptions::new()
@@ -1696,7 +1714,7 @@ four"
     #[test]
     fn a_stopped_kernel_reports_no_fragment() {
         let h = harness(true, false);
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         let options = RunOptions {
             fragment_enabled: true,
             fragment_length: "80-160".into(),
@@ -1727,7 +1745,7 @@ four"
     #[test]
     fn status_reports_the_node_the_kernel_was_started_with() {
         let h = harness(true, false);
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         let started = h
             .runtime
             .start(EngineKind::Xray, &node(), endpoints, RunOptions::new())
@@ -1745,7 +1763,7 @@ four"
     #[test]
     fn a_stopped_kernel_reports_no_node_id() {
         let h = harness(true, false);
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         h.runtime
             .start(EngineKind::Xray, &node(), endpoints, RunOptions::new())
             .unwrap();
@@ -1764,7 +1782,7 @@ four"
     #[test]
     fn a_kernel_that_exits_on_its_own_is_reported_as_stopped() {
         let h = harness(true, false);
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         h.runtime
             .start(EngineKind::Xray, &node(), endpoints, RunOptions::new())
             .unwrap();
@@ -1781,7 +1799,7 @@ four"
     #[test]
     fn stop_on_purpose_is_never_an_unexpected_exit() {
         let h = harness(true, false);
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         h.runtime
             .start(EngineKind::Xray, &node(), endpoints, RunOptions::new())
             .unwrap();
@@ -1798,7 +1816,7 @@ four"
     #[test]
     fn a_kernel_that_dies_on_its_own_is_announced_exactly_once() {
         let h = harness(true, false);
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         h.runtime
             .start(EngineKind::Xray, &node(), endpoints, RunOptions::new())
             .unwrap();
@@ -1816,7 +1834,7 @@ four"
     #[test]
     fn spawn_failure_surfaces_as_an_engine_error() {
         let h = harness(true, true);
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         let err = h
             .runtime
             .start(EngineKind::Xray, &node(), endpoints, RunOptions::new())
@@ -1831,7 +1849,7 @@ four"
         let h = harness(true, false);
         let mut bad = node();
         bad.server = String::new();
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         assert!(h
             .runtime
             .start(EngineKind::Xray, &bad, endpoints, RunOptions::new())

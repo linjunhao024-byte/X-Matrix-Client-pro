@@ -3648,6 +3648,30 @@
     "給 HTTP + SOCKS 共用的入口埠"
   ],
   [
+    "settings.httpPort",
+    "HTTP 端口",
+    "HTTP port",
+    "HTTP 埠"
+  ],
+  [
+    "settings.socksPort",
+    "SOCKS 端口",
+    "SOCKS port",
+    "SOCKS 埠"
+  ],
+  [
+    "settings.portSplitHint",
+    "留 0 表示与混合端口相同；填成两个不同端口就分开监听，系统代理指向 HTTP 端口",
+    "Leave 0 to share the mixed port. Two different ports split the listeners, and the system proxy follows the HTTP one.",
+    "留 0 表示與混合埠相同；填成兩個不同埠就分開監聽，系統代理指向 HTTP 埠"
+  ],
+  [
+    "home.fact.inboundSplit",
+    "入站端口（HTTP / SOCKS）",
+    "Inbound ports (HTTP / SOCKS)",
+    "入站埠（HTTP / SOCKS）"
+  ],
+  [
     "settings.mode",
     "代理模式",
     "Proxy mode",

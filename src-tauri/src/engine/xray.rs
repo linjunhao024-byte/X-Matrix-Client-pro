@@ -73,22 +73,7 @@ impl Engine for XrayEngine {
                 "error": null,
                 "loglevel": input.log_level.as_xray(),
             },
-            "inbounds": [{
-                "tag": "socks",
-                "port": endpoints.mixed_port,
-                "protocol": "mixed",
-                "listen": input.listen_address(),
-                "settings": {
-                    "auth": "noauth",
-                    "udp": true,
-                    "allowTransparent": false,
-                },
-                "sniffing": {
-                    "enabled": true,
-                    "destOverride": ["http", "tls"],
-                    "routeOnly": false,
-                },
-            }],
+            "inbounds": xray_inbounds(input, endpoints),
             "outbounds": outbounds,
             "routing": {
                 "domainStrategy": "IPIfNonMatch",
@@ -121,6 +106,63 @@ impl Engine for XrayEngine {
             },
         }))
     }
+}
+
+/// The inbound listeners.
+///
+/// Without a split there is one `mixed` listener on the resolved port, exactly
+/// the shape this config has always had: SOCKS5 and HTTP on one port, tag
+/// `socks`. With a split each protocol gets its own listener — the tags stay
+/// `socks` and `http`, so routing rules and the metrics endpoint do not move.
+///
+/// Sniffing is on both listeners: a split HTTP inbound is what the system proxy
+/// points at, and domain sniffing is what lets a rule match by hostname instead
+/// of by resolved IP.
+fn xray_inbounds(input: &RenderInput<'_>, endpoints: Endpoints) -> Vec<Value> {
+    let sniffing = json!({
+        "enabled": true,
+        "destOverride": ["http", "tls"],
+        "routeOnly": false,
+    });
+    if !endpoints.split() {
+        return vec![json!({
+            "tag": "socks",
+            "port": endpoints.proxy_port(),
+            "protocol": "mixed",
+            "listen": input.listen_address(),
+            "settings": {
+                "auth": "noauth",
+                "udp": true,
+                "allowTransparent": false,
+            },
+            "sniffing": sniffing,
+        })];
+    }
+    vec![
+        json!({
+            "tag": "socks",
+            "port": endpoints.socks_port,
+            "protocol": "socks",
+            "listen": input.listen_address(),
+            "settings": {
+                "auth": "noauth",
+                "udp": true,
+                "allowTransparent": false,
+            },
+            "sniffing": sniffing.clone(),
+        }),
+        json!({
+            "tag": "http",
+            "port": endpoints.http_port,
+            "protocol": "http",
+            "listen": input.listen_address(),
+            "settings": {
+                "auth": "noauth",
+                "allowTransparent": false,
+            },
+            "sniffing": sniffing,
+        }),
+    ]
 }
 
 /// All outbounds for this run.
@@ -264,7 +306,7 @@ mod tests {
     }
 
     fn render(node: &Node) -> Value {
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         XrayEngine.render_config(&RenderInput::new(node, endpoints)).unwrap()
     }
 
@@ -280,7 +322,7 @@ mod tests {
     }
 
     fn render_with(node: &Node, mode: ProxyMode, allow_lan: bool) -> Value {
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         let input = RenderInput::new(node, endpoints).with_options(RunOptions {
             mode,
             allow_lan,
@@ -460,6 +502,39 @@ mod tests {
     }
 
     #[test]
+    fn split_inbounds_give_socks_and_http_their_own_listeners() {
+        let endpoints = Endpoints::new(7890, 7891, 7892, 9090).unwrap();
+        let n = node(
+            Protocol::Trojan {
+                password: "pw".into(),
+            },
+            Transport::Tcp,
+            Security::None,
+        );
+        let cfg = XrayEngine
+            .render_config(&RenderInput::new(&n, endpoints))
+            .unwrap();
+        let inbounds = cfg["inbounds"].as_array().unwrap();
+        assert_eq!(inbounds.len(), 2);
+        // Order is fixed: socks first, http second, so a diff of two configs
+        // never reshuffles because a port number happened to change.
+        assert_eq!(inbounds[0]["tag"], json!("socks"));
+        assert_eq!(inbounds[0]["protocol"], json!("socks"));
+        assert_eq!(inbounds[0]["port"], json!(7892));
+        assert_eq!(inbounds[1]["tag"], json!("http"));
+        assert_eq!(inbounds[1]["protocol"], json!("http"));
+        assert_eq!(inbounds[1]["port"], json!(7891));
+        // The SOCKS listener keeps UDP relay; an HTTP listener has no such
+        // setting and sniffing needs destOverride on both.
+        assert_eq!(inbounds[0]["settings"]["udp"], json!(true));
+        assert!(inbounds[1]["settings"].get("udp").is_none());
+        assert_eq!(inbounds[1]["settings"]["allowTransparent"], json!(false));
+        assert_eq!(inbounds[1]["sniffing"]["destOverride"], json!(["http", "tls"]));
+        // Nothing listens on the mixed port any more.
+        assert!(inbounds.iter().all(|i| i["port"] != json!(7890)));
+    }
+
+    #[test]
     fn empty_server_is_rejected_before_rendering() {
         let mut n = node(
             Protocol::Trojan {
@@ -469,7 +544,7 @@ mod tests {
             Security::None,
         );
         n.server = "  ".into();
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         assert!(XrayEngine.render_config(&RenderInput::new(&n, endpoints)).is_err());
     }
 
@@ -483,7 +558,7 @@ mod tests {
 
     #[test]
     fn stats_channel_is_expvar_on_the_api_port() {
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         assert_eq!(
             XrayEngine.stats_channel(endpoints),
             StatsChannel::XrayExpVar { port: 9090 }
@@ -518,7 +593,7 @@ mod tests {
             ..Default::default()
         };
         let options = crate::engine::RunOptions::from_settings(&settings, &[]);
-        let input = crate::engine::RenderInput::new(&node, Endpoints::new(17890, 19090).unwrap())
+        let input = crate::engine::RenderInput::new(&node, Endpoints::new(17890, 0, 0, 19090).unwrap())
             .with_options(options);
         let config = XrayEngine.render_config(&input).unwrap();
         assert_eq!(config["log"]["loglevel"], "debug");
@@ -537,7 +612,7 @@ mod tests {
         };
         let nodes = vec![first.clone(), second.clone()];
         let groups = vec![group];
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         let options = RunOptions::new().with_catalog(&nodes, &groups);
         let input = RenderInput::new(&first, endpoints).with_options(options);
 
@@ -566,7 +641,7 @@ mod tests {
         };
         let nodes = vec![first.clone()];
         let groups = vec![group];
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         let input = RenderInput::new(&first, endpoints)
             .with_options(RunOptions::new().with_catalog(&nodes, &groups));
 
@@ -583,7 +658,7 @@ mod tests {
     #[test]
     fn custom_resolvers_land_in_the_dns_section() {
         let node = plain_node();
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         let mut input = RenderInput::new(&node, endpoints);
         input.dns_servers = vec![
             crate::domain::settings::DnsEntry::Plain("1.1.1.1".into()),
@@ -596,7 +671,7 @@ mod tests {
     #[test]
     fn encrypted_resolvers_keep_their_scheme_for_xray() {
         let node = plain_node();
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         let mut input = RenderInput::new(&node, endpoints);
         input.dns_servers = vec![
             crate::domain::settings::DnsEntry::Dot {
@@ -625,7 +700,7 @@ mod tests {
     /// so the renderer refuses and names the fix.
     #[test]
     fn a_quic_node_is_refused_with_a_pointer_to_sing_box() {
-        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
         let node = node(
             Protocol::Hysteria2 {
                 password: "pw".into(),
