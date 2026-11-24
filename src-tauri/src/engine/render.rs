@@ -315,6 +315,23 @@ fn split_entries(entries: &[SetEntry]) -> (Vec<String>, Vec<String>) {
     (domains, ips)
 }
 
+/// Where sing-box gets its geo data now that the built-in `geosite` and
+/// `geoip` rule fields are gone.
+///
+/// sing-box 1.12 removed them — a config carrying either one dies at boot with
+/// `parse rule[0]: geosite database is deprecated in sing-box 1.8.0 and removed
+/// in sing-box 1.12.0`. The replacement is a rule-set, so a `geosite:cn` rule
+/// becomes a reference to a `geosite-cn` set that sing-box downloads itself.
+/// jsDelivr is the mirror because the same CDN already backs our geo files and
+/// is reachable where GitHub is not.
+const SING_GEOSITE_BASE: &str = "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-";
+const SING_GEOIP_BASE: &str = "https://cdn.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-";
+
+/// The tag a bare geosite/geoip name is declared and referenced under.
+fn singbox_geo_tag(kind: &str, value: &str) -> String {
+    format!("{kind}-{value}")
+}
+
 /// Rule-set declarations for sing-box's `route.rule_set`.
 ///
 /// sing-box is the only kernel with a native rule-set object, so a set is
@@ -322,17 +339,56 @@ fn split_entries(entries: &[SetEntry]) -> (Vec<String>, Vec<String>) {
 /// "source"` means the file is a JSON document (`version` + `rules`), which is
 /// what [`singbox_rule_set_source`] writes.
 pub fn singbox_rule_set_declarations(input: &RenderInput<'_>) -> Vec<Value> {
-    let Some(dir) = input.rule_set_dir else {
-        return Vec::new();
-    };
     if input.mode != ProxyMode::Rule {
         return Vec::new();
     }
 
     let mut declared: Vec<String> = Vec::new();
     let mut out = Vec::new();
+
+    // Geo sets are files the app fetched before the kernel started
+    // (`prepare_geo_rule_sets` in `runtime.rs`). Declaring them as `local`
+    // keeps the boot offline: a `remote` set makes sing-box download while
+    // starting, and on the test box that either 404'd through the node or hung
+    // on an IPv6 AAAA record, in both cases leaving "the kernel never opened
+    // its control port" as the only visible symptom. `None` (pure rendering and
+    // its tests) keeps the remote spelling so a preview still says where the
+    // data comes from.
+    for rule in input.rules.iter().filter(|rule| rule.enabled) {
+        let (kind, value, base) = match &rule.matcher {
+            RuleMatcher::GeoSite { value } => ("geosite", value, SING_GEOSITE_BASE),
+            RuleMatcher::GeoIp { value } => ("geoip", value, SING_GEOIP_BASE),
+            _ => continue,
+        };
+        let tag = singbox_geo_tag(kind, value);
+        if declared.contains(&tag) {
+            continue;
+        }
+        declared.push(tag.clone());
+        if let Some(dir) = input.rule_set_dir {
+            let path = dir.join(super::geo::RULE_SET_SUBDIR).join(format!("{kind}-{value}.srs"));
+            out.push(json!({
+                "type": "local",
+                "tag": tag,
+                "format": "binary",
+                "path": path.to_string_lossy(),
+            }));
+            continue;
+        }
+        out.push(json!({
+            "type": "remote",
+            "tag": tag,
+            "format": "binary",
+            "download_detour": "direct",
+            "url": format!("{base}{value}.srs"),
+        }));
+    }
+
     for rule in input.rules.iter().filter(|rule| rule.enabled) {
         let RuleMatcher::RuleSet { value } = &rule.matcher else {
+            continue;
+        };
+        let Some(dir) = input.rule_set_dir else {
             continue;
         };
         let Some(loaded) = LoadedRuleSet::find(input.rule_sets, value) else {
@@ -451,14 +507,15 @@ pub fn singbox_route_rules(input: &RenderInput<'_>) -> Vec<Value> {
                 RuleMatcher::DomainRegex { value } => {
                     entry.insert("domain_regex".into(), json!([value]));
                 }
+                // Not `geosite`: that field no longer exists in sing-box.
                 RuleMatcher::GeoSite { value } => {
-                    entry.insert("geosite".into(), json!([value]));
+                    entry.insert("rule_set".into(), json!([singbox_geo_tag("geosite", value)]));
                 }
                 RuleMatcher::IpCidr { value } => {
                     entry.insert("ip_cidr".into(), json!([value]));
                 }
                 RuleMatcher::GeoIp { value } => {
-                    entry.insert("geoip".into(), json!([value]));
+                    entry.insert("rule_set".into(), json!([singbox_geo_tag("geoip", value)]));
                 }
                 RuleMatcher::Port { value } => {
                     entry.insert("port".into(), json!([value]));
@@ -763,7 +820,21 @@ mod rule_tests {
 
         let sing = singbox_routing_rules(&routed);
         assert_eq!(sing[0]["domain_regex"], json!(["^ads?\\d+\\."]));
-        assert_eq!(sing[1]["geosite"], json!(["category-ads-all"]));
+        // sing-box 1.12 removed the `geosite` field outright, so the name has
+        // to travel as a rule-set reference.
+        assert_eq!(sing[1]["rule_set"], json!(["geosite-category-ads-all"]));
+        assert!(sing[1].get("geosite").is_none());
+
+        let declared = singbox_rule_set_declarations(&routed);
+        assert_eq!(declared.len(), 1);
+        assert_eq!(declared[0]["tag"], json!("geosite-category-ads-all"));
+        assert_eq!(declared[0]["type"], json!("remote"));
+        assert_eq!(declared[0]["format"], json!("binary"));
+        assert_eq!(declared[0]["download_detour"], json!("direct"));
+        assert_eq!(
+            declared[0]["url"],
+            json!("https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-category-ads-all.srs")
+        );
     }
 
     fn sample() -> Vec<RoutingRule> {
@@ -793,6 +864,38 @@ mod rule_tests {
                 false,
             ),
         ]
+    }
+
+    /// With a rule-set directory the geo declaration points at the file the app
+    /// fetched before boot. This is the shape the kernel is actually started
+    /// with: no network access while starting, and a path a person can look at.
+    #[test]
+    fn a_geo_matcher_declares_the_file_the_app_downloaded() {
+        let node = node();
+        let rules = vec![rule(
+            "geoip",
+            RuleMatcher::GeoIp {
+                value: "cn".into(),
+            },
+            RuleAction::Direct,
+            true,
+        )];
+        let dir = std::path::Path::new("/tmp/xm-rule-sets");
+        let mut with_dir = input(&node, &rules);
+        with_dir.rule_set_dir = Some(dir);
+
+        let declared = singbox_rule_set_declarations(&with_dir);
+        assert_eq!(declared.len(), 1);
+        assert_eq!(declared[0]["tag"], json!("geoip-cn"));
+        assert_eq!(declared[0]["type"], json!("local"));
+        assert_eq!(declared[0]["format"], json!("binary"));
+        assert!(declared[0].get("download_detour").is_none());
+        let path = declared[0]["path"].as_str().unwrap();
+        let spelled = path.replace('\\', "/");
+        assert!(
+            spelled.ends_with("/geo-srs/geoip-cn.srs"),
+            "unexpected rule-set path: {path}"
+        );
     }
 
     #[test]
@@ -837,7 +940,7 @@ mod rule_tests {
     }
 
     #[test]
-    fn geoip_is_prefixed_for_xray_and_bare_for_singbox() {
+    fn a_geoip_matcher_becomes_a_rule_set_for_singbox() {
         let node = node();
         let rules = vec![rule(
             "cn",
@@ -849,7 +952,16 @@ mod rule_tests {
         )];
         let shared = input(&node, &rules);
         assert_eq!(xray_route_rules(&shared)[0]["ip"][0], json!("geoip:cn"));
-        assert_eq!(singbox_route_rules(&shared)[0]["geoip"][0], json!("cn"));
+        let sing = singbox_route_rules(&shared);
+        assert_eq!(sing[0]["rule_set"][0], json!("geoip-cn"));
+        assert!(sing[0].get("geoip").is_none());
+
+        let declared = singbox_rule_set_declarations(&shared);
+        assert_eq!(declared.len(), 1);
+        assert_eq!(
+            declared[0]["url"],
+            json!("https://cdn.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-cn.srs")
+        );
     }
 
     #[test]

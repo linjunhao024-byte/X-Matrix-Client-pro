@@ -474,6 +474,12 @@ export type EngineStatus_Deserialize = {
 	 *  settings; only meaningful while [`EngineStatus::fragment_enabled`].
 	 */
 	fragment_interval: string,
+	/**
+	 *  The probe address the running kernel was started with. sing-box bakes it
+	 *  into every `urltest` group, so a saved change to 测试地址 has to be
+	 *  reported the same way as the other rendered settings.
+	 */
+	test_url: string,
 };
 
 /**  What the UI shows about the runtime. */
@@ -549,6 +555,12 @@ export type EngineStatus_Serialize = {
 	 *  settings; only meaningful while [`EngineStatus::fragment_enabled`].
 	 */
 	fragment_interval: string,
+	/**
+	 *  The probe address the running kernel was started with. sing-box bakes it
+	 *  into every `urltest` group, so a saved change to 测试地址 has to be
+	 *  reported the same way as the other rendered settings.
+	 */
+	test_url: string,
 };
 
 /**

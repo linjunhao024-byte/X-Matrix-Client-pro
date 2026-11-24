@@ -8,7 +8,7 @@
 ## 0. 三句话现状
 
 1. 主体功能已追平 V2RayN / Clash 的日常面：双内核（Xray / sing-box）渲染与启停、系统代理接管与还原、订阅/整包导入、Clash 配置连同 **策略组与规则** 一起导入、运行中热切换节点与代理模式、托盘子菜单、日志页、hysteria2 / tuic、真实延迟（分组与节点）、流量历史落盘、一键断开全部 + 进程归属、测速预算与「选最快」、域名正则 / 域名分类匹配器、诊断包导出、全局快捷键。
-2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§44）。
+2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§45）。
 3. 交接时那处未提交的工作（N12 应用内更新检查）已经构建、真机验收并提交；此后又合入四件事：`--quit` 正常退出并删除托盘图标（§21）、GEO 数据文件卡片与镜像回退下载（§23）、测速记录落盘（§24）。工作区现在是干净的。
 
 ### 0.1 进度快照（交接这一刻的硬数字）
@@ -20,11 +20,11 @@
 | 上一版未提交清单（留档） | `src-tauri/src/domain/settings.rs`、`src-tauri/src/engine/{mod,render,runtime,xray}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§39 分片）；再上一版：`src-tauri/src/engine/{mod,runtime}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§37 统一提示）；再上一版：`src-tauri/src/commands/settings.rs`、`src-tauri/src/commands/sysproxy.rs`、`src/stores/sysproxy.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`、`docs/ACCEPTANCE.md`（§36 系统代理即时生效） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库（HEAD 上这一条） |
 | IPC 命令 | **81**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
-| Rust 单测 | **373 passed**（`ARCHITECTURE.md:278` 已同步） |
+| Rust 单测 | **376 passed**（`ARCHITECTURE.md:278` 已同步） |
 | 前端检查 | `npm run check` 全绿：vue-tsc / architecture / contract / vitest **96**（10 文件） |
-| i18n | **755** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
+| i18n | **758** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
 | 桌面产物 | 见 §1 表格（每次构建后刷新；当前 release 构建含 N12 + GEO + 测速落盘 + 退出通知） |
-| 验收文档 | `docs/ACCEPTANCE.md` §0–§44（§7 历史空缺，编号不连续但内容完整） |
+| 验收文档 | `docs/ACCEPTANCE.md` §0–§45（§7 历史空缺，编号不连续但内容完整） |
 | 云电脑 | 干净：`ProxyEnable=0x0`、无 X-Matrix/sing-box/xray 进程、无 `xm*` 计划任务 |
 
 **下一步的确定顺序**（做完一条打一个勾，别跳）：
@@ -35,7 +35,7 @@
 - [x] 4. `docs/ACCEPTANCE.md` 写到 §26
 - [x] 5. 提交（`fix(tray)` / `feat(update)` / `feat(geo,nodes)` / `feat(engine)` 各一条）
 - [x] 6. `FEED_URL` 已指向真实仓库 `linjunhao024-byte/X-Matrix-Client-pro`，`v0.1.0` 已发布并带 `X-Matrix.exe` 资产
-- [x] 7. 计数已同步：81 命令 / 373 单测 / 98 vitest / 755 i18n 键 × 3
+- [x] 7. 计数已同步：81 命令 / 376 单测 / 98 vitest / 758 i18n 键 × 3
 - [ ] 8. `bash /d/tmp/shots/cleanup.sh` 收尾云电脑
 
 ---
@@ -54,8 +54,8 @@
 | 桌面产物 | `/c/Users/83611/Desktop/X-Matrix.exe`、`/c/Users/83611/Desktop/X-Matrix_0.1.0_x64-setup.exe` |
 | 当前桌面产物版本 | exe **9,823,232 B @10:32**、NSIS **3,181,050 B @10:32**（= N9 那一次构建，**不含 N12**） |
 
-**计数基线（改动后记得同步文档）**：命令 **77**、`cargo test --lib` **366**、vitest **95**（10 个文件）、i18n **750** 键。
-> `README.md:81` 与 `ARCHITECTURE.md:277-278` 已同步为 77 条命令 / 348 项测试。
+**计数基线（改动后记得同步文档）**：命令 **81**、`cargo test --lib` **376**、vitest **98**（10 个文件）、i18n **758** 键。
+> `README.md:81` 与 `ARCHITECTURE.md:277-278` 已同步为 81 条命令 / 376 项测试。
 
 命令数核算法：
 
@@ -157,6 +157,7 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 | §42 | 第三种语言：机械转繁体 + 台湾用词表，选择器落库，托盘与通知跟着换 |
 | §43 | 不启动内核也能测真实延迟：临时内核打一枪就撤，拒绝与失败分开记 |
 | §44 | 换代理模式也要说一声：内核自报模式，一键按新表重启 |
+| §45 | 测试地址只对 sing-box 有意义的提示；顺带修好带 geo 规则时 sing-box 起不来 |
 
 已提交的提交序列（新→旧，14 条主体）：
 `5a44af3` 域名正则+geosite · `569a7ce` 流量历史 · `44b857b` 测速预算+选最快 · `42f85bd` 一键断开+进程名 · `f817726` 真实延迟 · `f3fc750` 订阅走代理 · `d892b9e` Clash 导入带组和规则 · `6851775` 托盘子菜单 · `f9a0406` H4 验收文档 · `14ddb20` hysteria2/tuic · `fdd0b8d` 运行中热切换 · `eb3f453` 日志页 · `79ccadd` 设计修复（粘右操作列、错误用红、焦点陷阱等）· `535124b` 快捷键与诊断包验收。
@@ -170,6 +171,8 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 **测试在空载与满载下不是一回事（2026-11-24）**：`cargo test --lib` 在开发机空载时连续 7 次全绿（372 passed，默认 16 线程与 4 线程都一样），但在两个进程同时抢盘（一边跑 `npm run check`、一边连跑三轮 cargo）的那一次里出现 13 条假失败，全部集中在 `commands::node`（`["a","b","a"]`、`["b","b"]`）、`commands::ruleset`（`loaded_sets` 多出一条）、`commands::subscription`（换个新 id 的采纳断言、`nothing was installed`）。同一批用例单独跑 `cargo test --lib commands::node` 连跑 6 次全过，所以不是断言写错，而是并发写盘时 `target/test-tmp` 下各用例自己的目录仍被拖慢到一个边界上。判据：先空载复跑；仍红才算回归，红了先单独跑那个模块。
 
 **不启动内核的真实延迟（2026-11-24，§43）**：此前「真实延迟」只有一条路——经正在跑的内核打一次探测（`node_delay`），没启动内核时只能提示「先启动内核」。H5(b) 就是补这一半：`src-tauri/src/engine/temp.rs` 起一个一次性内核（自己挑两个空闲端口、渲染只含该节点、`mode=Global` 的配置、`XRAY_LOCATION_ASSET` 与主内核同源、`CREATE_NO_WINDOW`），轮询到混合端口监听后经 `http_latency_via_proxy_with_timeout` 打一枪，`Cleanup` 的 `Drop` 负责 kill + 删 `probe-*.json/.err`。命令 `node_delay_offline`（前端 `api.nodeDelayOffline`）在内核运行中直接拒绝（「直接用「真实延迟」经它测」），按 `settings.last_engine` 选内核并先 `validate_node()`，所以 hysteria2/tuic 配 Xray 会得到和首页一样的人话。三种结局分开记：`Measured` 写数字、`Failed` 写 `delay_ms: null`、`NotStarted`（拒绝）一个字节都不写。节点页在没有内核时每行多一个「真实延迟」文字按钮，成功后用页面原有的提示条说「真实延迟 539 ms」。真机证据（`offline-accept.txt`）：本机 sing-box 假服务端 `127.0.0.1:8388`，`SS-Local` → 界面 `539 ms · 刚刚`、store `{"delay_ms":539,"kind":"real"}`；`SS-Dead` → 界面 `经代理请求返回 HTTP 503`、store `{"delay_ms":null,"kind":"real"}`；内核在跑时 `real delay buttons while running: 0`；事后 `dir probe-*.json` 为空、无残留进程、`ProxyEnable=0`。`cargo test --lib` 372（新增 4 条），vitest 96，i18n 754×3。剩下的大候选表里只剩设计审计残余与明确不做的 S1–S11。
+
+**测试地址也要说一声，而且 sing-box 曾经根本起不来（2026-11-24，§45）**：`Settings.test_url` 只被 sing-box 的 `urltest` 分组读走，Xray 渲染器完全不看它，所以 `EngineStatus.test_url` + 设置页仅在 `engine.kind === 'sing-box'` 时比较，才是诚实的。查这条时撞上一个更大的 bug：`render.rs` 给 sing-box 也写了 `"geosite"`/`"geoip"`，而 sing-box 1.8 起弃用、1.12 起删除该字段——**默认规则表里就有一条 geosite，所以任何用户切到 sing-box 都必然启动失败**，界面只报「8 秒内没打开控制端口 9090」。修法分三层：改成规则集引用；`download_detour: direct`（不然下载走占位节点，回 404）；最终不让内核上网，改由应用启动前把 `.srs` 下到 `rule-sets/geo-srs/`（`geo::rule_set_candidates` + `runtime::prepare_geo_rule_sets`），内核只读本地文件（IPv6 AAAA 先解析、云电脑无 IPv6 路由时内核自己下会吊死）。顺带修了 `ensure_free`：端口处于 `TIME_WAIT` 时不再说「另一个代理客户端还在跑」。真机证据（`testurl-accept.txt`）：`config remote rule sets: 0/1`、`stale: 内核还在用旧设置：测试地址`、`config probe url while stale: gstatic`、`sing-box pids before=6620 after=4760`、`config probe url after restart: http://cp.cloudflare.com/`、`VERDICT listed/restarted/applied/restored: True/True/True/True`；箱上 `rule-sets\geo-srs\geosite-category-ads-all.srs` = 8,175 字节。`cargo test --lib` 376，vitest 98，i18n 758×3。
 
 **代理模式也会落后（2026-11-24，§44）**：`Settings.mode` 只在启动时被渲染成路由表，`EngineStatus` 原先不带它，所以内核在跑时把「规则」改成「全局」，界面一条提示都没有、旧表继续跑。现在 `Running.mode`/`EngineStatus.mode` 和端口、日志级别、DNS 等一样由内核自报，设置页的 `staleItems` 末尾加上代理模式（i18n 755×3）。顺带修了 `reapply()` 的一个真缺陷：它从设置镜像读 `last_node_id`，而镜像可能指向刷新后已换 id 或已删除的节点，于是提示里的按钮点了毫无反应——现在先问内核（`status.node_id`），镜像只当兜底。真机证据（`mode-accept.txt`）：`routing rules before: 3` → 保存全局 → `stale: 内核还在用旧设置：代理模式`、`routing rules while stale: 3` → 点按钮 `pids before=7164 after=2552`、`routing rules after restart: 1`、`stale after restart: 0` → 改回规则并重启 `routing rules restored: 3`；全程 `ProxyEnable=1 ProxyServer=127.0.0.1:7890`。`cargo test --lib` 373，vitest 98。
 
@@ -293,7 +296,7 @@ scp -i /c/Users/83611/.ssh/id_ed25519_cpc 本地文件 Administrator@100.106.121
 
 1. `cd /d/GitHub-Warehouse/X-Matrix-Client-Pro && git status` —— 工作区应当干净；有改动先弄清是谁的。
 2. 读本文件的 §5 与 `docs/ACCEPTANCE.md` 的最后两节，对齐上下文。
-3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 373 passed）。
+3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 376 passed）。
 4. `cd .. && npm run check`（应为全绿）。
 5. 从 §6 表里挑一项（按性价比排序），**一项一提交**，提交信息用英文 `feat(...)/fix(...)/docs: ...`。
 6. 真机验证前先跑 `bash /d/tmp/shots/deploy-tray.sh <exe>`；远端被 `cleanup.sh` 清过的话，先 `scp x-act.ps1 uia2.ps1 ocr.ps1` 上去。

@@ -3726,6 +3726,12 @@
     "日誌級別"
   ],
   [
+    "settings.stale.itemTestUrl",
+    "测试地址",
+    "test address",
+    "測試位址"
+  ],
+  [
     "settings.stale.itemMode",
     "代理模式",
     "proxy mode",

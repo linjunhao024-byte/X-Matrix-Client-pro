@@ -123,6 +123,11 @@ const staleItems = computed<string[]>(() => {
   if (dnsList(saved.dns_servers) !== dnsList(status.dns_servers)) {
     items.push('settings.stale.itemDns')
   }
+  // Only sing-box writes this into the config (every `urltest` group); Xray
+  // never sees it, so claiming it is pending while Xray runs would be a lie.
+  if (engine.kind === 'sing-box' && saved.test_url !== status.test_url) {
+    items.push('settings.stale.itemTestUrl')
+  }
   return items
 })
 

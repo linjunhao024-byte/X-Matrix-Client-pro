@@ -666,6 +666,7 @@ export const tw: Record<string, string> = {
   "settings.staleListApply": "用新設定重啟內核",
   "settings.stale.itemPorts": "埠",
   "settings.stale.itemLog": "日誌級別",
+  "settings.stale.itemTestUrl": "測試位址",
   "settings.stale.itemMode": "代理模式",
   "settings.stale.itemLan": "區域網連接",
   "settings.stale.itemMux": "多路復用",

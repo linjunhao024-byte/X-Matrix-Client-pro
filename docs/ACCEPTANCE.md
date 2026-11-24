@@ -1123,3 +1123,65 @@ bash /d/tmp/shots/mode-accept.sh
 2. **三个模式按钮是普通 `Button`，`ItemStatus` 才是选中态。** 名字是「规则 / 全局 / 直连」，用 `InvokePattern` 能点动；判断当前选中不能看颜色，要看 `ItemStatus`。
 3. **渲染出的配置里「全局」并不是「没有 rules」。** 全局模式正好一条兜底规则（`outboundTag` 指向 `proxy`），所以判据是「3 → 1 → 3」，不是「3 → 0 → 3」。
 4. **验收脚本自己的启动顺序会骗人。** 计划任务建好不等于跑起来：`mode-accept.sh` 第一版忘了 `schtasks /run /tn xmmode`，日志文件根本没生成，界面却一切正常；脚本现在 `xmapp` 之后 `sleep 10` 再跑巡检任务。
+
+## 45. 测试地址只对 sing-box 有意义：改了就说明，重启才生效（2026-11-24，云电脑 cloudpc-test）
+
+「测试地址」(`Settings.test_url`) 是 sing-box 的 `urltest` 分组用的探测地址。它只在 sing-box 内核里出现——Xray 的渲染器根本不读它。所以这条提示必须**只在 sing-box 运行时**出现，否则就是在骗用户；而且它和 §37–§44 一样，保存只算「记住了」，重启内核才真正用上。
+
+顺带修掉两个真 bug：**带 geo 规则时 sing-box 根本起不来**（下面第四节），以及**端口刚被上次内核用过时会被误报成「另一个代理客户端还在跑」**。
+
+**验法**：`bash /d/tmp/shots/testurl-accept.sh`（部署最新 exe → 起 sing-box → 改测试地址 → 保存 → 重启 → 改回 → 重启 → 停止 → 退出）
+
+| 判据 | 实际（`C:\Users\Administrator\testurl-accept.txt`） | 结果 |
+| --- | --- | --- |
+| 起来的是 sing-box，配置文件在写 | `kernels: sing-box#2288`；`config probe url before: http://www.gstatic.com/generate_204` | **通过** |
+| 本地 geo 规则集已就位，没有远程规则集 | `config remote rule sets: 0/1` | **通过** |
+| 改完保存，设置里是新值 | `test url typed: http://cp.cloudflare.com/`；`store test url after save: http://cp.cloudflare.com/` | **通过** |
+| 提示出现，并且点名是测试地址 | `stale: 内核还在用旧设置：测试地址`；`item test url: True` | **通过** |
+| 保存只算记住，内核还是旧地址 | `config probe url while stale: http://www.gstatic.com/generate_204` | **通过** |
+| 一键重启真的换了内核 | `sing-box pids before=6620 after=4760` | **通过** |
+| 重启后配置文件里是新地址 | `config probe url after restart: http://cp.cloudflare.com/` | **通过** |
+| 提示自己清掉 | `stale after restart: 0` | **通过** |
+| 改回去再重启，地址回到原值 | `config probe url restored: http://www.gstatic.com/generate_204`；`VERDICT listed/restarted/applied/restored: True/True/True/True` | **通过** |
+| 收尾干净 | `after stop: ProxyEnable=0`；`kernels after stop:` 空 | **通过** |
+
+### 顺带修的第一个真 bug：sing-box 带 geo 规则起不来
+
+这条线索是三层层剥出来的，每一层都是上一层失败暴露的：
+
+1. **`FATAL[0000] start service: initialize router: parse rule[0]: geosite database is deprecated in sing-box 1.8.0 and removed in sing-box 1.12.0`**
+   `src-tauri/src/engine/render.rs` 给 sing-box 也写了 Xray 风格的 `"geosite"` / `"geoip"` 字段。默认规则表里就有一条 geosite，所以**只要用户切到 sing-box，内核必然在启动时死掉**，而界面只会说「内核在 8 秒内没有打开控制端口 9090」——用户完全看不出是规则的问题。
+2. **改成远程规则集后又 `unexpected HTTP response status: 404`**
+   sing-box 下载规则集走默认出站，也就是那个占位节点 `example.org:443`。加 `"download_detour": "direct"` 让下载走直连才拿到 200。
+3. **加完 detour 仍然卡住**：日志停在 `dns: lookup succeed for cdn.jsdelivr.net: 104.16.179.112 … 2a04:4e42:200::485`——解析先给 IPv6，而云电脑没有 IPv6 路由，下载就吊在那里，控制端口永远不开。
+
+**最终的定法：不让内核自己上网。** 启动前由应用把需要的 `.srs` 下回来，内核只读本地文件：
+
+- `src-tauri/src/engine/geo.rs`：`pub fn rule_set_candidates(kind: &str, name: &str) -> Vec<String>`（jsDelivr → raw.githubusercontent，文件名 `{kind}-{name}.srs`）、`pub fn is_rule_set_file(path: &Path) -> bool`（头三字节是 `SRS`）、`pub const RULE_SET_SUBDIR: &str = "geo-srs"`；
+- `src-tauri/src/engine/runtime.rs`：`fn prepare_geo_rule_sets(dir: &Path, rules: &[RoutingRule]) -> AppResult<()>`，在 `start()` 里写完用户规则集之后、`kind == EngineKind::SingBox` 时调用，逐个补齐缺失的 geo 文件，失败文案 `{kind}:{name} 规则集 下载失败：…`；
+- `render.rs` 的声明：有本地目录就写 `{"type": "local", "tag": "geosite-x", "format": "binary", "path": "<dir>/geo-srs/geosite-x.srs"}`；只有纯渲染（测试、预览）时才退回远程写法 + `download_detour: direct`。
+
+中间还踩了一次自己的坑：第一版用 `write_atomic` 写 `.srs`，它按文本写，二进制被转坏，内核报 `flate: corrupt input before offset 10`；改成 `fs::write` + `fs::rename` 之后**旧坏文件仍被当成好的**，因为文本写坏的文件头也还是 `SRS`。所以目录换成了版本化的 `geo-srs`（旧的 `geo` 缓存直接退休）——不猜「这个文件是好是坏」，换目录最省事。
+
+### 顺带修的第二个真 bug：`TIME_WAIT` 被说成「另一个客户端在跑」
+
+改测试地址要重启内核，第一版脚本在同一个端口上连着起两次，就撞上了：
+
+```
+混合端口 7890 绑定失败：os error 10013
+```
+
+而 `netstat` 里只有一行 `TIME_WAIT 192.168.0.244:7890`——上一个内核刚退出，系统还没放端口。界面却告诉用户「可能是另一个代理客户端还在跑」。`src-tauri/src/net/ports.rs` 的 `ensure_free` 现在先按 300 ms 间隔试三次绑定，还是不行再花 300 ms 连一下那个端口：连得上才说「已被占用」，连不上就说「刚被别的程序用过，系统还没放（通常几十秒）」。
+
+**三个设计理由**：
+- **只在 sing-box 时提示。** Xray 的渲染器不读测试地址，那边提示「测试地址变了」是纯噪音；判断条件是 `engine.kind === 'sing-box'`（导出的字面量就是带连字符的 `'sing-box'`）。
+- **提示条目不特殊化。** 测试地址接进 §37 那条统一的 `staleItems`，按面板顺序排队尾（端口 → 日志级别 → 局域网 → DNS → 多路复用 → 分片 → 代理模式 → 测试地址），一键重启清空。
+- **规则集由应用下、内核只读本地。** 内核自己下载有三个不可控：走哪条出站、先解析 IPv6、失败了只留一行 FATAL。放在应用里就能用现成的镜像回退（`geo.rs` 的同一套候选）、能落盘复用、能给中文错误。
+
+**四个坑**：
+1. **输入框在折叠线以下，`ValuePattern.SetValue` 到不了 Vue。** 直接设 DOM 值不会触发 `input` 事件，模型没变、保存下去还是旧值；必须先 `ScrollItemPattern.ScrollIntoView()`，再点它自己的矩形（滚之前的坐标点到的是空气）。
+2. **云电脑的中文输入法会吃掉注入的按键。** `keybd_event` 打字母全进了输入法候选，读回来是乱码。改成 `Set-Clipboard` + Ctrl+A + Ctrl+V 粘贴，输入法管不着。
+3. **`VERDICT applied` 要在重启后立刻取值。** 第一版在「改回去」之后再判，配置早被恢复成旧地址，于是把真通过判成 False。
+4. **配置文件名是 `sing-box.json`，不是 `singbox.json`。** 验收脚本里读错名字，前面几轮一直报 `config probe url: missing`，看起来像内核没写配置。
+
+**一句实话**：这条只证明「保存 ≠ 生效，重启才生效，提示说得清楚」；`8,175` 字节的 `geosite-category-ads-all.srs` 证明本地规则集是真的文件，但**规则命中与否**没有在这里验（那要靠流量去撞一条 ads 域名）。

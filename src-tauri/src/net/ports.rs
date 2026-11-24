@@ -16,21 +16,40 @@ use crate::error::{AppError, AppResult};
 /// binding later leaves a window where the answer changed. The listener is
 /// dropped immediately, so the port is free again for the kernel to take.
 pub fn ensure_free(port: u16, what: &str) -> AppResult<()> {
-    match TcpListener::bind(("127.0.0.1", port)) {
-        Ok(listener) => {
-            drop(listener);
-            Ok(())
+    let mut last: Option<std::io::Error> = None;
+    for attempt in 0..3 {
+        match TcpListener::bind(("127.0.0.1", port)) {
+            Ok(listener) => {
+                drop(listener);
+                return Ok(());
+            }
+            Err(error) => {
+                last = Some(error);
+                if attempt < 2 {
+                    // A port the last kernel used stays unusable for the length
+                    // of its TIME_WAIT (measured on the test box: 10013 for
+                    // about a minute). Three tries over 600 ms covers the short
+                    // tail of that and costs nothing when the port is busy.
+                    std::thread::sleep(std::time::Duration::from_millis(300));
+                }
+            }
         }
-        Err(error) => {
-            // The Win32 text ("通常每个套接字地址…只允许使用一次") is true and
-            // useless to a human at a glance: the sentence the user needs is
-            // "something else is holding it". Keep the code in the log for us,
-            // and say the actionable thing in the UI.
-            eprintln!("x-matrix: {what} {port} 绑定失败：{error}");
-            Err(AppError::Engine(format!(
-                "{what} {port} 已被占用：可能是另一个代理客户端还在跑。先关掉它，或在设置里换一个端口"
-            )))
-        }
+    }
+    let error = last.expect("at least one bind attempt");
+    // Binding alone cannot tell "somebody is listening" from "the system still
+    // holds a socket in TIME_WAIT". The user needs the difference: one is
+    // another client to close, the other is time.
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+    let occupied = std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(300)).is_ok();
+    eprintln!("x-matrix: {what} {port} 绑定失败：{error}");
+    if occupied {
+        Err(AppError::Engine(format!(
+            "{what} {port} 已被占用：可能是另一个代理客户端还在跑。先关掉它，或在设置里换一个端口"
+        )))
+    } else {
+        Err(AppError::Engine(format!(
+            "{what} {port} 刚被别的程序用过，系统还没放（通常几十秒）：等一会儿再试，或在设置里换一个端口"
+        )))
     }
 }
 

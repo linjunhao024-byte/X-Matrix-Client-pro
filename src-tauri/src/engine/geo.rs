@@ -50,6 +50,46 @@ pub fn candidates(name: &str) -> Vec<&'static str> {
 /// Both files, in the order a config is likely to need them.
 pub const ASSET_NAMES: [&str; 2] = ["geoip.dat", "geosite.dat"];
 
+/// Subdirectory of the rule-set folder that holds downloaded geo sets.
+///
+/// The name carries a version on purpose: an earlier build wrote the `.srs`
+/// body as text (`String::from_utf8_lossy`), which still begins with the magic
+/// `SRS` and therefore passed a magic-byte check while the kernel rejected it
+/// with `flate: corrupt input`. A new directory retires that cache without
+/// guessing whether a file is good.
+pub const RULE_SET_SUBDIR: &str = "geo-srs";
+
+/// Where sing-box gets a `geosite:<name>` / `geoip:<name>` rule set.
+///
+/// sing-box 1.12 removed its built-in geo databases, so a geo matcher has to
+/// point at a real `.srs` file. We fetch it here rather than letting the kernel
+/// do it: sing-box downloads rule sets while booting, which turns one slow CDN
+/// into "the kernel never opened its port", and it prefers IPv6 first (the test
+/// box has no IPv6 route, so the download simply hung).
+/// Is this a real sing-box rule set, or a stub from a broken download?
+///
+/// The binary format opens with `SRS` and a version byte; a text copy of the
+/// body (which an earlier build wrote) and a zero-byte placeholder both fail.
+pub fn is_rule_set_file(path: &Path) -> bool {
+    use std::io::Read;
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return false;
+    };
+    let mut head = [0u8; 4];
+    if file.read(&mut head).unwrap_or(0) != 4 {
+        return false;
+    }
+    &head[..3] == b"SRS"
+}
+
+pub fn rule_set_candidates(kind: &str, name: &str) -> Vec<String> {
+    let file = format!("{kind}-{name}.srs");
+    vec![
+        format!("https://cdn.jsdelivr.net/gh/SagerNet/sing-{kind}@rule-set/{file}"),
+        format!("https://raw.githubusercontent.com/SagerNet/sing-{kind}/rule-set/{file}"),
+    ]
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, serde::Deserialize, specta::Type)]
 pub struct GeoAssetStatus {
     pub name: String,
@@ -143,6 +183,26 @@ pub fn human_bytes(bytes: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The guard that stops a corrupt cache from reaching the kernel.
+    #[test]
+    fn only_a_real_rule_set_counts_as_downloaded() {
+        let dir = temp_dir("srs");
+        let good = dir.join("good.srs");
+        std::fs::write(&good, [b'S', b'R', b'S', 1, b'r', b'e', b's', b't']).unwrap();
+        assert!(is_rule_set_file(&good));
+
+        let text = dir.join("text.srs");
+        std::fs::write(&text, b"# a text copy of the body\n").unwrap();
+        assert!(!is_rule_set_file(&text));
+
+        let empty = dir.join("empty.srs");
+        std::fs::write(&empty, b"").unwrap();
+        assert!(!is_rule_set_file(&empty));
+
+        assert!(!is_rule_set_file(&dir.join("missing.srs")));
+        std::fs::remove_dir_all(&dir).ok();
+    }
 
     fn temp_dir(tag: &str) -> PathBuf {
         // Under `target/`, not the system temp dir: the sandbox this test runs

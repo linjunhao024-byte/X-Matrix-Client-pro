@@ -30,6 +30,7 @@ use specta::Type;
 use super::job::KillOnCloseJob;
 use super::{Endpoints, EngineKind, LoadedRuleSet, RenderInput, RunOptions, StatsChannel};
 use crate::domain::node::Node;
+use crate::domain::routing::RoutingRule;
 use crate::domain::settings::ProxyMode;
 use crate::domain::settings::LogLevel;
 use crate::error::{AppError, AppResult};
@@ -240,6 +241,10 @@ pub struct EngineStatus {
     /// The delay range the running kernel was started with, verbatim from the
     /// settings; only meaningful while [`EngineStatus::fragment_enabled`].
     pub fragment_interval: String,
+    /// The probe address the running kernel was started with. sing-box bakes it
+    /// into every `urltest` group, so a saved change to 测试地址 has to be
+    /// reported the same way as the other rendered settings.
+    pub test_url: String,
 }
 
 impl Default for EngineStatus {
@@ -264,6 +269,7 @@ impl Default for EngineStatus {
             fragment_enabled: false,
             fragment_length: "100-200".to_string(),
             fragment_interval: "10-20".to_string(),
+            test_url: String::new(),
         }
     }
 }
@@ -330,6 +336,9 @@ struct Running {
     /// The delay range this kernel was started with; see
     /// [`EngineStatus::fragment_interval`].
     fragment_interval: String,
+    /// The probe address this kernel was started with; see
+    /// [`EngineStatus::test_url`].
+    test_url: String,
     /// True once [`EngineRuntime::stop`] asked this kernel to go away. Set
     /// before the kill because a kill that reports an error can still have
     /// taken the process down: either way the exit was the user's decision, not
@@ -432,6 +441,9 @@ impl EngineRuntime {
         let rule_set_dir = self.rule_set_dir();
         if kind == EngineKind::SingBox {
             write_rule_set_files(&rule_set_dir, options.rule_sets)?;
+            // A geo matcher is a rule-set too, and the file has to exist before
+            // the kernel boots — see `prepare_geo_rule_sets`.
+            prepare_geo_rule_sets(&rule_set_dir, options.rules)?;
         }
 
         // The log level is rendered into the config, so the options are the
@@ -448,6 +460,7 @@ impl EngineRuntime {
         let fragment_enabled = options.fragment_enabled;
         let fragment_length = options.fragment_length.clone();
         let fragment_interval = options.fragment_interval.clone();
+        let test_url = options.probe_url.clone();
         let mut input = RenderInput::new(node, endpoints).with_options(options);
         if kind == EngineKind::SingBox {
             input = input.with_rule_set_dir(&rule_set_dir);
@@ -499,6 +512,7 @@ impl EngineRuntime {
             fragment_enabled,
             fragment_length: fragment_length.clone(),
             fragment_interval: fragment_interval.clone(),
+            test_url: test_url.clone(),
             expected: false,
         });
         *self.last_exit_code.lock() = None;
@@ -527,6 +541,7 @@ impl EngineRuntime {
             fragment_enabled,
             fragment_length,
             fragment_interval,
+            test_url,
         })
     }
 
@@ -629,6 +644,7 @@ impl EngineRuntime {
                 fragment_enabled: running.fragment_enabled,
                 fragment_length: running.fragment_length.clone(),
                 fragment_interval: running.fragment_interval.clone(),
+                test_url: running.test_url.clone(),
             },
         }
     }
@@ -868,6 +884,71 @@ impl Drop for EngineRuntime {
 /// Rewritten on every start rather than on every set edit: the file is a
 /// rendering detail of *this run*, and a set that is deleted while nothing is
 /// running should not leave a stale file that a later config could point at.
+/// Make sure every `geosite:`/`geoip:` matcher a rule uses has its `.srs` file.
+///
+/// Files live in `<config dir>/rule-sets/geo/` and survive restarts, so the CDN
+/// is asked once per name. A failure is reported before the kernel is spawned:
+/// "下载失败：…" is a sentence a user can act on, whereas letting sing-box try
+/// it produces `内核在 8 秒内没有打开控制端口 9090`.
+fn prepare_geo_rule_sets(dir: &Path, rules: &[RoutingRule]) -> AppResult<()> {
+    use crate::domain::routing::RuleMatcher;
+    use crate::engine::geo;
+
+    let mut wanted: Vec<(&str, &str)> = Vec::new();
+    for rule in rules.iter().filter(|rule| rule.enabled) {
+        let pair = match &rule.matcher {
+            RuleMatcher::GeoSite { value } => ("geosite", value.as_str()),
+            RuleMatcher::GeoIp { value } => ("geoip", value.as_str()),
+            _ => continue,
+        };
+        if !wanted.contains(&pair) {
+            wanted.push(pair);
+        }
+    }
+    if wanted.is_empty() {
+        return Ok(());
+    }
+
+    let geo_dir = dir.join(geo::RULE_SET_SUBDIR);
+    std::fs::create_dir_all(&geo_dir)?;
+    for (kind, name) in wanted {
+        let path = geo_dir.join(format!("{kind}-{name}.srs"));
+        // A `.srs` file starts with the magic "SRS" plus a format byte. Anything
+        // else on disk is a leftover from a failed write — older builds stored
+        // the body as text, and the kernel answered `flate: corrupt input`.
+        if geo::is_rule_set_file(&path) {
+            continue;
+        }
+        let noun = format!("{kind}:{name} 规则集");
+        let mut attempts: Vec<String> = Vec::new();
+        let mut saved = false;
+        for url in geo::rule_set_candidates(kind, name) {
+            match crate::net::remote::fetch_bytes(&url, std::time::Duration::from_secs(30), &noun) {
+                Ok((200..=299, body)) if body.len() > 64 => {
+                    // Bytes, not text: a `.srs` file is a binary document, and
+                    // writing it through `String::from_utf8_lossy` replaced
+                    // every non-UTF-8 byte with U+FFFD — the kernel then said
+                    // `flate: corrupt input before offset 10`.
+                    let temp = path.with_extension("srs.tmp");
+                    std::fs::write(&temp, &body)?;
+                    std::fs::rename(&temp, &path)?;
+                    saved = true;
+                    break;
+                }
+                Ok((status, _)) => attempts.push(format!("返回 HTTP {status}")),
+                Err(error) => attempts.push(format!("{error}")),
+            }
+        }
+        if !saved {
+            return Err(AppError::Engine(format!(
+                "{noun} 下载失败：{}",
+                attempts.join("；")
+            )));
+        }
+    }
+    Ok(())
+}
+
 fn write_rule_set_files(dir: &Path, sets: &[LoadedRuleSet]) -> AppResult<()> {
     let active: Vec<&LoadedRuleSet> = sets.iter().filter(|loaded| loaded.set.enabled).collect();
     if active.is_empty() {
@@ -1584,6 +1665,30 @@ four"
         assert!(status.fragment_enabled);
         assert_eq!(status.fragment_length, "120-240");
         assert_eq!(status.fragment_interval, "15-30");
+
+        std::fs::remove_dir_all(&h.dir).ok();
+    }
+
+    #[test]
+    fn status_reports_the_probe_address_the_kernel_was_started_with() {
+        let h = harness(true, false);
+        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let options = RunOptions {
+            probe_url: "http://probe.example.com/generate_204".into(),
+            ..RunOptions::new()
+        };
+        let started = h
+            .runtime
+            .start(EngineKind::SingBox, &node(), endpoints, options)
+            .unwrap();
+
+        // sing-box writes this into every `urltest` group, so the settings page
+        // needs the runtime's copy to tell a saved change from an applied one.
+        assert_eq!(started.test_url, "http://probe.example.com/generate_204");
+        assert_eq!(
+            h.runtime.status().test_url,
+            "http://probe.example.com/generate_204"
+        );
 
         std::fs::remove_dir_all(&h.dir).ok();
     }
