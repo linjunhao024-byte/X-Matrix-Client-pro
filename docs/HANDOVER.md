@@ -15,8 +15,8 @@
 
 | 项 | 值 |
 |---|---|
-| 代码 HEAD | `057fdb3`「feat(i18n): a third interface language, and a picker that the backend also hears」（= 最后一个**已提交**的功能，含 §42） |
-| 未提交 | 无（§42 的改动已提交为 `057fdb3`） |
+| 代码 HEAD | `9471732`「feat(nodes): measure a real delay without starting the main kernel」（= 最后一个**已提交**的功能，含 §43） |
+| 未提交 | 无（§43 的改动已提交为 `9471732`） |
 | 上一版未提交清单（留档） | `src-tauri/src/domain/settings.rs`、`src-tauri/src/engine/{mod,render,runtime,xray}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§39 分片）；再上一版：`src-tauri/src/engine/{mod,runtime}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§37 统一提示）；再上一版：`src-tauri/src/commands/settings.rs`、`src-tauri/src/commands/sysproxy.rs`、`src/stores/sysproxy.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`、`docs/ACCEPTANCE.md`（§36 系统代理即时生效） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库（HEAD 上这一条） |
 | IPC 命令 | **81**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
