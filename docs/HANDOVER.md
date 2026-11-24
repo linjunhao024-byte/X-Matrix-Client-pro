@@ -17,10 +17,10 @@
 
 | 项 | 值 |
 |---|---|
-| 代码 HEAD | `git log -1`（归属 docs 的收尾提交）；最后一个**功能**提交是 `ca53381`「feat(rulesets): say when the kernel is still running on the old geo data」，含 §46 |
+| 代码 HEAD | `6fd790f`「fix(subs): re-read the settings mirror after a refresh re-mints node ids」，含 §47；再往前一个功能提交是 `ca53381`（§46） |
 | 未提交 | 无。§47 的补丁已打完、构建、真机验收并写进 `docs/ACCEPTANCE.md` §47（见 §0.3） |
 | 上一版未提交清单（留档） | `src-tauri/src/domain/settings.rs`、`src-tauri/src/engine/{mod,render,runtime,xray}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§39 分片）；再上一版：`src-tauri/src/engine/{mod,runtime}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§37 统一提示）；再上一版：`src-tauri/src/commands/settings.rs`、`src-tauri/src/commands/sysproxy.rs`、`src/stores/sysproxy.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`、`docs/ACCEPTANCE.md`（§36 系统代理即时生效） |
-| 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库（HEAD 上这一条） |
+| 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库；之后每次收尾都跟着更新 |
 | IPC 命令 | **81**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
 | Rust 单测 | **377 passed**（`ARCHITECTURE.md:278` 已同步） |
 | 前端检查 | `npm run check` 全绿：vue-tsc / architecture / contract / vitest **98**（10 文件） |
