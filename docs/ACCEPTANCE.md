@@ -1219,3 +1219,37 @@ app stderr 同步佐证：托盘行从 `模式 rule · 内核运行中` 重新�
 3. **`store.json` 里没有 `system_proxy` 键时 `Store-Get` 返回空串。** 那是「没这个键」，不是「读失败」——判据里别把空串当异常。
 
 **一句实话**：这里证明的是「换文件 → 说出来 → 重启后内核拿到新文件」这条链路；**新规则有没有命中流量**没有在这条里验（那要靠撞一条只在新 geo 数据里存在的域名）。
+
+## 47. 刷新订阅会重铸节点 id：前端那份镜像必须跟着重读（2026-11-25，云电脑 cloudpc-test）
+
+**要证的事**：内核在跑的时候刷新订阅，后端会按指纹把「同一个服务器」采纳成新 id（§35，内核不断、store 里 `last_node_id` 换成新 id）。新 id 是这次导入现铸的（`src-tauri/src/import.rs:563` 的 `make_id` = `{prefix}-{纳秒:x}-{序号}`），旧 id 从此不在节点表里。前端 `src/views/SubscriptionsView.vue` 的 `kernelStopped()` 原来在「内核还活着」时提前 `return false`，跳过了 `settings.load(true)`：设置镜像里留着那个已经不存在的 id，**之后任何一次「整份设置回写」都会把它写回后端**，把后端刚做完的采纳覆盖成死 ID。这一条要证的是：补上那一次重读之后，前后两种行为在真机上能分别看见。
+
+**验法**：`bash /d/tmp/shots/47-accept.sh <exe> <label>`。同一台云电脑、同一个假订阅源（`sub-server-b.ps1`：四个节点与上一次同一批服务器、顺序反转 → 指纹相同 → 必然触发采纳），两轮只换二进制：改前是 §46 的产物 `/d/tmp/handover/x-matrix-46.exe`（md5 `ccdc8803a6131d51ac39c80d510b22f8`），改后是本次构建 `src-tauri/target/release/x-matrix.exe`（md5 `bc5f0adc586bfc6f1be053a551839c41`）。流程：把 store 的 `last_node_id` 钉到订阅节点 `机场A · 香港 02` → 节点页那一行「启动」→ 订阅页「刷新」（等 15 秒读完）→ 记录 id / 内核 PID / 提示 → 首页 → **设置页点「保存」** → 回读 store 的 `last_node_id` → 首页「停止」→「启动」。
+
+**判据与结果**（两轮都按同一脚本跑，差异只在二进制）：
+
+| 判据 | 改前（§46 产物） | 改后（本次产物） |
+|---|---|---|
+| 刷新前记住的节点 id | `vless-18eb0dce938e6b9c-2` | `vless-18eb0ec8bab1fc34-2` |
+| 刷新后后端采纳的新 id | `vless-18eb0ec8bab1fc34-2` | `vless-18eb0ee7a322e80c-2` |
+| 刷新没打断内核 | `kernels after refresh: xray#6808`（与刷新前同一 PID） | `xray#3832`（同一 PID） |
+| 没冒出「内核已停止」 | `stopped notice present: False` | `False` |
+| 设置页「保存」之后 store 的 id | **退回旧 id `vless-18eb0dce938e6b9c-2`**，`store id reverted: True` | 仍是采纳后的 `vless-18eb0ee7a322e80c-2`，`reverted: False` |
+| 那个 id 还是不是真节点 | `old still a node: False`（表里 8 个节点没有它） | `new still a node: True` |
+| 内核此时在跑 | `xray#6808`（还在采纳后的节点上，store 却写着死 id） | `xray#3832` |
+| 停止后 store 保留什么 | 死 id `vless-18eb0dce938e6b9c-2` | 活 id `vless-18eb0ee7a322e80c-2` |
+| 首页「启动」还能用 | `xray#5644` 起来、`ProxyEnable=1` | `xray#7380` 起来、`ProxyEnable=1` |
+
+补丁本身只动一个文件：`src/views/SubscriptionsView.vue`（12 增 8 删）。`kernelStopped()` 改成先 `await engine.refreshStatus()`、再**无条件** `await settings.load(true)`，最后才判断 `if (!wasRunning || !wasOn) return false` / `return !engine.running`；头顶的 docblock 也改成「后端要么采纳新 id（内核继续跑），要么清空并停内核」。
+
+**三个设计理由**：
+- **重读放在判断之前、且无条件。** 后端的两种结局（采纳 / 清空并停内核）都是这一页看不见的写入。想靠「内核是否还活着」推断要不要重读，就会漏掉采纳这一支——内核活着恰恰是镜像已经变了的信号。顺序不能反：先 `refreshStatus()` 拿到内核真相，再 `load(true)` 拿设置真相，最后才算「有没有节点被拿走」。
+- **不按名字或指纹在前端自己修 id。** 每次导入必铸新 id，同名节点也是新 id；前端手里没有节点表，任何本地「猜」都会在过滤、重命名、多订阅重号这些情况下出错。真相只有后端知道，前端只做重读。
+- **改的是「读」，不是「写」。** 页面没有任何地方需要写 `last_node_id`；只要镜像在刷新后是新的，后续整份 `settings.save({ ...settings.settings })` 与 `engine.reapply()` 自然落在正确的 id 上。这也顺带给 `SettingsView.vue` 的 `store.load()`（同样不带 `force`）提供了正确的输入。
+
+**三个坑**：
+1. **简报里「首页下拉选不中、启动报已经不在了」这条症状没有这样复现。** `src/views/HomeView.vue:284-286` 的下拉默认值是 `nodes.items[0].id`，页面从来没读过 `last_node_id`；两轮里下拉都显示第一个节点 `Clip-Test · example.org:443`，刷新后首页 `home alerts` 为空。要观测这个 bug，必须挑一个**会把整份设置回写**的入口：设置页「保存」（`SettingsView.vue:357` 写 `{...draft.value}`）可以；首页「模式」按钮不行——它保存完立刻 `applyLive()`，用下拉里的 `Clip-Test` 覆盖内核并把 `last_node_id` 写成 `Clip-Test`，把要观察的状态当场抹掉。
+2. **脚本里的 `$home` 会静默失效。** 它是 PowerShell 只读自动变量（`C:\Users\Administrator`），`$home = Navigate-Robust ...` 不报错也不生效，后面所有首页判据都会变成假的 False。改名 `$onHome` 才有 `home page: True`。另外生成的 `.ps1` 必须是 UTF-8 **BOM** + CRLF：无 BOM 时 PS 5.1 按 cp936 读，中文字符串会把引号吃掉，直接 `ParserError 字符串缺少终止符`。
+3. **WebView2 的元素模式不齐，点击要留后路。** 模式按钮（规则/全局/直连）只有 `TogglePattern`、没有 `InvokePattern`，硬调 Invoke 会报 `不支持的模式。`；原生 `<select>` 没有 `SelectionPattern`，只能走 `ValuePattern` 读当前值。行内按钮在行名下方约 160 px（取 `Top >= 行顶` 的最小者），`Has-Named` 会读到陈旧快照，别用它当判据。
+
+**一句实话**：这一条证明的是「刷新后镜像立刻是新的，所以整份回写不会再把死 id 写回去」；死 id 真正让人疼的那一步——下次带 `auto_connect` 启动时日志里那句 `x-matrix: 自动连接失败：节点 … 不存在`（`src-tauri/src/lib.rs:211` 起）——没有单独再跑一轮真机复现，是从 store 里那个「不在节点表里的 id」+ `lookup_node` 的文案推出来的。命令数 81、Rust 单测 377、vitest 98、i18n 758 键 × 3 均不变（纯前端补丁）。

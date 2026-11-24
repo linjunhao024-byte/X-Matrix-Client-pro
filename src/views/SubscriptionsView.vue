@@ -220,18 +220,22 @@ async function submit(): Promise<void> {
  * Did the refresh just take the kernel's node away?
  *
  * A refresh mints new ids for the nodes it imports, so the id the kernel was
- * started with never survives one; the backend stops a kernel that was on that
- * node and forgets the id. Asking the backend afterwards is the honest check:
- * this line only appears when a kernel really went down, never for a refresh
- * that left the running node in place.
+ * started with never survives one. The backend either adopts the new id when
+ * the same server comes back (the kernel keeps running) or clears it and stops
+ * the kernel. Asking the backend afterwards is the honest check: this line
+ * only appears when a kernel really went down, never for an adoption.
  */
 async function kernelStopped(wasRunning: boolean, wasOn: string | null): Promise<boolean> {
-  if (!wasRunning || !wasOn) return false
+  // Every refresh re-mints the ids of the nodes it imports, so the id the
+  // kernel was started with never survives one: the backend either re-points
+  // it at the same server (the kernel keeps running) or clears it (the node is
+  // gone). Both are writes this page never sees, so the mirror is re-read here
+  // — otherwise the shell keeps an id that no longer exists and the next
+  // 「启动」 fails on a node the user can still see on screen.
   await engine.refreshStatus()
-  if (engine.running) return false
-  // The backend also cleared `last_node_id`; the shell reads it from here.
   await settings.load(true)
-  return true
+  if (!wasRunning || !wasOn) return false
+  return !engine.running
 }
 
 async function refreshOne(subscription: Subscription_Serialize): Promise<void> {
