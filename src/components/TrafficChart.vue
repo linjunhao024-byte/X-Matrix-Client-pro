@@ -26,8 +26,11 @@ const props = defineProps<{ points: TrafficPoint[] }>()
 const ui = useUiStore()
 
 const option = computed(() => {
-  // Depend on the resolved theme so a theme switch re-reads the tokens.
+  // Depend on the resolved theme and the accent revision so a theme switch or an
+  // accent change (the accent lives in CSS, not in a token ECharts can read)
+  // re-reads the tokens.
   void ui.resolvedTheme
+  void ui.accentVersion
   const tokens = chartTokens()
   const labels = props.points.map((point) => new Date(point.at).toLocaleTimeString())
   return {

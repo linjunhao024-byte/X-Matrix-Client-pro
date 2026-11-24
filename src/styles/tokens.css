@@ -125,3 +125,103 @@
   --shadow-card: 0 10px 28px rgba(0, 0, 0, 0.42);
   --shadow-pop: 0 24px 56px rgba(0, 0, 0, 0.58);
 }
+
+/* ---------- Accent presets ---------- */
+/*
+ * An accent only touches four variables. `--bg-glow` already derives from
+ * `--accent` with color-mix, so the halo follows without a second palette, and
+ * success / warning / danger are deliberately not part of this set: a red
+ * "delete" button must stay red whatever the accent is.
+ *
+ * These blocks repeat the table in `src/services/accent.ts` because CSS has to
+ * be right before any JS runs. `accent.test.ts` parses this file and fails the
+ * build if the two ever drift. `indigo` repeats `:root` on purpose — switching
+ * back to the default must restore the exact values the app shipped with.
+ *
+ * `data-accent="custom"` has no block: `ui.ts` writes the four variables
+ * inline, which is also why leaving a preset clears them again.
+ */
+
+:root[data-accent="indigo"] {
+  --accent: #5b5bd6;
+  --accent-hover: #4a4ac4;
+  --accent-soft: rgba(91, 91, 214, 0.12);
+  --accent-contrast: #ffffff;
+}
+
+:root[data-accent="violet"] {
+  --accent: #7c3aed;
+  --accent-hover: #6d28d9;
+  --accent-soft: rgba(124, 58, 237, 0.12);
+  --accent-contrast: #ffffff;
+}
+
+:root[data-accent="ocean"] {
+  --accent: #0284c7;
+  --accent-hover: #0369a1;
+  --accent-soft: rgba(2, 132, 199, 0.12);
+  --accent-contrast: #10121a;
+}
+
+:root[data-accent="teal"] {
+  --accent: #0d9488;
+  --accent-hover: #0f766e;
+  --accent-soft: rgba(13, 148, 136, 0.12);
+  --accent-contrast: #10121a;
+}
+
+:root[data-accent="amber"] {
+  --accent: #b45309;
+  --accent-hover: #92400e;
+  --accent-soft: rgba(180, 83, 9, 0.12);
+  --accent-contrast: #ffffff;
+}
+
+:root[data-accent="rose"] {
+  --accent: #be123c;
+  --accent-hover: #9f1239;
+  --accent-soft: rgba(190, 18, 60, 0.12);
+  --accent-contrast: #ffffff;
+}
+
+:root[data-theme="dark"][data-accent="indigo"] {
+  --accent: #8f8ff8;
+  --accent-hover: #a5a5ff;
+  --accent-soft: rgba(143, 143, 248, 0.16);
+  --accent-contrast: #10121a;
+}
+
+:root[data-theme="dark"][data-accent="violet"] {
+  --accent: #a78bfa;
+  --accent-hover: #c4b5fd;
+  --accent-soft: rgba(167, 139, 250, 0.16);
+  --accent-contrast: #10121a;
+}
+
+:root[data-theme="dark"][data-accent="ocean"] {
+  --accent: #38bdf8;
+  --accent-hover: #7dd3fc;
+  --accent-soft: rgba(56, 189, 248, 0.16);
+  --accent-contrast: #10121a;
+}
+
+:root[data-theme="dark"][data-accent="teal"] {
+  --accent: #2dd4bf;
+  --accent-hover: #5eead4;
+  --accent-soft: rgba(45, 212, 191, 0.16);
+  --accent-contrast: #10121a;
+}
+
+:root[data-theme="dark"][data-accent="amber"] {
+  --accent: #fbbf24;
+  --accent-hover: #fcd34d;
+  --accent-soft: rgba(251, 191, 36, 0.16);
+  --accent-contrast: #10121a;
+}
+
+:root[data-theme="dark"][data-accent="rose"] {
+  --accent: #fb7185;
+  --accent-hover: #fda4af;
+  --accent-soft: rgba(251, 113, 133, 0.16);
+  --accent-contrast: #10121a;
+}

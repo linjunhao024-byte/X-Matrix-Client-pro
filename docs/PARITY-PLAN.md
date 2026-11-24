@@ -47,6 +47,8 @@ PAC 只表达**能表达的**：绕过列表 + 规则里「直连」的域名类
 主题仍是 light/dark/system，另加强调色（若干预设 + 自定义 hex），落在 `src/styles/tokens.css` 的语义变量上，由 `data-accent` 切换；对比度必须可读。
 判据：切换后主按钮/选中态跟随变化、深色下可读、刷新后保持、`python /c/Users/83611/check-design.py` 无 error。
 
+结果（2026-11-25）：六个预设（indigo / violet / ocean / teal / amber / rose）各一浅一深两块 CSS，只覆盖 `--accent` / `--accent-hover` / `--accent-soft` / `--accent-contrast` 四个变量；自定义 hex 由 JS 写内联变量、切回预设时 `removeProperty`；对比度用 WCAG 2.x 现算，<4.5 拒绝。indigo 的四个值与改动前逐字节一致，`src/services/accent.test.ts` 直接解析 `src/styles/tokens.css` 做双源比对。强度：默认观感不变、六预设两档、自定义、恢复默认、活过重启——五条都在真机上按像素数验过。
+
 ### S11 · 进程选择器
 `list_processes()`（Windows Toolhelp32，去重、带图标可省）供规则编辑器选择 `ProcessName`；说明只有 sing-box 的 `process_name` 匹配在运行期生效。
 判据：选择器能列出真实进程；选中后规则落库；sing-box 运行中该进程流量按规则走（真机）。
@@ -85,8 +87,8 @@ sing-box `tun` 入站（`auto_route`、`strict_route`、`stack: system`），需
 | 项 | 状态 | 提交 | 验收 |
 |---|---|---|---|
 | S2 PAC | **已完成**（2026-11-25） | 与 `src-tauri/src/sysproxy/pac.rs` 同一次提交（`git log --oneline -- src-tauri/src/sysproxy/pac.rs` 最新一条） | `docs/ACCEPTANCE.md` §48；真机脚本 `D:\tmp\shots\48-pac-accept.sh` |
-| S8 分离端口 | **已完成**（2026-11-25） | 与 `src-tauri/src/engine/mod.rs` 同一次提交（`git log --oneline -- src-tauri/src/engine/mod.rs` 最新一条） | `docs/ACCEPTANCE.md` §49；真机脚本 `D:	mp\shots9-split-accept.sh`、`49-ui-accept.sh` |
-| S10 主题 | 未开始 | — | — |
+| S8 分离端口 | **已完成**（2026-11-25） | 与 `src-tauri/src/engine/mod.rs` 同一次提交（`git log --oneline -- src-tauri/src/engine/mod.rs` 最新一条） | `docs/ACCEPTANCE.md` §49；真机脚本 `D:\tmp\shots\49-split-accept.sh`、`49-ui-accept.sh` |
+| S10 主题 | **已完成**（2026-11-25） | 与 `src/services/accent.ts` 同一次提交（`git log --oneline -- src/services/accent.ts` 最新一条） | `docs/ACCEPTANCE.md` §50；真机脚本 `D:\tmp\shots\50-accent-accept.sh` |
 | S11 进程选择器 | 未开始 | — | — |
 | S9 回退/负载组 | 未开始 | — | — |
 | S3 内核更新 | 未开始 | — | — |

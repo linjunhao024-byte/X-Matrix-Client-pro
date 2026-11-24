@@ -1350,3 +1350,54 @@ app stderr 同步佐证：托盘行从 `模式 rule · 内核运行中` 重新�
 5. **配置文件不止一个地方。** 正式配置在 `%APPDATA%\com.xmatrix.client\configs\<kernel>.json`，一次性探测（真实延迟）的临时内核配置在 `%TEMP%`。扫的时候两处都要扫，并且按「内容含 `"port"`」过滤，否则会把 `store.json` 也当成配置收走。
 
 **一句实话**：这一条证的是「端口决议、两个渲染器的形状、接管跟着 HTTP、校验拦在渲染之前、以及界面上两个分支的文字」。没证的：① 真正的 HTTP / SOCKS 请求能不能穿过这两个入站（测试机不通外网，只能看配置和注册表）；② sing-box 的分离渲染只有单测 `split_inbounds_give_socks_and_http_their_own_listeners`，没在真机上起过 sing-box 分离态；③ 半分离（`http=7891, socks=0`）也只有单测 `endpoints_resolve_zero_split_ports_to_the_mixed_port` 守着，真机没跑过这一种组合。
+
+## 50. 强调色：六个预设加一个自定义，默认那套一个字节都没动（2026-11-25，云电脑 cloudpc-test）
+
+**要证的事**（S10，`docs/PARITY-PLAN.md`）：
+
+1. 默认观感不变：没有任何 `xm.ui.accent` 键的全新配置启动后，主按钮/选中态还是改动前那套 indigo（浅色 `#5b5bd6`、深色 `#8f8ff8`）；
+2. 六个预设各给两档（浅/深）真的换了色，不是只换了按钮标签；
+3. 自定义色（`#rrggbb`）能生效，并且不属于任何预设时六个预设按钮全部 `Off`；
+4. 「恢复默认」把强调色拉回 indigo，不留自定义的内联变量；
+5. 选择活过一次重启（强调色存在 WebView 的 `localStorage` 里，不在 `store.json`）。
+
+**验法**：
+
+- `bash /d/tmp/shots/50-accent-accept.sh [exe] [label]`（新增）——**两个应用会话**：`a` 走全套操作，`b` 只看重启后还在不在。`a` 开始前先 `rmdir` 掉 `%LOCALAPPDATA%\com.xmatrix.client\EBWebView\Default\Local Storage`，因为升级用户正是「没有这个键」的状态，不清掉就验不了第 1 条。
+- 驱动是 `50-accent.ps1`（`mk_50_accent.py` 生成，UTF-8 BOM + CRLF，`-Phase a|b`）：导航到设置页（签名 = `设置` + 唯一的 `保存`）→ 滚到色板 → 每一步之后 `Snap` 一张图，并把六个 swatch 与三个主题按钮的 `aria-pressed`（UIA 的 `TogglePattern`）读成 `On/Off`。
+- 证据是像素：`capbmp.ps1` 用 `CopyFromScreen` 存 **24 位 BMP**（不是 PNG，PNG 调色板会把纯色改掉），`bmpstat.py` 逐像素数出指定十六进制的精确个数。于是「按钮变紫了」是一个数字，不是印象。
+
+**判据（`label=final`，exe 10,481,152 B，md5 `dd36d82a50a89d55a47485d52acc01c9`）**：
+
+| # | 检查 | 观察 |
+|---|------|------|
+| 1 | 全新配置首启 | `跟随系统`=On → 解析成浅色，主色 **4886 px `#5b5bd6`**、violet swatch 948 px → 与改动前的 indigo 逐像素一致 |
+| 2 | 点「浅色」 | `浅色`=On、`深色`=Off，**4888 px `#5b5bd6`** |
+| 3 | 点 violet | `violet`=On、`indigo`=Off，**5181 px `#7c3aed`** |
+| 4 | 点「深色」 | `深色`=On，**4893 px `#a78bfa`**（violet 的深色档） |
+| 5 | 输入 `#0ea5e9` → 应用 | **3644 px `#0ea5e9`**，六个预设全 `Off`（自定义不属于任何预设） |
+| 6 | 点「恢复默认」 | `indigo`=On，**4896 px `#8f8ff8`**（当前是深色档） |
+| 7 | 再点 violet | `violet`=On，**5196 px `#a78bfa`** |
+| 8 | 重启（新进程） | `violet`=On、`深色`=On，**4893 px `#a78bfa`** → 持久化成立 |
+| 9 | 门槛 | `npm run check` 全绿（vitest **113 passed** / 11 文件）、`check-design.py` 0 error 0 warning、`cargo test --lib` **402 passed**、IPC **81**（未新增）、i18n **778** |
+
+色板常驻像素说明：每个 swatch 用它自己那一档的颜色画（浅色档约 948–950 px、深色档约 959 px），所以查「别的预设」的颜色时，总能稳定数到这一份；判断当前强调色要看的是 3600–5200 px 那一档。
+
+**设计理由**：
+
+1. **只覆盖四个变量**（`--accent` / `--accent-hover` / `--accent-soft` / `--accent-contrast`），其余颜色全部由它们派生。一个强调色不会把成功/警告/危险带歪，也就不会出现「选了绿色，失败提示变绿」这种事故。
+2. **预设写进 CSS、自定义写内联**，两条路都汇到同一个 apply：`:root[data-accent="…"]` 与 `:root[data-theme="dark"][data-accent="…"]` 各一块；自定义色由 JS 写 `--accent*` 内联变量，切回预设时 `removeProperty` 清掉。这样切换不会残留上一套的内联值（否则 CSS 块永远被内联压住）。
+3. **对比度当场算出来**：自定义色用 `relativeLuminance` + `contrastRatio` 按 WCAG 2.x 算与文字的比值，<4.5 就拒绝并把提示改成告警色。不替用户挑色，但不让主按钮上的字看不清。
+4. **存 `localStorage`，不进 `store.json`**：强调色是这台机器上的界面偏好。`store.json` 会跟着 S6 的 WebDAV 备份走，把界面偏好一起同步到另一台机器是越权的。
+5. **indigo 的四个值逐字节沿用旧值**，`src/services/accent.test.ts` 还直接 `readFileSync` 解析 `src/styles/tokens.css` 做双源比对（防止 CSS 与 TS 各写一份悄悄漂移）。所以老用户升级后看到的是同一套颜色。
+
+**坑**：
+
+1. **`恢复默认` 在整棵树里有 5 个同名 Button。** 展开的高级项里还有两个「恢复默认」（热键与清理各一个），第一个在 `y=-2043`（滚出视口）。按名字取第 0 个会点到屏幕外或别处——**第一轮就是这么假失败的**：`pressed after reset: indigo=Off`、屏幕上仍是自定义色，看起来像产品 bug。改成「在与唯一的 `应用` 按钮同一行、且在它右边」的那个才对。
+2. **`Scroll-To` 返回的是 `[pscustomobject]{CX,CY}`，不是 AutomationElement。** 对它取 `.Current.BoundingRectangle` 不报错、得到 `0,0,0x0`，于是 `[Ui]::Click(0,0)` 点了标题栏，日志写成 `rect=0,0,0x0 click=0,0` 才看出来。要么用它的 `CX/CY`，要么重新 `FindAll` 拿元素本身（要 `SetFocus` 时必须拿元素）。
+3. **`<input type="number">` 的值 UIA 读不到**（§49 已记），自定义色的 Edit 更绕：它的 `Name` 是 placeholder `#5b5bd6`、`Value` 为空，所以定位靠「Name 匹配 `#[0-9a-fA-F]{6}`」，写值靠 `ValuePattern.SetValue` 再回读校验（`after SetValue: #0ea5e9`）。
+4. **验「默认观感」必须先清 WebView 的 `Local Storage`**，否则上一次跑留下的 accent 键会让这一条无从证明——第一轮报告里 `default.bmp` 只有 `#8f8ff8` 就是因为上一轮把主题留在了深色、把强调色留在了 indigo。
+5. **截图比对要用 BMP。** PNG 的调色板/有损压缩会把 `#5b5bd6` 这类纯色变成 ±1 的近似值，逐像素断言就立不住；`capbmp.ps1` 存 24 位 BMP，`bmpstat.py` 用 `struct.unpack_from('<IiiHHIIiiII', data, 14)` 读头（`bpp=header[4]`、`compression=header[5]`；写成 `[6]/[7]` 会报 `compression=2835` 这种离谱值）。
+6. **色板在页面靠下的位置，`ScrollItemPattern.ScrollIntoView()` 之后 rect 才有效**；不滚就取 rect 会拿到负坐标或 0 宽。
+
+**一句实话**：这一条证的是「默认观感不变、六个预设两档都换到了、自定义色生效、恢复默认干净、选择活过重启」。没证的：① 只在这台 Windows Server 2022 的 WebView2 上验过，没验 HDR 与系统级高对比度模式；② 六个预设的具体色值是我按对比度挑的，没有跟 v2rayN / Clash Verge 的主题逐色对齐；③ 强调色对第三方的图表组件只做到「跟着重取 token」（`TrafficChart.vue` 里 `void ui.resolvedTheme` + `void ui.accentVersion`），没有逐像素验图表线条的颜色。

@@ -4,6 +4,7 @@ import StaleConfig from '../components/StaleConfig.vue'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
 import { availableLocales, locale, setLocale, t } from '../i18n'
 import { comboFromKeyPress } from '../services/hotkey'
+import { ACCENTS, type AccentPreset } from '../services/accent'
 import {
   api,
   describeError,
@@ -15,10 +16,54 @@ import {
 import { useEngineStore } from '../stores/engine'
 import { useSettingsStore } from '../stores/settings'
 import { useSystemProxyStore } from '../stores/sysproxy'
+import { useUiStore, type ThemeMode } from '../stores/ui'
 
 const store = useSettingsStore()
 const proxy = useSystemProxyStore()
 const engine = useEngineStore()
+const ui = useUiStore()
+
+/**
+ * Theme and accent live in the UI store, not in the saved settings: they are
+ * look-and-feel, applied before the first paint from localStorage, and a save
+ * button has nothing to do with them. That is also why this section sits in its
+ * own panel with no "unsaved" state.
+ */
+const themeModes: { value: ThemeMode; labelKey: string }[] = [
+  { value: 'light', labelKey: 'settings.themeLight' },
+  { value: 'dark', labelKey: 'settings.themeDark' },
+  { value: 'system', labelKey: 'settings.themeSystem' },
+]
+
+/** A swatch shows the accent as it will look under the theme on screen now. */
+function swatchColor(preset: AccentPreset): string {
+  return ui.resolvedTheme === 'dark' ? preset.dark : preset.light
+}
+
+function isPresetSelected(id: string): boolean {
+  return ui.accent.kind === 'preset' && ui.accent.id === id
+}
+
+/**
+ * The custom hex field is a draft, not captured state: a malformed value must
+ * never reach the store or localStorage, so the message sits here and the app
+ * keeps its current accent.
+ */
+const customAccent = ref('')
+const customAccentError = ref<string | null>(null)
+const CUSTOM_HEX = /^#?([0-9a-fA-F]{6})$/
+/** Placeholder comes from the table, so no hex is hard-coded in this view. */
+const accentPlaceholder = ACCENTS[0].light
+
+function applyCustomAccent(): void {
+  const match = CUSTOM_HEX.exec(customAccent.value.trim())
+  if (match === null) {
+    customAccentError.value = t('settings.accentInvalid')
+    return
+  }
+  ui.setAccent(`custom:#${match[1].toLowerCase()}`)
+  customAccentError.value = null
+}
 const draft = ref<Settings_Serialize | null>(null)
 const error = ref<string | null>(null)
 const saved = ref(false)
@@ -818,6 +863,60 @@ async function save() {
       </section>
 
       <section class="surface-plain panel">
+        <h2 class="section-title">{{ t('settings.appearance') }}</h2>
+        <div class="segmented">
+          <button
+            v-for="mode in themeModes"
+            :key="mode.value"
+            type="button"
+            :class="{ active: ui.themeMode === mode.value }"
+            :aria-pressed="ui.themeMode === mode.value"
+            @click="ui.setTheme(mode.value)"
+          >
+            {{ t(mode.labelKey) }}
+          </button>
+        </div>
+        <div class="field">
+          <span class="field-label">{{ t('settings.accent') }}</span>
+          <div class="accent-row">
+            <button
+              v-for="preset in ACCENTS"
+              :key="preset.id"
+              type="button"
+              class="accent-swatch"
+              :class="{ active: isPresetSelected(preset.id) }"
+              :aria-label="preset.id"
+              :aria-pressed="isPresetSelected(preset.id)"
+              :title="preset.id"
+              :style="{ background: swatchColor(preset) }"
+              @click="ui.setAccent(preset.id)"
+            />
+          </div>
+        </div>
+        <div class="field">
+          <span class="field-label">{{ t('settings.accentCustom') }}</span>
+          <div class="accent-row">
+            <input
+              v-model="customAccent"
+              class="input input-narrow accent-input"
+              type="text"
+              :placeholder="accentPlaceholder"
+              @input="customAccentError = null"
+              @keydown.enter.prevent="applyCustomAccent"
+            />
+            <button class="btn btn-sm" type="button" @click="applyCustomAccent">
+              {{ t('settings.accentApply') }}
+            </button>
+            <button class="btn btn-sm" type="button" @click="ui.resetAccent()">
+              {{ t('settings.accentReset') }}
+            </button>
+          </div>
+          <p v-if="customAccentError" class="field-error">{{ customAccentError }}</p>
+        </div>
+        <p class="field-hint">{{ t('settings.accentHint') }}</p>
+      </section>
+
+      <section class="surface-plain panel">
         <h2 class="section-title">{{ t('settings.language') }}</h2>
         <div class="segmented">
           <button
@@ -980,5 +1079,42 @@ kbd {
   color: var(--text-secondary);
   /* A full path is long and has no spaces to break at on Windows. */
   overflow-wrap: anywhere;
+}
+
+.accent-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* A swatch is a colour sample, not a label: the ring marks the chosen one and
+   the 26px square keeps it clickable without turning the row into a toolbar. */
+.accent-swatch {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  box-shadow: inset 0 1px 0 var(--glass-highlight);
+  cursor: pointer;
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.accent-swatch:hover {
+  transform: scale(1.1);
+}
+
+/* The live accent draws the ring, so it reads even on a same-hue swatch. */
+.accent-swatch.active {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* `.input` is full width for forms; a six-digit hex does not need 180px. */
+.accent-input {
+  width: 128px;
+  flex: none;
 }
 </style>

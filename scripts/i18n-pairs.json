@@ -3594,6 +3594,66 @@
     "全域快捷鍵"
   ],
   [
+    "settings.appearance",
+    "外观",
+    "Appearance",
+    "外觀"
+  ],
+  [
+    "settings.themeLight",
+    "浅色",
+    "Light",
+    "淺色"
+  ],
+  [
+    "settings.themeDark",
+    "深色",
+    "Dark",
+    "深色"
+  ],
+  [
+    "settings.themeSystem",
+    "跟随系统",
+    "Follow system",
+    "跟隨系統"
+  ],
+  [
+    "settings.accent",
+    "强调色",
+    "Accent colour",
+    "強調色"
+  ],
+  [
+    "settings.accentCustom",
+    "自定义",
+    "Custom",
+    "自訂"
+  ],
+  [
+    "settings.accentApply",
+    "应用",
+    "Apply",
+    "套用"
+  ],
+  [
+    "settings.accentReset",
+    "恢复默认",
+    "Reset to default",
+    "恢復預設"
+  ],
+  [
+    "settings.accentHint",
+    "强调色只影响主按钮、选中态和焦点高亮，不改成功/警告/危险的语义色；深色下会自动换成更亮的一档。",
+    "The accent tints primary buttons, selection and focus only; success, warning and danger keep their own colours, and dark mode uses a brighter step.",
+    "強調色只影響主按鈕、選取態和焦點高亮，不改成功/警告/危險的語意色；深色下會自動換成更亮的一檔。"
+  ],
+  [
+    "settings.accentInvalid",
+    "请输入 #rrggbb 形式的颜色",
+    "Enter a colour as #rrggbb",
+    "請輸入 #rrggbb 形式的顏色"
+  ],
+  [
     "settings.language",
     "界面语言",
     "Language",
