@@ -3005,24 +3005,39 @@
     "Restore system proxy"
   ],
   [
-    "settings.stalePort",
-    "端口已改，内核还在旧端口上跑",
-    "Saved, but the kernel is still listening on the old ports"
+    "settings.staleList",
+    "内核还在用旧设置：{items}",
+    "The kernel is still running the old settings: {items}"
   ],
   [
-    "settings.stalePortApply",
-    "用新端口重启内核",
-    "Restart the kernel on the new ports"
+    "settings.staleListApply",
+    "用新设置重启内核",
+    "Restart the kernel with the new settings"
   ],
   [
-    "settings.staleLog",
-    "日志级别已改，内核还在用旧级别",
-    "Saved, but the kernel is still logging at the old level"
+    "settings.stale.itemPorts",
+    "端口",
+    "ports"
   ],
   [
-    "settings.staleLogApply",
-    "用新级别重启内核",
-    "Restart the kernel with the new level"
+    "settings.stale.itemLog",
+    "日志级别",
+    "log level"
+  ],
+  [
+    "settings.stale.itemLan",
+    "局域网连接",
+    "LAN access"
+  ],
+  [
+    "settings.stale.itemDns",
+    "DNS",
+    "DNS"
+  ],
+  [
+    "settings.stale.sep",
+    "、",
+    ", "
   ],
   [
     "settings.startMinimized",

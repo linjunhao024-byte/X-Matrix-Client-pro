@@ -27,37 +27,51 @@ const backupNote = ref<string | null>(null)
 const backupBusy = ref(false)
 
 /**
- * True when the saved ports are not the ports the running kernel listens on.
- *
- * The kernel binds its ports at start, so saving a new 端口 changes only the
- * document until the process is restarted; "已保存" alone would look broken.
- * A stopped kernel has nothing stale — the next start renders the saved
- * settings anyway — and an unloaded document cannot be compared. Deliberately
- * compares the saved settings, not `draft`: a port the user typed but has not
- * saved is not a divergence yet.
+ * Compare resolver lists by content, not spelling: the kernel gets the parsed
+ * list, so "1.1.1.1, 8.8.8.8" and "1.1.1.1 ,8.8.8.8" are the same setting.
  */
-const stalePorts = computed(
-  () =>
-    engine.running &&
-    store.loaded &&
-    store.settings !== null &&
-    (store.settings.mixed_port !== engine.status?.mixed_port ||
-      store.settings.api_port !== engine.status?.api_port),
-)
+function dnsList(raw: string): string {
+  return raw
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry !== '')
+    .join(',')
+}
 
 /**
- * True when the saved log level is not the one the running kernel uses.
+ * The i18n keys of every saved setting the running kernel was started with
+ * differently.
  *
- * Like the ports, the level is baked into the config at start: saving a new
- * 日志级别 while a kernel runs changes the document only, and the log keeps
- * its old verbosity until the next start. A stopped kernel has nothing stale.
+ * Ports, the log level, LAN sharing and the resolver list are all baked into
+ * the rendered config at start, so saving a new value changes only the
+ * document until the kernel restarts; "已保存" alone would look broken. One
+ * notice for all of them, in panel order, so the page never stacks near
+ * duplicates. A stopped kernel has nothing stale — the next start renders the
+ * saved settings anyway — and an unloaded document cannot be compared.
+ * Deliberately compares the saved settings, not `draft`: a value the user typed
+ * but has not saved is not a divergence yet.
  */
-const staleLog = computed(
-  () =>
-    engine.running &&
-    store.loaded &&
-    store.settings !== null &&
-    store.settings.log_level !== engine.status?.log_level,
+const staleItems = computed<string[]>(() => {
+  const saved = store.settings
+  const status = engine.status
+  if (!engine.running || !store.loaded || saved === null || status === null) return []
+
+  const items: string[] = []
+  if (saved.mixed_port !== status.mixed_port || saved.api_port !== status.api_port) {
+    items.push('settings.stale.itemPorts')
+  }
+  if (saved.log_level !== status.log_level) items.push('settings.stale.itemLog')
+  if (saved.allow_lan !== status.allow_lan) items.push('settings.stale.itemLan')
+  if (dnsList(saved.dns_servers) !== dnsList(status.dns_servers)) {
+    items.push('settings.stale.itemDns')
+  }
+  return items
+})
+
+const staleMessage = computed(() =>
+  t('settings.staleList', {
+    items: staleItems.value.map((key) => t(key)).join(t('settings.stale.sep')),
+  }),
 )
 
 const modes: { value: ProxyMode; labelKey: string }[] = [
@@ -307,13 +321,13 @@ async function save() {
     </section>
 
     <template v-else>
-      <!-- The ports panel right below owns the values the kernel is bound to,
-           so the "kernel has not caught up" notice sits with them instead of
-           at the bottom of a long page. -->
+      <!-- One notice for the whole page, at the top: it lists every setting the
+           running kernel is behind on, so scattering copies next to each panel
+           would repeat the same "not live yet" sentence. -->
       <StaleConfig
-        :show="stalePorts"
-        :message="t('settings.stalePort')"
-        :apply-label="t('settings.stalePortApply')"
+        :show="staleItems.length > 0"
+        :message="staleMessage"
+        :apply-label="t('settings.staleListApply')"
       />
 
       <section class="surface-plain panel">
@@ -466,12 +480,6 @@ async function save() {
         </div>
         <p class="field-hint">{{ t('settings.kernel.note') }}</p>
       </section>
-
-      <StaleConfig
-        :show="staleLog"
-        :message="t('settings.staleLog')"
-        :apply-label="t('settings.staleLogApply')"
-      />
 
       <section class="surface-plain panel">
         <h2 class="section-title">{{ t('settings.logLevel') }}</h2>

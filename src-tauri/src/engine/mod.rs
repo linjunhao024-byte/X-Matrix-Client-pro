@@ -266,6 +266,11 @@ pub struct RunOptions<'a> {
     pub probe_url: String,
     /// Custom resolvers, taken from the settings.
     pub dns_servers: Vec<crate::domain::settings::DnsEntry>,
+    /// The settings text the resolvers were parsed from. The UI compares it
+    /// with the saved value to tell an applied change from a pending one, so it
+    /// must survive exactly as the user wrote it — the parsed list cannot
+    /// round-trip whitespace or a trailing comma.
+    pub dns_servers_raw: String,
 }
 
 impl<'a> RunOptions<'a> {
@@ -280,6 +285,7 @@ impl<'a> RunOptions<'a> {
             log_level: LogLevel::Warn,
             probe_url: crate::domain::settings::DEFAULT_TEST_URL.to_string(),
             dns_servers: Vec::new(),
+            dns_servers_raw: String::new(),
         }
     }
 
@@ -295,6 +301,7 @@ impl<'a> RunOptions<'a> {
             log_level: settings.log_level,
             probe_url: settings.test_url.clone(),
             dns_servers: settings.dns_entries().unwrap_or_default(),
+            dns_servers_raw: settings.dns_servers.clone(),
         }
     }
 

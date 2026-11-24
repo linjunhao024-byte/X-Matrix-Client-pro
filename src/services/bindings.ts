@@ -416,6 +416,17 @@ export type EngineStatus_Deserialize = {
 	 *  applied change from an applied one.
 	 */
 	log_level: LogLevel,
+	/**
+	 *  Whether the running kernel listens on all interfaces. Baked into the
+	 *  rendered config, so the settings page needs it for the same reason as
+	 *  [`EngineStatus::log_level`].
+	 */
+	allow_lan: boolean,
+	/**
+	 *  The resolver list the running kernel was started with, verbatim from the
+	 *  settings; empty means the kernel uses the system resolver.
+	 */
+	dns_servers: string,
 };
 
 /**  What the UI shows about the runtime. */
@@ -444,6 +455,17 @@ export type EngineStatus_Serialize = {
 	 *  applied change from an applied one.
 	 */
 	log_level: LogLevel,
+	/**
+	 *  Whether the running kernel listens on all interfaces. Baked into the
+	 *  rendered config, so the settings page needs it for the same reason as
+	 *  [`EngineStatus::log_level`].
+	 */
+	allow_lan: boolean,
+	/**
+	 *  The resolver list the running kernel was started with, verbatim from the
+	 *  settings; empty means the kernel uses the system resolver.
+	 */
+	dns_servers: string,
 };
 
 /**

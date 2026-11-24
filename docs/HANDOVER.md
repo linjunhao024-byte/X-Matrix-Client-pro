@@ -8,23 +8,23 @@
 ## 0. 三句话现状
 
 1. 主体功能已追平 V2RayN / Clash 的日常面：双内核（Xray / sing-box）渲染与启停、系统代理接管与还原、订阅/整包导入、Clash 配置连同 **策略组与规则** 一起导入、运行中热切换节点与代理模式、托盘子菜单、日志页、hysteria2 / tuic、真实延迟（分组与节点）、流量历史落盘、一键断开全部 + 进程归属、测速预算与「选最快」、域名正则 / 域名分类匹配器、诊断包导出、全局快捷键。
-2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§36）。
+2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§37）。
 3. 交接时那处未提交的工作（N12 应用内更新检查）已经构建、真机验收并提交；此后又合入四件事：`--quit` 正常退出并删除托盘图标（§21）、GEO 数据文件卡片与镜像回退下载（§23）、测速记录落盘（§24）。工作区现在是干净的。
 
 ### 0.1 进度快照（交接这一刻的硬数字）
 
 | 项 | 值 |
 |---|---|
-| 代码 HEAD | `38d6a64`「fix(settings): a proxy switch that bites the moment it is saved」（= 最后一个**已提交**的功能，含 §36） |
-| 未提交 | 无（§36 的改动已提交为 `38d6a64`） |
+| 代码 HEAD | `61cb7d9`「docs: point the handover at the proxy-switch build」（= 最后一个**已提交**的提交，含 §36） |
+| 未提交 | 设置页统一「内核还在用旧设置」提示（§37）：`src-tauri/src/engine/mod.rs`、`src-tauri/src/engine/runtime.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`、`docs/ACCEPTANCE.md` |
 | 上一版未提交清单（留档） | `src-tauri/src/commands/settings.rs`、`src-tauri/src/commands/sysproxy.rs`、`src/stores/sysproxy.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`、`docs/ACCEPTANCE.md`（§36 系统代理即时生效） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库（HEAD 上这一条） |
 | IPC 命令 | **77**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
-| Rust 单测 | **342 passed**（`ARCHITECTURE.md:278` 已同步） |
+| Rust 单测 | **344 passed**（`ARCHITECTURE.md:278` 已同步） |
 | 前端检查 | `npm run check` 全绿：vue-tsc / architecture / contract / vitest **78**（8 文件） |
-| i18n | **733** 键（`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
+| i18n | **736** 键（`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
 | 桌面产物 | 见 §1 表格（每次构建后刷新；当前 release 构建含 N12 + GEO + 测速落盘 + 退出通知） |
-| 验收文档 | `docs/ACCEPTANCE.md` §0–§36（§7 历史空缺，编号不连续但内容完整） |
+| 验收文档 | `docs/ACCEPTANCE.md` §0–§37（§7 历史空缺，编号不连续但内容完整） |
 | 云电脑 | 干净：`ProxyEnable=0x0`、无 X-Matrix/sing-box/xray 进程、无 `xm*` 计划任务 |
 
 **下一步的确定顺序**（做完一条打一个勾，别跳）：
@@ -35,7 +35,7 @@
 - [x] 4. `docs/ACCEPTANCE.md` 写到 §26
 - [x] 5. 提交（`fix(tray)` / `feat(update)` / `feat(geo,nodes)` / `feat(engine)` 各一条）
 - [x] 6. `FEED_URL` 已指向真实仓库 `linjunhao024-byte/X-Matrix-Client-pro`，`v0.1.0` 已发布并带 `X-Matrix.exe` 资产
-- [x] 7. 计数已同步：77 命令 / 342 单测 / 78 vitest / 733 i18n 键
+- [x] 7. 计数已同步：77 命令 / 344 单测 / 78 vitest / 736 i18n 键
 - [ ] 8. `bash /d/tmp/shots/cleanup.sh` 收尾云电脑
 
 ---
@@ -54,8 +54,8 @@
 | 桌面产物 | `/c/Users/83611/Desktop/X-Matrix.exe`、`/c/Users/83611/Desktop/X-Matrix_0.1.0_x64-setup.exe` |
 | 当前桌面产物版本 | exe **9,823,232 B @10:32**、NSIS **3,181,050 B @10:32**（= N9 那一次构建，**不含 N12**） |
 
-**计数基线（改动后记得同步文档）**：命令 **77**、`cargo test --lib` **320**、vitest **76**（8 个文件）、i18n **724** 键。
-> `README.md:81` 与 `ARCHITECTURE.md:277` 已同步为 77 条命令 / 320 项测试。
+**计数基线（改动后记得同步文档）**：命令 **77**、`cargo test --lib` **344**、vitest **78**（8 个文件）、i18n **736** 键。
+> `README.md:81` 与 `ARCHITECTURE.md:277-278` 已同步为 77 条命令 / 344 项测试。
 
 命令数核算法：
 
@@ -149,6 +149,7 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 | §34 | 日志级别改保存后提示「内核还在用旧级别」，一键用新级别重启，渲染配置随之改变 |
 | §35 | 节点没了就停内核：删除即停、刷新换 ID 则跟随、代理同时交还 |
 | §36 | 保存系统代理开关/例外清单时，正在跑的内核立刻接管或交还 |
+| §37 | 一条提示说全「内核还在用旧设置」：端口、日志级别、局域网连接、DNS |
 
 已提交的提交序列（新→旧，14 条主体）：
 `5a44af3` 域名正则+geosite · `569a7ce` 流量历史 · `44b857b` 测速预算+选最快 · `42f85bd` 一键断开+进程名 · `f817726` 真实延迟 · `f3fc750` 订阅走代理 · `d892b9e` Clash 导入带组和规则 · `6851775` 托盘子菜单 · `f9a0406` H4 验收文档 · `14ddb20` hysteria2/tuic · `fdd0b8d` 运行中热切换 · `eb3f453` 日志页 · `79ccadd` 设计修复（粘右操作列、错误用红、焦点陷阱等）· `535124b` 快捷键与诊断包验收。
@@ -159,11 +160,13 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 
 ## 5. 最近完成的事（已提交、已真机验收）
 
-**系统代理开关即刻生效（2026-11-24，§36）**：`save_settings` 多了 `runtime`/`proxy` 两个参数，写盘之后按 `takeover_change(before, after)`（纯函数，6 条单测）决定 `enable_with_bypass` 还是 `disable`；接管用的是**正在跑**的 `status.mixed_port`（为 0 才退回设置里的值），因此「先改端口再改开关」不会指向空端口。前端 `SettingsView.vue` 的 `save()` 在 `refreshAutostart()` 之后补了 `proxy.refresh()`，页面下方的「系统代理当前」角标跟着变；`settings.proxyIntent` 文案改成「内核在跑时立刻生效」。真机证据：`TAKEN ProxyEnable=1 ProxyServer=127.0.0.1:7890` → 关掉保存 `RELEASED ProxyEnable=0`（内核仍在）→ 再打开保存 `RETAKE ProxyEnable=1` → 改例外 `override now: …;*.example.com` → 还原 → 停止后 `ProxyEnable=0`、内核 0。`cargo test --lib` 342。
+**一条提示说全四件事（2026-11-24，§37）**：设置页原本有两条几乎一样的提示（端口、日志级别），而同样写进渲染配置的「允许局域网连接」和「DNS」一个字都不说。现在 `EngineStatus` 多带 `allow_lan` 与 `dns_servers`（`start()` 在 `with_options` 之前抄进 `Running`，DNS 保留设置原文 `RunOptions::dns_servers_raw`，因为解析后的列表拿不回空格/尾逗号），`SettingsView.vue` 的 `staleItems` 按面板顺序列出四项、`staleMessage` 用「、」拼成一句，页面只剩一个 `<StaleConfig>` + 一个「用新设置重启内核」。真机证据：`stale: 内核还在用旧设置：端口、日志级别、局域网连接、DNS`（`stale lines: 1`）→ 重启 `xray#9072→#8968` → `proxy now: ProxyServer=127.0.0.1:7891`、`render loglevel: warning`、`render dns has 9.9.9.9: True`、`render lan listen 0.0.0.0: True` → `stale after restart: 0` → 停止后 `ProxyEnable=0`、内核 0。`cargo test --lib` 344（新增 2 条）。
 
-**改了日志级别就说出来（2026-11-24，§34）**：`EngineStatus.log_level` 由 `Running.log_level` 给出（`start()` 时塞进 `RenderInput` 的那个值，不是回头读设置），`SettingsView.vue` 的 `staleLog` 比较「已存设置」与它，仍用 `StaleConfig`（覆盖文案两处）。真机证据：`store=debug / render=debug` → 点「警告」保存 → `notice present=True` → 重启 `xray#1224→#2868`、`configs/xray.json` 的 `"loglevel":"warning"`、提示自清；再改回 `debug` 同样成立；停止后无内核。单元测试 2 条，`cargo test --lib` 342。
+**系统代理开关即刻生效（2026-11-24，§36）**：`save_settings` 多了 `runtime`/`proxy` 两个参数，写盘之后按 `takeover_change(before, after)`（纯函数，6 条单测）决定 `enable_with_bypass` 还是 `disable`；接管用的是**正在跑**的 `status.mixed_port`（为 0 才退回设置里的值），因此「先改端口再改开关」不会指向空端口。前端 `SettingsView.vue` 的 `save()` 在 `refreshAutostart()` 之后补了 `proxy.refresh()`，页面下方的「系统代理当前」角标跟着变；`settings.proxyIntent` 文案改成「内核在跑时立刻生效」。真机证据：`TAKEN ProxyEnable=1 ProxyServer=127.0.0.1:7890` → 关掉保存 `RELEASED ProxyEnable=0`（内核仍在）→ 再打开保存 `RETAKE ProxyEnable=1` → 改例外 `override now: …;*.example.com` → 还原 → 停止后 `ProxyEnable=0`、内核 0。`cargo test --lib` 344。
 
-**节点没了，内核就得停（2026-11-24，§35）**：`EngineStatus.node_id` 让前端知道内核在跑哪个节点；`commands::engine::stop_if_running_node` 先 `proxy.disable()` 再 `runtime.stop()`；`delete_node(s)` / `apply_delete_subscription` 清掉 `settings.last_node_id` 并调用它。订阅刷新时 ID 必变，所以 `apply_document` 换表**前**从旧行取下 `Node::fingerprint()`，换表后找到同指纹的替身就 `adopt_node_id`（内核不动），找不到才算真的消失。真机证据：删掉正在跑的节点→内核空、`ProxyEnable=0`、`last_node_id` 无、页面提示；刷新同一订阅（源内容倒序）→ `xray#4784` 不变、`last_node_id` 从 `vless-18eac9ae1ba07634-0` 变成 `vless-18ead5d985cb4444-3`、无误报提示、代理仍在。`cargo test --lib` 342。
+**改了日志级别就说出来（2026-11-24，§34）**：`EngineStatus.log_level` 由 `Running.log_level` 给出（`start()` 时塞进 `RenderInput` 的那个值，不是回头读设置），`SettingsView.vue` 的 `staleLog` 比较「已存设置」与它，仍用 `StaleConfig`（覆盖文案两处）。真机证据：`store=debug / render=debug` → 点「警告」保存 → `notice present=True` → 重启 `xray#1224→#2868`、`configs/xray.json` 的 `"loglevel":"warning"`、提示自清；再改回 `debug` 同样成立；停止后无内核。单元测试 2 条，`cargo test --lib` 344。
+
+**节点没了，内核就得停（2026-11-24，§35）**：`EngineStatus.node_id` 让前端知道内核在跑哪个节点；`commands::engine::stop_if_running_node` 先 `proxy.disable()` 再 `runtime.stop()`；`delete_node(s)` / `apply_delete_subscription` 清掉 `settings.last_node_id` 并调用它。订阅刷新时 ID 必变，所以 `apply_document` 换表**前**从旧行取下 `Node::fingerprint()`，换表后找到同指纹的替身就 `adopt_node_id`（内核不动），找不到才算真的消失。真机证据：删掉正在跑的节点→内核空、`ProxyEnable=0`、`last_node_id` 无、页面提示；刷新同一订阅（源内容倒序）→ `xray#4784` 不变、`last_node_id` 从 `vless-18eac9ae1ba07634-0` 变成 `vless-18ead5d985cb4444-3`、无误报提示、代理仍在。`cargo test --lib` 344。
 
 **改了端口就说出来（2026-11-24，§33）**：设置页保存端口后，内核仍绑旧端口，`SettingsView.vue` 用 `stalePorts` 比较「已存设置」与 `engine.status`（非草稿），复用 `StaleConfig`（新增 `message`/`applyLabel`/`busyLabel` 三个可覆盖 prop），按钮走 `engine.reapply()`。重启由 `start_engine` 自己完成：启动成功后 `proxy.enable_with_bypass(..., endpoints.mixed_port, …)` 会在已接管时重写注册表，所以新端口自动生效。真机证据：`xray#5072→#1636`、`ProxyServer=127.0.0.1:7891`、改回 7890 后 `:7890`、停止后 `ProxyEnable=0`。
 
@@ -267,7 +270,7 @@ scp -i /c/Users/83611/.ssh/id_ed25519_cpc 本地文件 Administrator@100.106.121
 
 1. `cd /d/GitHub-Warehouse/X-Matrix-Client-Pro && git status` —— 工作区应当干净；有改动先弄清是谁的。
 2. 读本文件的 §5 与 `docs/ACCEPTANCE.md` 的最后两节，对齐上下文。
-3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 342 passed）。
+3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 344 passed）。
 4. `cd .. && npm run check`（应为全绿）。
 5. 从 §6 表里挑一项（按性价比排序），**一项一提交**，提交信息用英文 `feat(...)/fix(...)/docs: ...`。
 6. 真机验证前先跑 `bash /d/tmp/shots/deploy-tray.sh <exe>`；远端被 `cleanup.sh` 清过的话，先 `scp x-act.ps1 uia2.ps1 ocr.ps1` 上去。

@@ -208,6 +208,13 @@ pub struct EngineStatus {
     /// into the rendered config, so the UI needs this to tell a saved-but-not-
     /// applied change from an applied one.
     pub log_level: LogLevel,
+    /// Whether the running kernel listens on all interfaces. Baked into the
+    /// rendered config, so the settings page needs it for the same reason as
+    /// [`EngineStatus::log_level`].
+    pub allow_lan: bool,
+    /// The resolver list the running kernel was started with, verbatim from the
+    /// settings; empty means the kernel uses the system resolver.
+    pub dns_servers: String,
 }
 
 impl Default for EngineStatus {
@@ -224,6 +231,8 @@ impl Default for EngineStatus {
             started_at_ms: 0,
             last_exit_code: None,
             log_level: LogLevel::Warn,
+            allow_lan: false,
+            dns_servers: String::new(),
         }
     }
 }
@@ -266,6 +275,12 @@ struct Running {
     started_at_ms: u64,
     /// The level this kernel was started with; see [`EngineStatus::log_level`].
     log_level: LogLevel,
+    /// The LAN opt-in this kernel was started with; see
+    /// [`EngineStatus::allow_lan`].
+    allow_lan: bool,
+    /// The resolver list this kernel was started with; see
+    /// [`EngineStatus::dns_servers`].
+    dns_servers: String,
     /// True once [`EngineRuntime::stop`] asked this kernel to go away. Set
     /// before the kill because a kill that reports an error can still have
     /// taken the process down: either way the exit was the user's decision, not
@@ -372,8 +387,12 @@ impl EngineRuntime {
 
         // The log level is rendered into the config, so the options are the
         // only place it exists before the config is written — read it before
-        // `with_options` consumes them.
+        // `with_options` consumes them. Same for the two DNS/LAN settings: the
+        // UI compares them with the saved ones, and the rendered config cannot
+        // give the original text back.
         let log_level = options.log_level;
+        let allow_lan = options.allow_lan;
+        let dns_servers = options.dns_servers_raw.clone();
         let mut input = RenderInput::new(node, endpoints).with_options(options);
         if kind == EngineKind::SingBox {
             input = input.with_rule_set_dir(&rule_set_dir);
@@ -417,6 +436,8 @@ impl EngineRuntime {
             config_path: config_path.clone(),
             started_at_ms,
             log_level,
+            allow_lan,
+            dns_servers: dns_servers.clone(),
             expected: false,
         });
         *self.last_exit_code.lock() = None;
@@ -437,6 +458,8 @@ impl EngineRuntime {
             started_at_ms,
             last_exit_code: None,
             log_level,
+            allow_lan,
+            dns_servers,
         })
     }
 
@@ -531,6 +554,8 @@ impl EngineRuntime {
                 started_at_ms: running.started_at_ms,
                 last_exit_code: None,
                 log_level: running.log_level,
+                allow_lan: running.allow_lan,
+                dns_servers: running.dns_servers.clone(),
             },
         }
     }
@@ -1334,6 +1359,56 @@ four"
         let status = h.runtime.status();
         assert!(!status.running);
         assert_eq!(status.log_level, LogLevel::Warn);
+
+        std::fs::remove_dir_all(&h.dir).ok();
+    }
+
+    #[test]
+    fn status_reports_the_lan_and_dns_the_kernel_was_started_with() {
+        let h = harness(true, false);
+        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let options = RunOptions {
+            allow_lan: true,
+            dns_servers_raw: "1.1.1.1, 8.8.8.8".into(),
+            ..RunOptions::new()
+        };
+        let started = h
+            .runtime
+            .start(EngineKind::Xray, &node(), endpoints, options)
+            .unwrap();
+
+        // Both are baked into the rendered config, so the settings page can
+        // only learn them here: the raw text stays as the user wrote it, not
+        // as the parsed resolver list.
+        assert!(started.allow_lan);
+        assert_eq!(started.dns_servers, "1.1.1.1, 8.8.8.8");
+        let status = h.runtime.status();
+        assert!(status.allow_lan);
+        assert_eq!(status.dns_servers, "1.1.1.1, 8.8.8.8");
+
+        std::fs::remove_dir_all(&h.dir).ok();
+    }
+
+    #[test]
+    fn a_stopped_kernel_reports_no_lan_and_no_dns() {
+        let h = harness(true, false);
+        let endpoints = Endpoints::new(7890, 9090).unwrap();
+        let options = RunOptions {
+            allow_lan: true,
+            dns_servers_raw: "1.1.1.1".into(),
+            ..RunOptions::new()
+        };
+        h.runtime
+            .start(EngineKind::Xray, &node(), endpoints, options)
+            .unwrap();
+
+        h.runtime.stop().unwrap();
+        // Nothing runs, so nothing listens on 0.0.0.0 or uses those resolvers:
+        // a leftover value would make the UI claim an unapplied change is live.
+        let status = h.runtime.status();
+        assert!(!status.running);
+        assert!(!status.allow_lan);
+        assert_eq!(status.dns_servers, "");
 
         std::fs::remove_dir_all(&h.dir).ok();
     }

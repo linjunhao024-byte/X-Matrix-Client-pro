@@ -854,3 +854,31 @@
 1. **`ProxyEnable=1` + 空 `ProxyServer` 仍然是坏状态。** 第一轮验收脚本没真按下开关（见坑 2），于是「交还」后读到 `ProxyEnable=1 ProxyServer=` —— 注册表开关还开着、地址却空了，等于每条请求都往一个空代理送。判据必须同时看开关和地址，不能只看地址为空。
 2. **「接管系统代理」在 UIA 里是 `Button`，不是 `CheckBox`。** 名字和旁边的说明文字重名（`Text | 接管系统代理` 在左边），按名字取元素要加 `AndCondition(ControlType=Button)`；`Buttons-Named` 返回的是带坐标的包装对象，`GetCurrentPattern` 要用它内部的 `.El`，否则抛「[PSCustomObject] 不包含名为 GetCurrentPattern 的方法」。
 3. **`Get-Win.FindAll(...)` 会被 PowerShell 当成命令名。** 写 `foreach ($e in Get-Win.FindAll(...))` 直接静默失败（函数返回空、异常被 catch 吞掉），必须先 `$win = Get-Win` 再 `$win.FindAll(...)`；同理找 `Edit` 时比较 `ControlType` 要用 `.Id`，对象 `-ne` 永远为真，会把所有元素都 `continue` 掉。
+
+## 37. 「内核还在用旧设置」只说一遍，但把四件事都说全（2026-11-24，云电脑 cloudpc-test）
+
+**验法**：`bash /d/tmp/shots/stale-all-accept.sh`（读 store 里的四个值 → 首页启动内核 → 设置页同时改端口、日志级别、局域网连接、DNS → 保存 → 读提示行 → 点「用新设置重启内核」→ 读 pid / 注册表 / 渲染出来的 `configs/xray.json` → 还原设置 → 停止内核）。
+
+§33 和 §34 各给了自己一条提示：端口一条、日志级别一条，放在各自面板旁边。这样做有两个毛病：同一页可能出现两条几乎一样的话；而同样被写进渲染配置的 `allow_lan` 和 `dns_servers` 却一个字都不说——把「允许局域网连接」打开并保存，界面显示已开启，内核还在只听 `127.0.0.1`；把 DNS 改成 `9.9.9.9` 并保存，内核还在用 `1.1.1.1`。这一节把四件事合成一条提示，并把后两件也接上。
+
+| 判据 | 验法 | 结果 |
+|---|---|---|
+| 四项都在提示里 | `stale: 内核还在用旧设置：端口、日志级别、局域网连接、DNS`，`items: port=True log=True lan=True dns=True` | **通过** |
+| 只有一条 | `stale lines: 1` | **通过** |
+| 提示带一键重启 | `restart button: True` | **通过** |
+| 重启真的换了进程 | `pids before=9072 after=8968` | **通过** |
+| 新端口接管了系统代理 | `proxy now: ProxyEnable=1 ProxyServer=127.0.0.1:7891` | **通过** |
+| 新日志级别进了渲染配置 | `render loglevel: warning` | **通过** |
+| 新 DNS 进了渲染配置 | `render dns has 9.9.9.9: True` | **通过** |
+| 局域网监听跟着变 | `render lan listen 0.0.0.0: True` | **通过** |
+| 重启后提示自己消失 | `stale after restart: 0` | **通过** |
+| 停止后一切归零 | `after stop: ProxyEnable=0 ProxyServer=`，`kernels after stop: 0` | **通过** |
+
+**三个设计理由**：
+- **一条提示，按面板顺序列名字。** `staleItems` 返回的是 i18n key 数组（端口 → 日志级别 → 局域网连接 → DNS），`staleMessage` 把它们用「、」连起来塞进 `settings.staleList` 的 `{items}`。页面上只有一个 `<StaleConfig>`、一个重启按钮，位置在设置页顶部：它是「整页与内核不一致」，不属于某一个面板。
+- **内核报出「它启动时用的是哪一份」。** 判断依据不是重读设置，而是 `EngineStatus` 里新增的 `allow_lan` / `dns_servers`（连同已有的 `mixed_port`、`log_level`），它们由 `start()` 在 `with_options` 吃掉 options **之前**抄下来存进 `Running`。DNS 存的是设置里的**原文**（`RunOptions::dns_servers_raw`），因为解析后的 `DnsEntry` 列表拿不回空格和结尾逗号，前端没法比对。
+- **比对按内容，不按写法。** `dnsList()` 把 `1.1.1.1, 8.8.8.8` 和 `1.1.1.1 ,8.8.8.8` 归一成同一个值，否则用户只是多打一个空格就会被提示「内核用着旧设置」。
+
+**两个坑**：
+1. **`status === null` 必须一起挡。** 早期写法是 `engine.status?.allow_lan`，状态还没拉回来时 `undefined !== false`，四项会一起变成「旧设置」，页面刚打开就闪一条提示。现在的 guard 是 `!engine.running || !store.loaded || saved === null || status === null`。
+2. **改完四项要按顺序等界面。** 端口是 `Spinner`（`SetValue` 后约 500ms 才落到 `draft`）、日志级别是 `Button`（不支持 `InvokePattern`，要滚动到可见再点矩形中心）、局域网连接是开关按钮、DNS 是 `Edit`——四个控件的驱动方式各不相同；全部改完再按一次「保存」，否则前面的改动会被后一次保存前的 `draft` 覆盖。
