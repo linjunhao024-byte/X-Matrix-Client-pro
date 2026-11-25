@@ -1,6 +1,6 @@
 # 新窗口开工简报（X-Matrix Client Pro）
 
-> 写于 2026-11-25 17:4x（§58 / S1 收口这一版）。给**下一个窗口**的你自己看：先读这一页，够用就别翻长文档；需要细节时按文末索引跳。
+> 写于 2026-11-25 18:4x（§59 / S7 收口这一版，S1–S11 到此全部完成）。给**下一个窗口**的你自己看：先读这一页，够用就别翻长文档；需要细节时按文末索引跳。
 > 长文档：`docs/HANDOVER.md`（地图、候选表、云电脑手册）、`docs/ACCEPTANCE.md`（每条功能的判据与踩坑）、`docs/PARITY-PLAN.md`（S1–S11 的解禁计划与进度表——**下一个任务从这里取**）。
 
 ## 1. 三十秒现状
@@ -8,12 +8,12 @@
 | 项 | 值 |
 |---|---|
 | 仓库 / 工作区 | `D:\\GitHub-Warehouse\\X-Matrix-Client-Pro`（Tauri 2 + Vue 3 + TS） |
-| HEAD | 本简报这条 docs 提交；功能提交查 `git log --oneline -- src-tauri/src/engine/singbox.rs` 的第一条（含 §58），再往前 §57（`src-tauri/src/service.rs`）、§56（`src-tauri/src/elevate.rs`）、§55（`src-tauri/src/power.rs`）、§54（`net/webdav.rs`）、§53（`engine/release.rs`）、§52（`engine/groupwatch.rs`）、§51（`sysproc.rs`）、§50（`src/services/accent.ts`）、§49（S8）、`a794438`（§48）、`6fd790f`（§47） |
+| HEAD | 本简报这条 docs 提交；功能提交查 `git log --oneline -- src-tauri/src/store.rs` 的第一条（含 §59），再往前 §58（`src-tauri/src/engine/singbox.rs`）、再往前 §57（`src-tauri/src/service.rs`）、§56（`src-tauri/src/elevate.rs`）、§55（`src-tauri/src/power.rs`）、§54（`net/webdav.rs`）、§53（`engine/release.rs`）、§52（`engine/groupwatch.rs`）、§51（`sysproc.rs`）、§50（`src/services/accent.ts`）、§49（S8）、`a794438`（§48）、`6fd790f`（§47） |
 | 工作区 | **干净**，没有未提交改动 |
-| 规模 | 92 个 IPC 命令 / Rust 单测 **496** / vitest **116**（12 文件）/ i18n **835 键 × 3 语言** |
-| 验收 | `docs/ACCEPTANCE.md` 写到 **§58**，全部是云电脑真机点出来的（§56 判据 7、8、§57 的三项、§58 的非管理员拒绝都明标了「未验」与原因） |
+| 规模 | 97 个 IPC 命令 / Rust 单测 **514** / vitest **116**（12 文件）/ i18n **856 键 × 3 语言** |
+| 验收 | `docs/ACCEPTANCE.md` 写到 **§59**，全部是云电脑真机点出来的（§56 判据 7、8、§57 的三项、§58 的非管理员拒绝、§59 的「新配置没节点」「托盘刷新」「merge/script」都明标了「未验」与原因） |
 | 云电脑 | 干净：`ProxyEnable=0x0`、无 `xm*`/`tunkill` 任务、无内核进程、无 `XMatrixKernel` 服务、`HKLM\\Software\\X-Matrix\\Service` 已删、`X-Matrix/WebDAV` 凭据已删、`engines\\wintun.dll.bak` 与 `ss-server.json` 已删；UAC 三项策略已恢复原值（`EnableLUA=0`） |
-| 构建产物 | `src-tauri/target/release/x-matrix.exe`（10,890,240 B，md5 `bd156788af54a6153b447242b8db9aa1`，含 §21–§58） |
+| 构建产物 | `src-tauri/target/release/x-matrix.exe`（11,056,640 B，md5 `907a38674359352f22cddcb9c61c627f`，含 §21–§59） |
 | 目标 | 功能追平 V2RayN / Clash、二者互补，并把各功能之间**说得清、配合得上**（用户原话，长期有效） |
 
 ## 2. 常用的四条命令
@@ -36,9 +36,11 @@ https_proxy=http://127.0.0.1:10808 git push origin main
 
 改 Rust 的 `#[tauri::command]` 签名后必须 `npm run gen:contract`；新增 i18n 键必须走 `scripts/i18n-pairs.json` + `python scripts/gen_i18n.py`（三份字典会一起生成）。
 
-## 3. 下一个任务：`docs/PARITY-PLAN.md` 进度表的下一行（现在是 **S7 多配置**）
+## 3. 下一个任务：S1–S11 已全部完成，队列为空（先问用户要什么，不要自己加戏）
 
-用户的指示（2026-11-25）是「S1–S11 全部解禁，一个一个写明确的任务书派子代理去做」，所以**别再自作主张跳过**。每项固定流程：
+用户的指示（2026-11-25）是「S1–S11 全部解禁，一个一个写明确的任务书派子代理去做」。**到 2026-11-25 18:4x，S1–S11 十一项全部完成、逐项真机验收、逐项提交**（§48–§59，`docs/PARITY-PLAN.md` 进度表全是「已完成」）。所以下一个窗口**没有排队任务**：动手前先问用户要做什么；`docs/PARITY-PLAN.md` 顶部「候选」表里还有当时没被解禁的条目（订阅级 merge / script 覆盖、按连接分摊的真负载均衡等），**不要**把它们当成已授权。
+
+若用户给的是新功能，沿用下面这套固定流程（十一项都是这么走完的）：
 
 1. 写任务书到 `D:\\tmp\\handover\\tasks\\S<n>-*.md`（判据、钉死的设计、可改文件范围、验证命令、禁区）；
 2. 派**一个**子代理（同时最多 1 个，用完即弃；它常静默死亡，所以必须自己读 diff 复验，必要时自己写完）；
@@ -96,6 +98,9 @@ SSH="C:/Windows/System32/OpenSSH/ssh.exe"
 27. 每阶段生成 wrapper ps1 时，把 `\\r\\n` 拼进单引号字符串会变成**字面文本**（`$env:XM_PHASE = 'ui'\\r\\n& ...`），整份脚本解析失败且日志根本不出现。改成**一个** `run.ps1` 带 `-Phase` 参数，比每阶段生成一份稳。
 28. python 打印驱动日志会在 GBK 控制台崩（日志里有 PUA 图标字符，`UnicodeEncodeError: 'gbk' codec can't encode character '\\ue047'`）；回拉日志的打印器要 `sys.stdout.reconfigure(encoding='utf-8', errors='replace')`（见 `D:\\tmp\\shots\\show_log.py`）。`sc query` 的中文经 ssh 管道也是乱码，判定按 `STATE :`/`1060`/`RUNNING` 这些 ASCII 关键字。
 29. 内核服务的作业目录 `C:\\ProgramData\\X-Matrix\\jobs` 故意保留给 `BUILTIN\\Users:(OI)(CI)(M)`（界面要往里丢作业）；卸载服务时只删服务与注册表键、不删目录与 ACL——这是设计，不是漏删。
+34. `store.json` 的 v1 升级条件要写成「`profiles` 空且没有 `active`」，只看 `version < 2` 会把「用户删到只剩一个配置」的正常状态又迁一遍。
+35. 备份里非激活配置的字段是**扁平**的（`StoredProfile` flatten 了 `ProfileParts`，没有 `parts` 这一层）；验收脚本按 `parts.nodes` 读会拿到 0，读顶层才对。
+36. 设置页比窗口长（WebDAV 那块 `top=7093`），点前必须 `Scroll-Row`，否则 `clicked: True` 而什么都没发生。
 30. `schtasks /tr` 的 action **不能直接写 `.ps1`**（给了也不执行，日志里表现成「app 根本没起」）；必须 `powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File C:/Users/.../xxx.ps1`。
 31. 验收脚本里的 `push <local> <remote-name>` 是**两参数**签名；写成 `push a.bat b.json` 会把 bat 的内容写进 json（§58 里这条让 `sing-box` 报 `decode config …: invalid character '@' looking for beginning of value`，看起来像配置写错，其实是推错文件）。
 32. TUN 会接管默认路由：`auto_route` 起来后 ssh 也走隧道，所以每个 TUN 阶段都要先挂 `tunkill.bat` 看门狗；另外**每阶段 `taskkill /f /im sing-box.exe` 会连环回测试节点一起杀掉**，之后的「隧道不通」其实是没有节点——最后让驱动自己起节点并打 `node server listening: N`。

@@ -17,7 +17,7 @@ use crate::domain::{
 };
 use crate::error::AppResult;
 use crate::rulesets::RuleSetCache;
-use crate::store::{Document, Store, SCHEMA_VERSION};
+use crate::store::{Document, ProfileMeta, ProfileParts, Store, StoredProfile, SCHEMA_VERSION};
 
 pub struct AppState {
     pub nodes: RwLock<Vec<Node>>,
@@ -26,6 +26,14 @@ pub struct AppState {
     pub subscriptions: RwLock<Vec<Subscription>>,
     pub groups: RwLock<Vec<ProxyGroup>>,
     pub rule_sets: RwLock<Vec<RuleSet>>,
+    /// Every profile, the active one included. The order is the order the user
+    /// sees, so it must survive a restart untouched.
+    pub profiles: RwLock<Vec<ProfileMeta>>,
+    /// Id of the profile whose contents are in the fields above. Only the
+    /// active profile has its contents inline; the others live in their own
+    /// files, which keeps the hot path (start the kernel, list nodes) reading
+    /// one document instead of fanning out per profile.
+    pub active: RwLock<String>,
     /// Last latency measurement per node, keyed by node id. It is a note to
     /// the user, not an input to routing: nothing here can change how traffic
     /// flows, which is why a stale entry is harmless.
@@ -49,6 +57,17 @@ impl AppState {
             }
         };
 
+        // A profile whose file went missing is worth a line in the console, but
+        // it must not stop the app: the other profiles still work, and the list
+        // reports the missing one as an empty profile rather than pretending.
+        for meta in document.profiles.iter().filter(|meta| meta.id != document.active) {
+            match store.read_profile(&meta.id) {
+                Ok(Some(_)) => {}
+                Ok(None) => eprintln!("x-matrix: 配置 {} 的文件不见了", meta.id),
+                Err(error) => eprintln!("x-matrix: 配置 {} 的文件读不出来：{error}", meta.id),
+            }
+        }
+
         Self {
             nodes: RwLock::new(document.nodes),
             settings: RwLock::new(document.settings),
@@ -56,6 +75,8 @@ impl AppState {
             subscriptions: RwLock::new(document.subscriptions),
             groups: RwLock::new(document.groups),
             rule_sets: RwLock::new(document.rule_sets),
+            profiles: RwLock::new(document.profiles),
+            active: RwLock::new(document.active),
             probes: RwLock::new(document.probes),
             rule_set_files: RuleSetCache::new(rule_sets_dir(&store)),
             store,
@@ -71,6 +92,8 @@ impl AppState {
     pub fn document(&self) -> Document {
         Document {
             version: SCHEMA_VERSION,
+            active: self.active.read().clone(),
+            profiles: self.profiles.read().clone(),
             nodes: self.nodes.read().clone(),
             settings: self.settings.read().clone(),
             rules: self.rules.read().clone(),
@@ -134,10 +157,67 @@ impl AppState {
         *self.subscriptions.write() = document.subscriptions;
         *self.groups.write() = document.groups;
         *self.rule_sets.write() = document.rule_sets;
+        *self.profiles.write() = document.profiles;
+        *self.active.write() = document.active;
         *self.probes.write() = document.probes;
         self.persist()
     }
 
+    /// Contents of the active profile, straight from the inline fields.
+    pub fn active_parts(&self) -> ProfileParts {
+        ProfileParts {
+            nodes: self.nodes.read().clone(),
+            rules: self.rules.read().clone(),
+            subscriptions: self.subscriptions.read().clone(),
+            groups: self.groups.read().clone(),
+            rule_sets: self.rule_sets.read().clone(),
+        }
+    }
+
+    /// Swap the inline contents for another profile's, in memory only.
+    ///
+    /// The caller decides when to write: a switch saves the profile it is
+    /// leaving first, and only then moves the contents over, so a failed write
+    /// cannot leave the two profiles sharing one body.
+    pub fn set_active_parts(&self, parts: ProfileParts) {
+        *self.nodes.write() = parts.nodes;
+        *self.rules.write() = parts.rules;
+        *self.subscriptions.write() = parts.subscriptions;
+        *self.groups.write() = parts.groups;
+        *self.rule_sets.write() = parts.rule_sets;
+    }
+
+    /// Contents of one profile: inline for the active one, its file otherwise.
+    ///
+    /// `None` means the file is missing, which the list shows as a profile with
+    /// no nodes rather than an error the user cannot act on.
+    pub fn profile_parts(&self, id: &str) -> AppResult<Option<ProfileParts>> {
+        if *self.active.read() == id {
+            return Ok(Some(self.active_parts()));
+        }
+        Ok(self.store.read_profile(id)?.map(|profile| profile.parts))
+    }
+
+    /// Write one profile's contents to its file. `name` travels with it so the
+    /// file is readable on its own.
+    pub fn save_profile_parts(
+        &self,
+        id: &str,
+        name: &str,
+        parts: &ProfileParts,
+    ) -> AppResult<()> {
+        self.store.write_profile(&StoredProfile {
+            id: id.to_string(),
+            name: name.to_string(),
+            parts: parts.clone(),
+        })
+    }
+
+    /// Remove one profile's file. Called when it becomes active (the inline
+    /// fields become its only copy) and when it is deleted.
+    pub fn drop_profile_file(&self, id: &str) -> AppResult<()> {
+        self.store.remove_profile(id)
+    }
 }
 
 impl Default for AppState {
@@ -270,6 +350,31 @@ mod tests {
         let state = AppState::load(Store::new(&path));
         assert!(state.nodes.read().is_empty());
         assert_eq!(state.settings.read().mixed_port, 7890);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_non_active_profile_reads_from_its_own_file() {
+        let dir = scratch();
+        let path = dir.join("store.json");
+        let state = AppState::load(Store::new(&path));
+
+        // The inline fields belong to the active profile only.
+        let other = ProfileParts {
+            nodes: vec![node()],
+            ..ProfileParts::default()
+        };
+        state.save_profile_parts("p-other", "公司", &other).unwrap();
+        let read = state.profile_parts("p-other").unwrap().expect("its file is there");
+        assert_eq!(read.nodes.len(), 1);
+        assert_eq!(read.nodes[0].name, "东京");
+        assert!(state.active_parts().nodes.is_empty());
+
+        // And the active id answers from memory instead of a file that is not
+        // supposed to exist.
+        let active = state.active.read().clone();
+        state.set_active_parts(other);
+        assert_eq!(state.profile_parts(&active).unwrap().unwrap().nodes.len(), 1);
         std::fs::remove_dir_all(&dir).ok();
     }
 }

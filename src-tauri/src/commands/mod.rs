@@ -6,6 +6,7 @@ pub mod import;
 pub mod kernel;
 pub mod node;
 pub mod process;
+pub mod profile;
 pub mod routing;
 pub mod ruleset;
 pub mod service;

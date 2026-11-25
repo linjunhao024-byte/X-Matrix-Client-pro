@@ -356,6 +356,20 @@ export const commands = {
 	serviceState: () => __TAURI_INVOKE<ServiceState_Serialize>("service_state"),
 	serviceInstall: () => typedError<ServiceState_Serialize, AppError>(__TAURI_INVOKE("service_install")),
 	serviceUninstall: () => typedError<ServiceState_Serialize, AppError>(__TAURI_INVOKE("service_uninstall")),
+	profilesList: () => __TAURI_INVOKE<ProfileView[]>("profiles_list"),
+	profileCreate: (name: string, from: string | null) => typedError<ProfileView, AppError>(__TAURI_INVOKE("profile_create", { name, from })),
+	profileRename: (id: string, name: string) => typedError<ProfileView, AppError>(__TAURI_INVOKE("profile_rename", { id, name })),
+	profileDelete: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("profile_delete", { id })),
+	/**
+	 *  Switch profiles, restarting the kernel on the new one when it was running.
+	 * 
+	 *  The kernel is stopped before the state is swapped (a running kernel was
+	 *  rendered from the old profile) and started again only after the new profile
+	 *  is actually the active one. When the new profile has no node, the honest
+	 *  outcome is a stopped kernel plus a note, not a kernel started on a node that
+	 *  is not in the profile the user picked.
+	 */
+	profileSwitch: (id: string) => typedError<SwitchReport_Serialize, AppError>(__TAURI_INVOKE("profile_switch", { id })),
 };
 
 /* Types */
@@ -390,6 +404,7 @@ export type BackupSummary = {
 	rules: number | null,
 	groups: number | null,
 	rule_sets: number | null,
+	profiles: number | null,
 };
 
 /**
@@ -1050,6 +1065,15 @@ export type ProcessInfo = {
 	name: string,
 	/**  Every pid currently running under that name, ascending. */
 	pids: number[],
+};
+
+/**  One row in the profiles list. */
+export type ProfileView = {
+	id: string,
+	name: string,
+	/**  Whether this is the profile the running state belongs to. */
+	active: boolean,
+	nodes: number | null,
 };
 
 export type Protocol = Protocol_Serialize | Protocol_Deserialize;
@@ -1905,6 +1929,37 @@ export type Subscription_Serialize = {
 	traffic_total: number | null,
 	/**  Unix milliseconds when the plan expires, same header. */
 	expires_at_ms: number | null,
+};
+
+/**  What a switch did to the kernel, so the UI does not have to guess. */
+export type SwitchReport = SwitchReport_Serialize | SwitchReport_Deserialize;
+
+/**  What a switch did to the kernel, so the UI does not have to guess. */
+export type SwitchReport_Deserialize = {
+	active: ProfileView,
+	/**  The kernel was running and now runs on the new profile. */
+	restarted: boolean,
+	/**
+	 *  The kernel was running and is now stopped, because the new profile has
+	 *  no node to run.
+	 */
+	stopped: boolean,
+	/**  Why the restart did not happen, in the backend's own words. */
+	note?: string | null,
+};
+
+/**  What a switch did to the kernel, so the UI does not have to guess. */
+export type SwitchReport_Serialize = {
+	active: ProfileView,
+	/**  The kernel was running and now runs on the new profile. */
+	restarted: boolean,
+	/**
+	 *  The kernel was running and is now stopped, because the new profile has
+	 *  no node to run.
+	 */
+	stopped: boolean,
+	/**  Why the restart did not happen, in the backend's own words. */
+	note: string | null,
 };
 
 /**  What the UI shows on the settings page. */

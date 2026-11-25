@@ -36,6 +36,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'page.groups.title', subtitle: 'page.groups.subtitle' },
   },
   {
+    path: '/profiles',
+    name: 'profiles',
+    component: () => import('../views/ProfilesView.vue'),
+    meta: { title: 'page.profiles.title', subtitle: 'page.profiles.subtitle' },
+  },
+  {
     path: '/rule-sets',
     name: 'ruleSets',
     component: () => import('../views/RuleSetsView.vue'),

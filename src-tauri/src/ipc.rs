@@ -102,5 +102,10 @@ pub fn builder() -> Builder<tauri::Wry> {
         commands::service::service_state,
         commands::service::service_install,
         commands::service::service_uninstall,
+        commands::profile::profiles_list,
+        commands::profile::profile_create,
+        commands::profile::profile_rename,
+        commands::profile::profile_delete,
+        commands::profile::profile_switch,
     ])
 }

@@ -20,6 +20,7 @@ const items: NavItem[] = [
   { name: 'nodes', labelKey: 'nav.nodes', icon: 'nodes' },
   { name: 'routing', labelKey: 'nav.routing', icon: 'routing' },
   { name: 'groups', labelKey: 'nav.groups', icon: 'layers' },
+  { name: 'profiles', labelKey: 'nav.profiles', icon: 'copy' },
   { name: 'ruleSets', labelKey: 'nav.ruleSets', icon: 'inbox' },
   { name: 'subscriptions', labelKey: 'nav.subscriptions', icon: 'cloud' },
   { name: 'connections', labelKey: 'nav.connections', icon: 'connections' },

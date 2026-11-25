@@ -36,6 +36,7 @@ import type {
   ProxyGroup_Deserialize,
   ProxyGroup_Serialize,
   ProcessInfo,
+  ProfileView,
   ProxyMode,
   RefreshOutcome_Serialize,
   RuleTest_Serialize,
@@ -48,6 +49,7 @@ import type {
   Settings_Serialize,
   Subscription_Deserialize,
   Subscription_Serialize,
+  SwitchReport_Serialize,
   SystemProxyStatus,
   TrafficPoint,
   WebdavPush,
@@ -292,6 +294,20 @@ export const api = {
   webdavUpload: (): Promise<WebdavPush> => unwrap(commands.webdavUpload()),
   /** Replace the configuration from the cloud copy; null = nothing to apply. */
   webdavRestore: (): Promise<BackupSummary | null> => unwrap(commands.webdavRestore()),
+  /** One row per profile, the active one included. */
+  profilesList: (): Promise<ProfileView[]> => commands.profilesList(),
+  /** Create a profile; `from` copies another profile's nodes and rules. */
+  profileCreate: (name: string, from: string | null): Promise<ProfileView> =>
+    unwrap(commands.profileCreate(name, from)),
+  /** Rename a profile; only the name changes, nodes and rules stay. */
+  profileRename: (id: string, name: string): Promise<ProfileView> =>
+    unwrap(commands.profileRename(id, name)),
+  /** Delete a profile and the file that holds its nodes and rules. */
+  profileDelete: (id: string): Promise<void> =>
+    unwrap(commands.profileDelete(id)).then(() => undefined),
+  /** Make a profile active; a running kernel is restarted on it. */
+  profileSwitch: (id: string): Promise<SwitchReport_Serialize> =>
+    unwrap(commands.profileSwitch(id)),
   engineStart: (kind: EngineKind, nodeId: string): Promise<EngineStatus_Serialize> =>
     unwrap(commands.engineStart(kind, nodeId)),
   engineApply: (kind: EngineKind, nodeId: string): Promise<EngineStatus_Serialize> =>
@@ -389,6 +405,7 @@ export type {
   ProxyGroup_Deserialize,
   ProxyGroup_Serialize,
   ProcessInfo,
+  ProfileView,
   ProxyMode,
   RefreshOutcome_Serialize,
   RoutingRule,
@@ -400,6 +417,7 @@ export type {
   Settings_Serialize,
   Subscription_Deserialize,
   Subscription_Serialize,
+  SwitchReport_Serialize,
   SystemProxyStatus,
   TrafficSample,
   RuleSet_Deserialize,

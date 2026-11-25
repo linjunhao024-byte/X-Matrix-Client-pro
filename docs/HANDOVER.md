@@ -10,23 +10,23 @@
 ## 0. 三句话现状
 
 1. 主体功能已追平 V2RayN / Clash 的日常面：双内核（Xray / sing-box）渲染与启停、系统代理接管与还原、订阅/整包导入、Clash 配置连同 **策略组与规则** 一起导入、运行中热切换节点与代理模式、托盘子菜单、日志页、hysteria2 / tuic、真实延迟（分组与节点）、流量历史落盘、一键断开全部 + 进程归属、测速预算与「选最快」、域名正则 / 域名分类匹配器、诊断包导出、全局快捷键。
-2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§58）。
+2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§59）。
 3. 交接时那处未提交的工作（N12 应用内更新检查）已经构建、真机验收并提交；此后又合入四件事：`--quit` 正常退出并删除托盘图标（§21）、GEO 数据文件卡片与镜像回退下载（§23）、测速记录落盘（§24）。工作区现在是干净的。
 
 ### 0.1 进度快照（交接这一刻的硬数字）
 
 | 项 | 值 |
 |---|---|
-| 代码 HEAD | 「feat(tun): take over the machine at the adapter, and only when sing-box and admin can do it」，含 §58（S1 TUN）；前一条是「feat(service): let a Windows service own the kernel, so it can run as SYSTEM」（§57）；再往前：§56（S4a 提权）、§54（S6，查 `src-tauri/src/engine/release.rs`/`net/webdav.rs`）、§53（S3，查 `src-tauri/src/engine/release.rs`）、§52（S9）、§51（S11）、§50（S10）、§49（S8）、`a794438`（§48）、`6fd790f`（§47） |
-| 未提交 | 无。§58（S1 TUN）的代码、构建、真机验收、`docs/ACCEPTANCE.md` §58 与 `docs/PARITY-PLAN.md` 都在同一次提交里（见 §0.14） |
+| 代码 HEAD | 「feat(profiles): several configurations, one kernel at a time」，含 §59（S7 多配置）；前一条是「feat(tun): take over the machine at the adapter, and only when sing-box and admin can do it」（§58）；前一条是「feat(service): let a Windows service own the kernel, so it can run as SYSTEM」（§57）；再往前：§56（S4a 提权）、§54（S6，查 `src-tauri/src/engine/release.rs`/`net/webdav.rs`）、§53（S3，查 `src-tauri/src/engine/release.rs`）、§52（S9）、§51（S11）、§50（S10）、§49（S8）、`a794438`（§48）、`6fd790f`（§47） |
+| 未提交 | 无。§59（S7 多配置）的代码、构建、真机验收、`docs/ACCEPTANCE.md` §59 与 `docs/PARITY-PLAN.md` 都在同一次提交里（见 §0.15） |
 | 上一版未提交清单（留档） | `src-tauri/src/domain/settings.rs`、`src-tauri/src/engine/{mod,render,runtime,xray}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§39 分片）；再上一版：`src-tauri/src/engine/{mod,runtime}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§37 统一提示）；再上一版：`src-tauri/src/commands/settings.rs`、`src-tauri/src/commands/sysproxy.rs`、`src/stores/sysproxy.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`、`docs/ACCEPTANCE.md`（§36 系统代理即时生效） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库；之后每次收尾都跟着更新 |
-| IPC 命令 | **92**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
-| Rust 单测 | **496 passed**（`ARCHITECTURE.md:278` 已同步） |
-| 前端检查 | `npm run check` 全绿：vue-tsc / architecture（66 文件）/ contract / vitest **116**（12 文件） |
-| i18n | **835** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
-| 桌面产物 | 桌面上的旧副本**已不存在**；唯一产物是 `src-tauri/target/release/x-matrix.exe`（10,890,240 B @2026-11-25 15:57，md5 `bd156788af54a6153b447242b8db9aa1`，含 §21–§58 全部改动） |
-| 验收文档 | `docs/ACCEPTANCE.md` §0–§58（§7 历史空缺，编号不连续但内容完整） |
+| IPC 命令 | **97**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
+| Rust 单测 | **514 passed**（`ARCHITECTURE.md:278` 已同步） |
+| 前端检查 | `npm run check` 全绿：vue-tsc / architecture（68 文件）/ contract / vitest **116**（12 文件） |
+| i18n | **856** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
+| 桌面产物 | 桌面上的旧副本**已不存在**；唯一产物是 `src-tauri/target/release/x-matrix.exe`（11,056,640 B @2026-11-25 18:26，md5 `907a38674359352f22cddcb9c61c627f`，含 §21–§59 全部改动） |
+| 验收文档 | `docs/ACCEPTANCE.md` §0–§59（§7 历史空缺，编号不连续但内容完整） |
 | 云电脑 | 干净：`ProxyEnable=0x0`、无 X-Matrix/sing-box/xray 进程、无 `xm*` 计划任务 |
 
 **下一步的确定顺序**（做完一条打一个勾，别跳）：
@@ -48,6 +48,7 @@
 - [x] 16. §54（S6）WebDAV 云备份：`net/webdav.rs` + `syscreds.rs` + `save_settings` 携密码 → 构建 → 云电脑五段验收（上传 4889 B、恢复把删掉的节点带回来、内核在跑时拒绝且不联网、密码错落成 401 一句话、走代理但内核没跑先拒）→ 写 §54 → 提交（2026-11-25 10:5x）
 - [x] 17. §55（S5）轻量模式：`power.rs` 两半记账 + `set_quiet()` 接三藏一显 + 前端 `quiet` 停表 → 构建 → 云电脑两阶段（对照/实验）验收 → 写 §55 → 提交（2026-11-25 12:4x）
 - [x] 18. §56（S4a）提权：`elevate.rs` 令牌判断 + `ShellExecuteEx` runas + `--relaunch-wait` 握手 + 设置页「权限」节；判据 7、8（非管理员文案、真提权）在这台机器上造不出条件，已如实标未验
+- [x] 20. §59（S7）多配置：`store.json` v2（激活内联 + 非激活每份一个文件）+ 五条 profile 命令 + `ProfilesView` + 备份带全部配置 → 构建 → 云电脑 v1 升级/两向切换/云备份三段验收 → 写 §59 → 提交（2026-11-25 18:4x）
 - [x] 19. §58（S1）TUN：`Settings.tun_enabled/tun_stack` + sing-box tun 入站与 `sniff` + `start_engine` 三条渲染前拒绝 + 界面开关 → 构建 → 云电脑四阶段验收（两条拒绝、网卡与路由接管、隧道 204、停止复原）→ 写 §58 → 提交（2026-11-25 17:4x）
 - [x] 15. §53（S3）内核下载/更新：`release.rs` 解析 + sha256 核对 + `stage/promote` → 构建 → 云电脑三阶段验收（xray 真换文件并用同节点重启、sing-box 无校验值照装但明说未核、自定义路径拒绝且不下载）→ 写 §53 → 提交（2026-11-25 10:10）
 
@@ -179,6 +180,14 @@
 
 ---
 
+### 0.15 S7 · 多配置（2026-11-25）
+
+- **为什么做**：一个客户端常常要在「机场 A」和「机场 B」之间来回换，过去的做法是导出再导入，或者手工改节点；v2rayN / Clash Verge 都是「配置」这一层。S7 把这一层补上：一套节点、订阅、规则与策略组叫一个配置，切换后内核按新配置重建。
+- **做了什么**：`store.json` 升到 v2（`active` + `profiles` 元数据，激活那份仍内联，非激活的每份一个 `profiles/<id>.json`）；`Store::normalize()` 负责 v1 → v2 的原地升级且只写一次盘；`AppState` 多两把锁（配置元数据 / 激活 id）与 `active_parts`/`profile_parts`/`save_profile_parts`/`drop_profile_file`；`commands/profile.rs` 五条命令（list/create/rename/delete/switch），切换走「先落盘离开那份 → 读目标 → 停内核 → 换内存 → persist → 按需重启 → 刷托盘」；备份 `Backup.profiles` 带全部非激活配置；界面新增 `ProfilesView.vue`（`/profiles`，侧栏图标 `copy`）与 `src/stores/profiles.ts`。
+- **验收**：`bash /d/tmp/shots/59-profiles-accept.sh p1`（switch / back / backup）与 `PHASES="migrate" ./59-profiles-accept.sh p4`。已验：v1（5 节点）打开一次即 `version=2 active=default profiles=1 nodes=5`、`store.json` 3773 B / mtime 跨一次重启不变（只写一次）；「默认」→「工作」`nodes 2→3`、`rules 2→0`，反向切回 `nodes 3→2`、`rules 0→2`，节点页与路由页逐项对得上；两次切换 `xray.exe` PID 都变（#896→#7392、#748→#6572）且提示「内核已按 {name} 重启」；云备份 5072 字节里 `document.profiles` 两条、非激活那份带 3 个节点，`profiles/` 目录里只剩 `p-work.json`。**未验**：新配置没有节点时的停机分支、托盘菜单刷新、以及计划里提到的 merge / script 覆盖脚本（本轮没做）。
+- **坑**：① v1 升级条件要写成「`profiles` 空且没有 `active`」，只看 `version < 2` 会把用户「删到只剩一个配置」的正常状态又迁一遍；② `ProfileParts` 不能 derive `PartialEq`（`Subscription` 没实现，且本轮不许改 `domain/**`），测试只能逐字段断言；③ 侧栏图标 `layers` 已被策略组占用，配置页用 `copy`；④ 切换时旧内核已停，端口必然空闲，所以「新配置端口冲突」这条分支在真机走不到；⑤ 备份里非激活配置的字段是扁平的（`StoredProfile` flatten 了 `ProfileParts`），验收脚本按 `parts.nodes` 读会拿到 0；⑥ 设置页比窗口长（WebDAV 那块 `top=7093`），点前必须 `Scroll-Row`。
+- **计数**：Rust 496 → **514**、IPC 92 → **97**、vitest 116（未变）、i18n 835 → **856**。
+
 ## 1. 项目坐标与命令
 
 | 项 | 值 |
@@ -191,10 +200,10 @@
 | 后端测试 | `cd src-tauri && cargo test --lib` |
 | 契约重生成 | `npm run gen:contract`（改了命令签名就必须跑，`check:contract` 会拦） |
 | 桌面产物 | `/c/Users/83611/Desktop/X-Matrix.exe`、`/c/Users/83611/Desktop/X-Matrix_0.1.0_x64-setup.exe` |
-| 当前构建产物 | `src-tauri/target/release/x-matrix.exe` **10,882,560 B @2026-11-25 15:04，md5 `9bafd2050acc3428ca2e8a5fad180b98`**（含 §21–§57）；桌面副本已不在，需要时自己 `cp` 过去 |
+| 当前构建产物 | `src-tauri/target/release/x-matrix.exe` **11,056,640 B @2026-11-25 18:26，md5 `907a38674359352f22cddcb9c61c627f`**（含 §21–§59）；桌面副本已不在，需要时自己 `cp` 过去 |
 
 **计数基线（改动后记得同步文档）**：命令 **92**、`cargo test --lib` **489**、vitest **116**（12 个文件）、i18n **829** 键。
-> `README.md:81` 与 `ARCHITECTURE.md:277-278` 已同步为 92 条命令 / 496 项测试。
+> `README.md:81` 与 `ARCHITECTURE.md:277-278` 已同步为 97 条命令 / 514 项测试。
 
 命令数核算法：
 
@@ -247,7 +256,7 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 
 ## 4. 已完成的功能与验收索引
 
-`docs/ACCEPTANCE.md` 是**唯一可信的进度表**（§0–§58 共 58 节，每节都有「验法 + 判据 + 设计理由 + 坑」）：
+`docs/ACCEPTANCE.md` 是**唯一可信的进度表**（§0–§59 共 59 节，每节都有「验法 + 判据 + 设计理由 + 坑」）：
 
 | 节 | 内容 |
 |---|---|
@@ -443,7 +452,7 @@ scp -i /c/Users/83611/.ssh/id_ed25519_cpc 本地文件 Administrator@100.106.121
 
 1. `cd /d/GitHub-Warehouse/X-Matrix-Client-Pro && git status` —— 工作区应当干净；有改动先弄清是谁的。
 2. 读本文件的 §5 与 `docs/ACCEPTANCE.md` 的最后两节，对齐上下文。
-3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 496 passed）。
+3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 514 passed）。
 4. `cd .. && npm run check`（应为全绿）。
 5. 从 §6 表里挑一项（按性价比排序），**一项一提交**，提交信息用英文 `feat(...)/fix(...)/docs: ...`。
 6. 真机验证前先跑 `bash /d/tmp/shots/deploy-tray.sh <exe>`；远端被 `cleanup.sh` 清过的话，先 `scp x-act.ps1 uia2.ps1 ocr.ps1` 上去。

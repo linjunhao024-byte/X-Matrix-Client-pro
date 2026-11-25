@@ -113,6 +113,13 @@ sing-box `tun` 入站（`auto_route`、`strict_route`、`stack: system`），需
 引入 profile 层：每个 profile 保存节点来源（订阅/手工）、规则、策略组与覆盖脚本（merge / script），切换时重新生成配置。`render.rs` 从「一份全局配置」改为「按 profile 生成」。
 判据：两个 profile 各自的节点与规则互不污染；切换 profile 后运行中内核按新配置重启；导出备份含全部 profile。
 
+### S7 · 结果（2026-11-25）
+
+- **做了什么**：`store.json` 升到 v2——`active` 与 `profiles:[{id,name}]` 是元数据，**激活那份仍内联在 `nodes`/`rules`/`subscriptions`/`groups`/`rule_sets`**，非激活的各存 `profiles/<id>.json`；v1 打开时 `normalize()` 原地补两个键、迁移成「默认」并只写一次盘。命令恰好五条（`profiles_list`/`profile_create`/`profile_rename`/`profile_delete`/`profile_switch`，IPC 92 → 97）。切换顺序：先把离开的那份落盘 → 读目标（失败不动现状）→ 若在跑先 `proxy.disable()`+`runtime.stop()` → 换内存 + persist + 删重复文件（失败回滚）→ 用 `last_node_id`（无效则第一个节点）重启 → `refresh_tray`。界面新增 `ProfilesView.vue`（`/profiles`）与 `src/stores/profiles.ts`（切换后对 settings/nodes/routing/groups/ruleSets/subscriptions 全部 `load(true)`）。备份 `Backup.profiles` 带全部非激活配置，`apply` 先写文件再 `replace`；老备份 `#[serde(default)]` 归一成「默认」。
+- **真机结论**（`59-profiles-accept.sh`）：v1（5 节点）打开一次即 `version=2 active=default profiles=1 nodes=5`，`store.json` 3773 B / mtime 不变地跨过一次重启（只写一次）；切到「工作」后 `nodes=3 rules=0`、节点页只剩三个环回 SS、路由页 0 条规则，切回「默认」后 `nodes=2 rules=2`、两个订阅节点与两条规则都回来了；两次切换的 `xray.exe` PID 都变了（#896→#7392、#748→#6572），界面提示「内核已按 {name} 重启」；云备份 5072 字节里 `document.profiles` 两条、非激活那份带 3 个节点。
+- **判据收窄三处**：① 「新配置里没有节点 → 内核保持停止」这条分支没验（种子两个配置都有节点）；② 托盘菜单是否跟着刷新没验（只读了首页徽章）；③ 计划里的 merge / script 覆盖脚本**没有做**——本轮做到 profile 层，订阅级覆盖脚本与「`render.rs` 按 profile 分支渲染」留作后续。
+- **计数**：Rust 496 → **514**、IPC 92 → **97**、vitest 116（未变）、i18n 835 → **856**。
+
 ## 进度
 
 | 项 | 状态 | 提交 | 验收 |
@@ -128,4 +135,4 @@ sing-box `tun` 入站（`auto_route`、`strict_route`、`stack: system`），需
 | S4a 提权 | **已完成**（2026-11-25，判据 7、8 未验） | 与 `src-tauri/src/elevate.rs` 同一次提交（`git log --oneline -- src-tauri/src/elevate.rs` 最新一条） | `docs/ACCEPTANCE.md` §56；真机脚本 `D:/tmp/shots/56-elev-accept.sh`、`mk_56_elev.py` |
 | S4b 内核服务 | **已完成**（判据全过，见 §57） | 与 `src-tauri/src/service.rs` 同一次提交（`git log --oneline -- src-tauri/src/service.rs` 最新一条） | `docs/ACCEPTANCE.md` §57；真机脚本 `D:/tmp/shots/57-service-accept.sh`、`mk_57_service.py` |
 | S1 TUN | **已完成**（2026-11-25） | 与 `src-tauri/src/engine/singbox.rs` 同一次提交（`git log --oneline -- src-tauri/src/engine/singbox.rs` 最新一条） | `docs/ACCEPTANCE.md` §58；真机脚本 `D:\tmp\shots\58-tun-accept.sh`、`mk_58_head.py`/`mk_58_body.py` |
-| S7 多配置 | 未开始 | — | — |
+| S7 多配置 | **已完成**（2026-11-25，profile 层与三条判据；merge / script 覆盖脚本未做，见 §59） | 与 `src-tauri/src/store.rs` 同一次提交（`git log --oneline -- src-tauri/src/store.rs` 最新一条） | `docs/ACCEPTANCE.md` §59；真机脚本 `D:\tmp\shots\59-profiles-accept.sh`、`seed59.py`、`mk_59_body.py` |

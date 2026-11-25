@@ -5008,5 +5008,131 @@
     "按进程分流在 sing-box 上走 `process_name` 字段；Xray 的 `process` 匹配取决于内核版本与平台，本项目没在真机上验过",
     "sing-box matches this through its `process_name` field; Xray's `process` matching depends on the kernel version and platform, and this project has not verified it on a real machine",
     "按進程分流在 sing-box 上走 `process_name` 欄位；Xray 的 `process` 匹配取決於內核版本與平台，本項目沒在真機上驗過"
+  ],
+  [
+    "nav.profiles",
+    "配置",
+    "Profiles",
+    "設定"
+  ],
+  [
+    "page.profiles.title",
+    "配置",
+    "Profiles",
+    "設定"
+  ],
+  [
+    "page.profiles.subtitle",
+    "一套节点与规则叫一个配置，切换后内核按新配置重启",
+    "One set of nodes and rules is a profile; switching restarts the kernel on it",
+    "一套節點與規則叫一個設定，切換後內核按新設定重啟"
+  ],
+  [
+    "profiles.hint",
+    "每个配置都有自己的节点、订阅、规则和策略组。切换之后，内核会用新配置里的节点重建。",
+    "Each profile keeps its own nodes, subscriptions, rules and groups. After a switch the kernel is rebuilt from the profile's own nodes.",
+    "每個設定都有自己的節點、訂閱、規則和策略組。切換之後，內核會用新設定裡的節點重建。"
+  ],
+  [
+    "profiles.globalNote",
+    "端口、语言、热键、托盘这些是全局设置，不随配置切换。",
+    "Ports, language, hotkeys and the tray are global settings; switching a profile does not change them.",
+    "連接埠、語言、快速鍵、系統匣這些是全域設定，不隨設定切換。"
+  ],
+  [
+    "profiles.new",
+    "新建配置",
+    "New profile",
+    "新增設定"
+  ],
+  [
+    "profiles.namePlaceholder",
+    "给这个配置起个名字",
+    "Name this profile",
+    "給這個設定取個名字"
+  ],
+  [
+    "profiles.copyCurrent",
+    "从当前配置复制",
+    "Copy the current profile",
+    "從目前設定複製"
+  ],
+  [
+    "profiles.nameEmpty",
+    "配置名不能为空",
+    "A profile needs a name",
+    "設定名稱不能是空的"
+  ],
+  [
+    "profiles.active",
+    "使用中",
+    "In use",
+    "使用中"
+  ],
+  [
+    "profiles.use",
+    "切换到它",
+    "Switch to it",
+    "切換到它"
+  ],
+  [
+    "profiles.rename",
+    "重命名",
+    "Rename",
+    "重新命名"
+  ],
+  [
+    "profiles.delete",
+    "删除",
+    "Delete",
+    "刪除"
+  ],
+  [
+    "profiles.deleteConfirm",
+    "删除后这份配置里的节点与规则一起没了，确定吗？",
+    "Deleting it also deletes its nodes and rules. Continue?",
+    "刪除後這份設定裡的節點與規則一起沒了，確定嗎？"
+  ],
+  [
+    "profiles.empty",
+    "还没有配置",
+    "No profiles yet",
+    "還沒有設定"
+  ],
+  [
+    "profiles.col.name",
+    "名字",
+    "Name",
+    "名稱"
+  ],
+  [
+    "profiles.col.nodes",
+    "节点数",
+    "Nodes",
+    "節點數"
+  ],
+  [
+    "profiles.col.actions",
+    "操作",
+    "Actions",
+    "操作"
+  ],
+  [
+    "profiles.switched",
+    "已切到 {name}",
+    "Switched to {name}",
+    "已切到 {name}"
+  ],
+  [
+    "profiles.restarted",
+    "内核已按 {name} 重启",
+    "The kernel restarted on {name}",
+    "內核已按 {name} 重新啟動"
+  ],
+  [
+    "profiles.stoppedNoNode",
+    "新配置里没有节点，内核保持停止",
+    "The new profile has no nodes, so the kernel stays stopped",
+    "新設定裡沒有節點，內核保持停止"
   ]
 ]
