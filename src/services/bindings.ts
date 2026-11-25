@@ -242,6 +242,10 @@ export const commands = {
 	 *  nothing running — it is how the UI can explain a node without spawning it.
 	 */
 	engineConfigPreview: (kind: EngineKind, nodeId: string) => typedError<string, AppError>(__TAURI_INVOKE("engine_config_preview", { kind, nodeId })),
+	/**  Check what upstream has, and what this machine has, without touching either. */
+	kernelCheck: (kind: EngineKind) => typedError<KernelRelease_Serialize, AppError>(__TAURI_INVOKE("kernel_check", { kind })),
+	/**  Download the newest official kernel and replace the one in `engines/`. */
+	kernelInstall: (kind: EngineKind) => typedError<KernelUpdate_Serialize, AppError>(__TAURI_INVOKE("kernel_install", { kind })),
 	/**  Parse without touching state. */
 	importPreview: (text: string) => __TAURI_INVOKE<ImportPreview_Serialize>("import_preview", { text }),
 	/**  Parse and merge into the node list, then persist. */
@@ -757,6 +761,121 @@ export type ImportPreview_Serialize = {
 	groups: string[],
 	/**  One line per rule the document declares, in file order. */
 	rules: string[],
+};
+
+/**
+ *  What the settings page needs to draw one kernel row: the newest official
+ *  release, where it comes from, and what this machine has right now.
+ */
+export type KernelRelease = KernelRelease_Serialize | KernelRelease_Deserialize;
+
+/**
+ *  What the settings page needs to draw one kernel row: the newest official
+ *  release, where it comes from, and what this machine has right now.
+ */
+export type KernelRelease_Deserialize = {
+	kind: EngineKind,
+	/**  Upstream tag as published (`v26.11.9`). */
+	tag: string,
+	/**  The tag without its `v` — the spelling the UI compares. */
+	version: string,
+	url: string,
+	/**
+	 *  `f64` because specta cannot carry `u64`; the same rule `GeoAssetStatus`
+	 *  follows for byte counts.
+	 */
+	bytes: number | null,
+	/**
+	 *  Version the installed binary reports, or `None` when there is none to
+	 *  ask. A missing kernel is not an error here — "not installed yet" is a
+	 *  state the settings page must be able to show.
+	 */
+	current?: string | null,
+	/**
+	 *  Something the caller should say out loud: e.g. the fetch went direct
+	 *  because the kernel was not running. `None` when the route was the one
+	 *  the settings asked for.
+	 */
+	note?: string | null,
+};
+
+/**
+ *  What the settings page needs to draw one kernel row: the newest official
+ *  release, where it comes from, and what this machine has right now.
+ */
+export type KernelRelease_Serialize = {
+	kind: EngineKind,
+	/**  Upstream tag as published (`v26.11.9`). */
+	tag: string,
+	/**  The tag without its `v` — the spelling the UI compares. */
+	version: string,
+	url: string,
+	/**
+	 *  `f64` because specta cannot carry `u64`; the same rule `GeoAssetStatus`
+	 *  follows for byte counts.
+	 */
+	bytes: number | null,
+	/**
+	 *  Version the installed binary reports, or `None` when there is none to
+	 *  ask. A missing kernel is not an error here — "not installed yet" is a
+	 *  state the settings page must be able to show.
+	 */
+	current: string | null,
+	/**
+	 *  Something the caller should say out loud: e.g. the fetch went direct
+	 *  because the kernel was not running. `None` when the route was the one
+	 *  the settings asked for.
+	 */
+	note: string | null,
+};
+
+/**  The outcome of one update, one field per question the UI asks about it. */
+export type KernelUpdate = KernelUpdate_Serialize | KernelUpdate_Deserialize;
+
+/**  The outcome of one update, one field per question the UI asks about it. */
+export type KernelUpdate_Deserialize = {
+	kind: EngineKind,
+	version: string,
+	bytes: number | null,
+	/**
+	 *  sha256 of the downloaded archive — the same value that was compared
+	 *  against upstream, so a later "was this the file we checked" question has
+	 *  an answer.
+	 */
+	sha256: string,
+	/**
+	 *  True only when an upstream sha256 was fetched *and* matched. No digest
+	 *  means `false`, never "the file looked fine".
+	 */
+	verified: boolean,
+	/**  Whether there was a previous binary to move aside. */
+	replaced: boolean,
+	/**  Whether a running kernel was stopped and brought back on the same node. */
+	restarted: boolean,
+	note?: string | null,
+};
+
+/**  The outcome of one update, one field per question the UI asks about it. */
+export type KernelUpdate_Serialize = {
+	kind: EngineKind,
+	version: string,
+	bytes: number | null,
+	/**
+	 *  sha256 of the downloaded archive — the same value that was compared
+	 *  against upstream, so a later "was this the file we checked" question has
+	 *  an answer.
+	 */
+	sha256: string,
+	/**
+	 *  True only when an upstream sha256 was fetched *and* matched. No digest
+	 *  means `false`, never "the file looked fine".
+	 */
+	verified: boolean,
+	/**  Whether there was a previous binary to move aside. */
+	replaced: boolean,
+	/**  Whether a running kernel was stopped and brought back on the same node. */
+	restarted: boolean,
+	note: string | null,
 };
 
 export type Language = "zh" | "zh-tw" | "en";

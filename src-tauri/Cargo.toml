@@ -41,6 +41,12 @@ serde_yaml = "0.9"
 regex = "1"
 thiserror = "2"
 parking_lot = "0.12"
+# Official kernel releases ship as zip archives; both upstreams use deflate, so
+# the other codecs stay out of the build.
+zip = { version = "2", default-features = false, features = ["deflate"] }
+# Xray publishes `SHA2-256= <hex>` next to its zip; verifying it is the only
+# reason a hash algorithm lives in this binary.
+sha2 = "0.10"
 
 # Contract layer: Rust command signatures -> src/services/bindings.ts
 specta = { version = "=2.0.0-rc.26", features = ["derive", "function", "serde_json"] }

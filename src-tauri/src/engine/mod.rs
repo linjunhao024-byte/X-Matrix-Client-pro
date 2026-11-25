@@ -15,6 +15,9 @@ pub mod geo;
 pub mod groupwatch;
 mod job;
 mod render;
+// What the official release feed says, and how a new binary replaces the old
+// one without ever destroying it.
+pub mod release;
 // Crate-visible so command tests can reuse the runtime fakes instead of
 // inventing a second set of them.
 pub(crate) mod runtime;

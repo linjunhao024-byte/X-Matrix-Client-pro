@@ -10,6 +10,7 @@ import {
   describeError,
   type EngineBinary,
   type EngineKind,
+  type KernelRelease_Serialize,
   type ProxyMode,
   type Settings_Serialize,
 } from '../services/contract'
@@ -401,6 +402,90 @@ async function probeKernelVersion(kind: EngineKind): Promise<void> {
   }
 }
 
+/** Newest official release per kernel, as last checked in this session. */
+const kernelReleases = ref<Partial<Record<EngineKind, KernelRelease_Serialize>>>({})
+/** Kind whose download is in flight — the only button that says 正在下载… */
+const installing = ref<EngineKind | null>(null)
+
+/**
+ * Is there a newer official build than the one on this machine?
+ *
+ * Nothing is offered before a check has run: without the newest version there
+ * is nothing to compare against, and a button that guesses would be a lie.
+ */
+function outdated(kind: EngineKind): boolean {
+  const release = kernelReleases.value[kind]
+  if (!release) return false
+  return release.version !== release.current
+}
+
+/**
+ * One line describing a checked release.
+ *
+ * `current` is what the local binary reports. When there is none the file is
+ * missing, which is not the same as being out of date and must not be dressed
+ * up as one.
+ */
+function describeRelease(release: KernelRelease_Serialize): string {
+  const latest = `${t('settings.kernel.latest')} ${release.version}`
+  const line = !release.current
+    ? `${latest} · ${t('settings.kernel.missing')}`
+    : release.current === release.version
+      ? t('settings.kernel.isLatest')
+      : `${latest} · ${t('settings.kernel.current')} ${release.current}`
+  // A direct fetch while 订阅走代理 is still a success, but the user asked for
+  // the proxy and did not get it — say so instead of hiding it.
+  return release.note ? `${line}；${release.note}` : line
+}
+
+/** Ask GitHub what the newest official build is; show it beside the local one. */
+async function checkKernel(kind: EngineKind): Promise<void> {
+  kernelBusy.value = kind
+  try {
+    const release = await api.kernelCheck(kind)
+    kernelReleases.value[kind] = release
+    kernelNotes.value[kind] = describeRelease(release)
+  } catch (cause) {
+    kernelNotes.value[kind] = describeError(cause)
+  } finally {
+    kernelBusy.value = null
+  }
+}
+
+/**
+ * Download and swap in the newest official kernel.
+ *
+ * The backend may stop and restart the kernel being replaced, so every row
+ * stays disabled for the whole call. Failures are shown verbatim: the reason
+ * (checksum mismatch, unreadable config, a kernel that will not start) decides
+ * what the user does next.
+ */
+async function installKernel(kind: EngineKind): Promise<void> {
+  kernelBusy.value = kind
+  installing.value = kind
+  try {
+    const update = await api.kernelInstall(kind)
+    // Keep the cached latest honest: the file on disk is now `update.version`,
+    // so the 更新 button has to disappear without a second network round.
+    const release = kernelReleases.value[kind]
+    if (release) kernelReleases.value[kind] = { ...release, current: update.version }
+    const hash = update.sha256.slice(0, 12)
+    const checksum = update.verified
+      ? t('settings.kernel.checksumOk', { hash })
+      : t('settings.kernel.checksumLocal', { hash })
+    const parts = [t('settings.kernel.updated', { version: update.version }), checksum]
+    // e.g. 替换成功，但内核没起来：… — the swap worked, the restart did not.
+    if (update.note) parts.push(update.note)
+    kernelNotes.value[kind] = parts.join(' · ')
+    await refreshKernelBinaries()
+  } catch (cause) {
+    kernelNotes.value[kind] = describeError(cause)
+  } finally {
+    installing.value = null
+    kernelBusy.value = null
+  }
+}
+
 onMounted(async () => {
   await store.load()
   if (store.settings) draft.value = { ...store.settings }
@@ -689,6 +774,27 @@ async function save() {
               @click="probeKernelVersion(row.kind)"
             >
               {{ t('settings.kernel.version') }}
+            </button>
+            <button
+              class="btn btn-sm"
+              type="button"
+              :disabled="kernelBusy !== null"
+              @click="checkKernel(row.kind)"
+            >
+              {{ t('settings.kernel.check') }}
+            </button>
+            <button
+              v-if="outdated(row.kind)"
+              class="btn btn-sm"
+              type="button"
+              :disabled="kernelBusy !== null"
+              @click="installKernel(row.kind)"
+            >
+              {{
+                installing === row.kind
+                  ? t('settings.kernel.installing')
+                  : t('settings.kernel.install')
+              }}
             </button>
           </div>
           <p v-if="kernelNotes[row.kind]" class="field-hint">{{ kernelNotes[row.kind] }}</p>

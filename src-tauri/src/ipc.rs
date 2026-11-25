@@ -61,6 +61,8 @@ pub fn builder() -> Builder<tauri::Wry> {
         commands::engine::traffic_history,
         commands::engine::traffic_clear_history,
         commands::engine::engine_config_preview,
+        commands::kernel::kernel_check,
+        commands::kernel::kernel_install,
         commands::import::import_preview,
         commands::import::import_nodes,
         commands::group::list_groups,

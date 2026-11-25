@@ -96,18 +96,47 @@ pub fn describe_error(error: &(dyn std::error::Error + 'static)) -> String {
 /// decoded as UTF-8 would be silently mangled. Status handling stays the
 /// caller's job, and `noun` keeps the failure sentences honest.
 pub fn fetch_bytes(url: &str, timeout: Duration, noun: &str) -> AppResult<(u16, Vec<u8>)> {
+    fetch_bytes_through(url, timeout, None, noun)
+}
+
+/// Same fetch, optionally routed through the local mixed inbound.
+///
+/// The caller is the kernel updater: a machine whose only way out is the tunnel
+/// still has to be able to fetch the next kernel. `proxy` is the loopback port
+/// of the running kernel's HTTP inbound, spelled as an HTTP proxy for the same
+/// reason [`fetch_through`] does it.
+///
+/// GitHub's API answers `Accept: application/vnd.github+json` with the release
+/// object; its default representation of the same URL is HTML, which parses as
+/// neither JSON nor a version. The header is only added for that host so the
+/// geo downloader keeps byte-for-byte the requests it always made.
+pub fn fetch_bytes_through(
+    url: &str,
+    timeout: Duration,
+    proxy: Option<u16>,
+    noun: &str,
+) -> AppResult<(u16, Vec<u8>)> {
     if !(url.starts_with("http://") || url.starts_with("https://")) {
         return Err(AppError::InvalidInput(format!(
             "{noun}地址必须是 http(s)：{url}"
         )));
     }
-    let client = reqwest::blocking::Client::builder()
+    let mut builder = reqwest::blocking::Client::builder()
         .timeout(timeout)
-        .user_agent(USER_AGENT)
+        .user_agent(USER_AGENT);
+    if let Some(port) = proxy {
+        let proxy = reqwest::Proxy::all(format!("http://127.0.0.1:{port}"))
+            .map_err(|error| AppError::InvalidInput(format!("代理端口 {port} 用不了：{error}")))?;
+        builder = builder.proxy(proxy);
+    }
+    let client = builder
         .build()
         .map_err(|error| AppError::Internal(format!("无法创建 HTTP 客户端：{error}")))?;
-    let response = client
-        .get(url)
+    let mut request = client.get(url);
+    if url.contains("api.github.com") {
+        request = request.header(reqwest::header::ACCEPT, "application/vnd.github+json");
+    }
+    let response = request
         .send()
         // The cause chain is spelled out here on purpose: this error is the one
         // shown for a failed geo download, and "error sending request" alone

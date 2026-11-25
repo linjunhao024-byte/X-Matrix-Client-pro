@@ -2,6 +2,7 @@ pub mod backup;
 pub mod engine;
 pub mod group;
 pub mod import;
+pub mod kernel;
 pub mod node;
 pub mod process;
 pub mod routing;

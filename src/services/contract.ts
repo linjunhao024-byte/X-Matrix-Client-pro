@@ -26,6 +26,8 @@ import type {
   LatencyProbe_Serialize,
   GeoAssetStatus_Serialize,
   GeoUpdate,
+  KernelRelease_Serialize,
+  KernelUpdate_Serialize,
   LogDelta,
   Node_Deserialize,
   Node_Serialize,
@@ -245,6 +247,28 @@ export const api = {
   engineConfigPreview: (kind: EngineKind, nodeId: string): Promise<string> =>
     unwrap(commands.engineConfigPreview(kind, nodeId)),
 
+  /**
+   * What the newest official kernel is, and what this machine has.
+   *
+   * `bytes` is `number | null` in the generated contract (specta renders every
+   * f64 that way); it is only a size hint, so it is coalesced here instead of at
+   * every call site.
+   */
+  kernelCheck: async (kind: EngineKind): Promise<KernelRelease_Serialize> => {
+    const release = await unwrap(commands.kernelCheck(kind))
+    return { ...release, bytes: release.bytes ?? 0, note: release.note ?? null }
+  },
+  /**
+   * Download, verify and swap the kernel in `engines/`.
+   *
+   * Slow (tens of MB) and it may stop and restart a running kernel; the caller
+   * must show progress and never fire it twice.
+   */
+  kernelInstall: async (kind: EngineKind): Promise<KernelUpdate_Serialize> => {
+    const update = await unwrap(commands.kernelInstall(kind))
+    return { ...update, bytes: update.bytes ?? 0 }
+  },
+
   systemProxyStatus: (): Promise<SystemProxyStatus> => unwrap(commands.systemProxyStatus()),
   systemProxyDisable: (): Promise<SystemProxyStatus> => unwrap(commands.systemProxyDisable()),
 
@@ -295,6 +319,8 @@ export type {
   ImportPreview_Serialize,
   Language,
   GeoAssetStatus_Serialize,
+  KernelRelease_Serialize,
+  KernelUpdate_Serialize,
   LatencyProbe_Serialize,
   Node_Deserialize,
   Node_Serialize,

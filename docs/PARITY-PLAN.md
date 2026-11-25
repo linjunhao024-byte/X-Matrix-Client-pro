@@ -65,6 +65,8 @@ PAC 只表达**能表达的**：绕过列表 + 规则里「直连」的域名类
 从 GitHub releases（可走应用内代理）下载官方内核压缩包，校验 sha256，解压到 engines 目录；运行中先停内核再替换，替换失败保留旧文件。
 判据：能下载并替换；`engine_version` 读到新版本；失败路径（断网、校验不符）有明确提示且旧文件仍在。
 
+**结果（2026-11-25）**：`src-tauri/src/engine/release.rs` 负责上游解析与校验（`feed_url`/`asset_name`/`parse_release`/`parse_digest`/`sha256_hex`/`version_from_self_report`/`extract_exe`/`stage`/`promote`/`discard`），`src-tauri/src/commands/kernel.rs` 只暴露两条命令（`kernel_check` 只读、`kernel_install` 承担全部副作用，IPC 82 → 84）；`net/remote.rs` 加 `fetch_bytes_through`，沿用 `subscription_via_proxy` 的取路规则。次序是钉死的：自定义路径先拒绝（不联网）→ 解析 → 下载（120 秒）→ 核 sha256（不符不落盘；上游没有 digest 就装但回执写「未核对」）→ 解 exe → `.{name}.incoming` → `<incoming> version` 自报版本 → 先放代理再停内核 → `promote`（旧文件 → `.old`，rename 失败回滚）→ 同节点重启 → `refresh_tray`。真机（云电脑，三段 `xray`/`singbox`/`custom`）：xray 26.10.31 → 26.11.9 `已核对`、`.old` 保留、内核 PID 变、代理恢复；sing-box 1.14.3 → 1.14.4 且明写「上游未提供校验值」；自定义路径拒绝且文件不动。判据收窄处如实写进 §53：云电脑到 GitHub 只有 ~5.5 KB/s，验收把**测试二进制**的两条 feed URL 等长改指本机镜像（返回真上游 JSON 形状与真官方包），真 GitHub 只验到「120 秒超时、文件不动、内核不停」。Rust 单测 421 → 434（+13），IPC 82 → 84（+2），i18n 789 → 798（+9）。
+
 ### S6 · WebDAV 备份
 在现有备份包之上加 WebDAV 上传/下载（URL + 用户名 + 密码，密码进 Credential Manager 或本地加密，不明文进 store）。提供「立即上传」「从云端恢复」。
 判据：上传后云端文件可被另一台/清空后恢复；凭据不以明文出现在 `store.json`。
@@ -95,7 +97,7 @@ sing-box `tun` 入站（`auto_route`、`strict_route`、`stack: system`），需
 | S10 主题 | **已完成**（2026-11-25） | 与 `src/services/accent.ts` 同一次提交（`git log --oneline -- src/services/accent.ts` 最新一条） | `docs/ACCEPTANCE.md` §50；真机脚本 `D:\tmp\shots\50-accent-accept.sh` |
 | S11 进程选择器 | **已完成**（2026-11-25） | 与 `src-tauri/src/sysproc.rs` 同一次提交（`git log --oneline -- src-tauri/src/sysproc.rs` 最新一条） | `docs/ACCEPTANCE.md` §51；真机脚本 `D:\tmp\shots\51-proc-accept.sh` |
 | S9 回退/负载组 | **已完成**（2026-11-25） | 与 `src-tauri/src/engine/groupwatch.rs` 同一次提交（`git log --oneline -- src-tauri/src/engine/groupwatch.rs` 最新一条） | `docs/ACCEPTANCE.md` §52；真机脚本 `D:/tmp/shots/52-group-run.sh` |
-| S3 内核更新 | 未开始 | — | — |
+| S3 内核更新 | **已完成**（2026-11-25） | 与 `src-tauri/src/engine/release.rs` 同一次提交（`git log --oneline -- src-tauri/src/engine/release.rs` 最新一条） | `docs/ACCEPTANCE.md` §53；真机脚本 `D:/tmp/shots/53-kernel-accept.sh`、`mk_53_kernel.py`、`mirror.ps1` |
 | S6 WebDAV | 未开始 | — | — |
 | S5 轻量模式 | 未开始 | — | — |
 | S4 提权/服务 | 未开始 | — | — |

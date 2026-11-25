@@ -1498,3 +1498,57 @@ app stderr 同步佐证：托盘行从 `模式 rule · 内核运行中` 重新�
 5. **组改动仍需重启内核才生效**（既有架构：组是渲染期决定的），这次没有改这一点。
 
 **一句实话**：轮换只证到「内核的 selector 被一轮一轮切走、内核自己也认这个 `now`」，**没证**并发连接真的分摊到两台服务器上（Clash API 做不到，界面也这么写）；Xray 下这两类组不参与任何切换，是设计里的诚实降级。另外「杀掉首选成员」是用一个指向死端口的成员模拟的，而不是真的 kill 一个服务进程。
+
+## 53. 内核能不能自己更新：上游给校验值就核，没给就明说没核（2026-11-25，云电脑 cloudpc-test）
+
+**要证的事**（S3，`docs/PARITY-PLAN.md`）：
+
+1. 设置页能向上游问最新版本，并把「本机是多少」一起说清；
+2. 点「更新到最新」真的换掉 `engines/` 里的官方文件，旧文件留成 `.old`，换完自报的版本与上游一致；
+3. 内核正在跑、系统代理开着时，更新要先停内核、换文件、用同一个节点重新起、代理恢复；
+4. 上游给 sha256 就核对（不符则不落盘、明说差在哪）；上游没给就照样装，但回执里明写「未核对」；
+5. 自定义内核路径时按钮必须拒绝，而且**在联网之前**就拒绝；
+6. 不新增多余命令（IPC 82 → 84，只加 `kernel_check` / `kernel_install`）、只加 `zip` 与 `sha2` 两个 crate。
+
+**验法**：
+
+- 云电脑到 GitHub 实测只有 **5.5 KB/s**（2,800,406 B / 502.8 s），16.7 MB 的 Xray 包要 ~50 分钟；第一轮按真 GitHub 跑，`kernel_install` 在 120 秒预算里超时，报 `内核压缩包内容读取失败：error decoding response body`（文件没动、内核没停——这本身就是判据 4 的一部分）。
+- 为了让「下载 → 校验 → 解压 → 换文件 → 停启内核」这条真链路在可接受时间里跑完，把**测试二进制**里两条 feed URL 原地等长替换（59 / 62 字符，各只出现 1 次）成 `http://127.0.0.1:8080/`，别的字节不动；云电脑上起一个 `TcpListener` 手写 HTTP 服务（`D:/tmp/shots/mirror.ps1`，用 `schtasks /sc once /st 23:59 /it` 在会话 1 里起，收到 `/quit` 才退），它返回**真上游 JSON 形状**与**真官方压缩包**：`xray.zip` 16,697,596 B（sha256 `1262522266337b824f07beb8e1375786b437683b3890105469088f8e17e0a69d`，与官方 `.dgst` 的 `SHA2-256=` 逐位一致）、`sb.zip` 32,891,280 B（sha256 `99185d75d314a07dbba4a130c8ad986cbeb629a07927975636b341ca61f991df`，上游没有任何 digest 资产）。
+- `bash /d/tmp/shots/53-kernel-accept.sh [exe] [label]`：三个应用会话，每会话先钉 store 再把引擎换回上一版（xray 26.10.31 / sing-box 1.14.3），否则「检查更新」只会如实回「已是最新」。
+  - `xray`：内核在跑、系统代理开（验判据 1–3）；
+  - `singbox`：上游无校验值（验判据 4 的后半）；
+  - `custom`：`xray_binary` 指向 `C:\Users\Administrator\not-a-kernel.exe`（验判据 5）。
+- 判定看五处：设置页说明行、`engines/` 文件的尺寸 + sha256 + mtime、`.old` 在不在、内核 PID 换没换、注册表代理状态；最后在远端直接跑 `xray.exe version` 与 `sing-box.exe version` 核对文件本体。
+
+**判据（xray 用 `label=s3c`，singbox/custom 用 `label=s3g`；exe 10,690,048 B，md5 `4cf343fc21b1dfec8a6ebe8726c9a682`）**：
+
+| # | 检查 | 观察 |
+|---|------|------|
+| 1 | xray 查版本 | `check result: 最新版本 26.11.9 · 本机 26.10.31`，随后 `install buttons after check: 1` |
+| 2 | xray 换文件 | `install result: 已更新到 26.11.9 · sha256 126252226633 · 已核对`；`file after: 34,864,640 B sha256=1ca7a2cf61ba2c5d`；`old file after: 34,555,392 B sha256=d5b55819…`（旧文件进 `.old`） |
+| 3 | xray 停→换→同节点重启→代理恢复 | `kernels after: xray#6976`（更新前 #6676，PID 变了）；`reg after: ProxyEnable=1 ProxyServer=127.0.0.1:7890 AutoConfigURL=`；再查一次 → `已是最新`；远端 `xray.exe version` = `Xray 26.11.9` |
+| 4 | sing-box 无校验值也照装，但明说没核 | `check result: 最新版本 1.14.4 · 本机 1.14.3` → `install result: 已更新到 1.14.4 · sha256 99185d75d314 · 上游未提供校验值，未核对 ；上游没有提供 sha256 校验文件`；`file after: 82,074,624 B sha256=8f30682e…`；`old file after: 81,987,584 B`；远端 `sing-box version` 1.14.4 |
+| 5 | 自定义路径先拒绝、不下载 | `check result: 最新版本 26.11.9 · 文件不存在`；点「更新到最新」→ `自定义路径 | xray 用的是自定义内核路径（C:\Users\Administrator\not-a-kernel.exe），这个按钮只更新内核目录里的官方文件。恢复默认后再更新`；`xray.exe` 仍是 34,555,392 B（没有下载、没有替换） |
+| 6 | 不起代理的会话不碰代理 | singbox / custom 两轮 `reg` 全程 `ProxyEnable=0 ProxyServer= AutoConfigURL=` |
+| 7 | 收尾干净 | `cleanup.sh` → `ProxyEnable REG_DWORD 0x0`、`tasks-above-should-be-empty` |
+| 8 | 门槛 | IPC **84**（+2）、`cargo test --lib` **434 passed**（+13）、`npm run check` 全绿（architecture 65 文件、vitest **116**/12 文件）、i18n **798** 键、`check-design.py` 0 error 0 warning |
+
+**设计理由**：
+
+1. **先拒绝，再联网。** 自定义路径的拒绝发生在任何网络请求之前：那个按钮的语义是「替换内核目录里的官方文件」，用户把路径指到别处之后，按钮就没有可替换的对象，下载了也无处安放。所以它连字节都不该下载。
+2. **校验值有多少核多少，不包装。** 上游给 `.dgst` 就核 sha256，不符直接报错且**不落盘**（报错里带上游值与实得值）；上游没给就照装，但回执与说明行明写「未核对」。把「没校验」说成「已校验」是这一行最不该有的假话。
+3. **换文件是原子的，旧文件留着。** 新文件先以 `.{name}.incoming` 落在同目录 → 跑 `<incoming> version` 确认它能自报版本 → `promote` 先把旧文件改名 `.old` 再 rename 新文件（rename 失败自动回滚）。探测不过就 `discard`，原文件一个字节都没动。
+4. **停内核的顺序照抄 `stop_engine`**：先放代理再停内核，否则系统代理会短暂指向一个已经死掉的端口；重启用原来的节点，失败只写进说明、不回滚二进制——文件已经换成能自报版本的一份，回滚反而可能把用户降回更坏的那份。
+5. **两条命令，一个入口。** `kernel_check` 只读（拿不到本机版本就当「未知」而不是报错），`kernel_install` 承担全部副作用；界面因此能先给出「最新 X · 本机 Y」的对照，再让用户决定点不点。
+
+**坑**：
+
+1. **云电脑上 GitHub 只有 5.5 KB/s。** 16.7 MB 要 ~50 分钟，120 秒预算里必然超时，报错是 `内核压缩包内容读取失败：error decoding response body`。看到这个不要以为下载实现坏了——它是 reqwest 在预算耗尽时中断 body 的原文。
+2. **`cleanup.sh` 会删掉 home 目录下的 `*.ps1` / `*.bat` / `*.txt` / `*.png`**，所以每次验收都要重推驱动脚本与镜像启动器；镜像目录 `C:\Users\Administrator\mirror\` 里的文件不受影响。
+3. **cmd 不认双反斜杠路径。** `del C:\\Users\\...` 静默失败（`dir` 还看得见文件），于是一个上一轮留下的 `stop` 文件让镜像进程在启动瞬间退出，白跑两轮才抓到。给 `del` 用单反斜杠。
+4. **镜像的生命周期要能跨会话自证。** 最初用「出现 stop 文件就退」，结果残留文件把新实例立刻关掉；改成收到 `/quit` 请求才退，状态不再跨会话残留。
+5. **设置页比窗口长。** 内核行按钮的 UIA 坐标会是 3706 这种屏幕外值，必须先 `Scroll-Row` 把行滚进视口再点；`ScrollItemPattern` 不支持时用 PGDN 兜底。
+6. **「检查更新」在两个内核行各有一个。** 按名字点会命中上面那一行（Xray），必须靠行标签定位（`Click-Near-Row`：先对齐行标签，再取同名按钮里 Top 差在 −10..400 的最近一个）。
+7. **`.old` 只留最近一份**：再更新一次会把上一个 `.old` 覆盖掉，不保留历史。这次没有为它加编号轮转。
+
+**一句实话**：这次验收里**「从 GitHub 真下载」这一段被本机镜像替代了**——测试二进制只改了两条 feed URL（等长原地替换，其余字节未动），下载的是同一个官方压缩包、走的是同一套解析/校验/解压/换文件/停启内核代码。真 GitHub 路径只验到一面：5.5 KB/s 下 120 秒超时，文件不动、内核不停。未验的还有：GitHub API 的 rate limit / 403 分支、`.old` 的历史保留、以及应用自身更新（About 页）与内核更新的交叉影响。
