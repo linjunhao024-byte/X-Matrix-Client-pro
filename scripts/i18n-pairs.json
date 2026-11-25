@@ -1266,6 +1266,30 @@
     "規則可以指向策略組，組內再挑節點。"
   ],
   [
+    "groups.kind.fallback",
+    "回退",
+    "Fallback",
+    "回退"
+  ],
+  [
+    "groups.kind.fallback.hint",
+    "按成员顺序，第一个测得通的接管；它不通了就顺延下一个（sing-box 由界面每 20 秒测一次并切换；Xray 下是静态副本）",
+    "Members in order: the first one that answers takes the traffic, and the next one takes over when it stops answering (sing-box: this app probes every 20 s and switches; Xray: static copy)",
+    "按成員順序，第一個測得通的接管；它不通了就順延下一個（sing-box 由介面每 20 秒測一次並切換；Xray 下是靜態副本）"
+  ],
+  [
+    "groups.kind.loadBalance",
+    "负载均衡",
+    "Load balance",
+    "負載均衡"
+  ],
+  [
+    "groups.kind.loadBalance.hint",
+    "在健康的成员之间轮换，每 20 秒换一个。按时间轮换，不是按连接分摊（sing-box 由界面切换；Xray 下是静态副本）",
+    "Rotates through the healthy members, one every 20 s. Rotation by time, not per-connection balancing (sing-box: this app switches; Xray: static copy)",
+    "在健康的成員之間輪換，每 20 秒換一個。按時間輪換，不是按連線分攤（sing-box 由介面切換；Xray 下是靜態副本）"
+  ],
+  [
     "groups.kind.select",
     "手动选择",
     "Select",
@@ -1318,6 +1342,12 @@
     "Xray 没有选择器 outbound，所以策略组在 Xray 下会渲染成「选中成员的静态副本」：换成员等于换一条出站，需要重启内核。sing-box 下是内核原生 selector，切换即时生效。",
     "Xray has no selector outbound, so under Xray a group renders as a static copy of the chosen member: switching members means restarting the kernel. Under sing-box it is a native selector and switches live.",
     "Xray 沒有選擇器 outbound，所以策略組在 Xray 下會渲染成「選中成員的靜態副本」：換成員等於換一條出站，需要重啟內核。sing-box 下是內核原生 selector，切換即時生效。"
+  ],
+  [
+    "groups.xrayStatic",
+    "Xray 没有选择器出口：这个组在配置里是启动时定下的静态副本，不会回退也不会轮换。",
+    "Xray has no selector outbound: this group is a static copy fixed at start, so it neither falls back nor rotates.",
+    "Xray 沒有選擇器出口：這個組在配置裡是啟動時定下的靜態副本，不會回退也不會輪換。"
   ],
   [
     "home.binaryMissing",

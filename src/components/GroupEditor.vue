@@ -12,13 +12,20 @@ const emit = defineEmits<{ close: []; submit: [ProxyGroup_Deserialize] }>()
 const nodes = useNodesStore()
 
 /**
- * Only the two kinds the kernels actually implement. Clash has a third
- * (`fallback`) that neither Xray nor sing-box can express natively, so
- * offering it would be a switch that silently does nothing.
+ * Every kind the app can honestly offer. `select` and `url-test` are kernel
+ * features. `fallback` and `load-balance` are not: neither kernel has such an
+ * outbound, so they render as a plain selector and the app-side watcher moves
+ * it — which is why the groups page warns that they are inert under Xray.
  */
 const kinds: { value: GroupKind; labelKey: string; hintKey: string }[] = [
   { value: 'select', labelKey: 'groups.kind.select', hintKey: 'groups.kind.select.hint' },
   { value: 'url-test', labelKey: 'groups.kind.urlTest', hintKey: 'groups.kind.urlTest.hint' },
+  { value: 'fallback', labelKey: 'groups.kind.fallback', hintKey: 'groups.kind.fallback.hint' },
+  {
+    value: 'load-balance',
+    labelKey: 'groups.kind.loadBalance',
+    hintKey: 'groups.kind.loadBalance.hint',
+  },
 ]
 
 const draft = reactive({

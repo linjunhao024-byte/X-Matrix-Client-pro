@@ -59,6 +59,8 @@ PAC 只表达**能表达的**：绕过列表 + 规则里「直连」的域名类
 `GroupKind` 增加 `Fallback`（按成员顺序，健康检查失败就顺延）与 `LoadBalance`（轮询）。sing-box 用 `selector` + 应用侧健康检查切换；Xray 下如实标注为「静态副本，不具备回退语义」。
 判据：sing-box 下杀掉首选成员的内核出口能自动落到下一个；轮询组连续请求分散到不同成员；Xray 下界面明确说明差异。
 
+**结果（2026-11-25）**：sing-box 下两种组都渲染成原生 `selector`，切换由新模块 `src-tauri/src/engine/groupwatch.rs` 做（20 秒一轮、3 秒探针预算、只改 selector 不下发流量命令）；Xray 保持静态副本并在组页写明不回退不轮换。真机（云电脑，本地两个 shadowsocks 服务 + 一个死端口成员）：fallback 一次跨到 `node:ss-local-1` 后 72 秒不抖、load-balance 20 秒一轮切换四次、日志 5 条「原因：健康探测」。判据收窄处如实写进 §52：「轮换」指内核的 `now` 被逐轮切走，**不是**按连接分摊（Clash selector 模型做不到，界面也这么写）；「杀掉首选成员」是用死端口成员模拟的。Rust 单测 405 → 421，IPC 仍 82（无新命令），i18n 784 → 789。
+
 ### S3 · 内核下载 / 更新
 从 GitHub releases（可走应用内代理）下载官方内核压缩包，校验 sha256，解压到 engines 目录；运行中先停内核再替换，替换失败保留旧文件。
 判据：能下载并替换；`engine_version` 读到新版本；失败路径（断网、校验不符）有明确提示且旧文件仍在。
@@ -91,8 +93,8 @@ sing-box `tun` 入站（`auto_route`、`strict_route`、`stack: system`），需
 | S2 PAC | **已完成**（2026-11-25） | 与 `src-tauri/src/sysproxy/pac.rs` 同一次提交（`git log --oneline -- src-tauri/src/sysproxy/pac.rs` 最新一条） | `docs/ACCEPTANCE.md` §48；真机脚本 `D:\tmp\shots\48-pac-accept.sh` |
 | S8 分离端口 | **已完成**（2026-11-25） | 与 `src-tauri/src/engine/mod.rs` 同一次提交（`git log --oneline -- src-tauri/src/engine/mod.rs` 最新一条） | `docs/ACCEPTANCE.md` §49；真机脚本 `D:\tmp\shots\49-split-accept.sh`、`49-ui-accept.sh` |
 | S10 主题 | **已完成**（2026-11-25） | 与 `src/services/accent.ts` 同一次提交（`git log --oneline -- src/services/accent.ts` 最新一条） | `docs/ACCEPTANCE.md` §50；真机脚本 `D:\tmp\shots\50-accent-accept.sh` |
-| S11 进程选择器 | **已完成**（2026-11-25） | 与 `src-tauri/src/sysproc.rs` 同一次提交（`git log --oneline -- src-tauri/src/sysproc.rs` 最新一条） | `docs/ACCEPTANCE.md` §51；真机脚本 `D:	mp\shots)-proc-accept.sh` |
-| S9 回退/负载组 | 未开始 | — | — |
+| S11 进程选择器 | **已完成**（2026-11-25） | 与 `src-tauri/src/sysproc.rs` 同一次提交（`git log --oneline -- src-tauri/src/sysproc.rs` 最新一条） | `docs/ACCEPTANCE.md` §51；真机脚本 `D:\tmp\shots\51-proc-accept.sh` |
+| S9 回退/负载组 | **已完成**（2026-11-25） | 与 `src-tauri/src/engine/groupwatch.rs` 同一次提交（`git log --oneline -- src-tauri/src/engine/groupwatch.rs` 最新一条） | `docs/ACCEPTANCE.md` §52；真机脚本 `D:/tmp/shots/52-group-run.sh` |
 | S3 内核更新 | 未开始 | — | — |
 | S6 WebDAV | 未开始 | — | — |
 | S5 轻量模式 | 未开始 | — | — |

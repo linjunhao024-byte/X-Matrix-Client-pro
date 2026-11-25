@@ -45,6 +45,37 @@ pub fn delete_with_timeout(port: u16, path: &str, timeout: Duration) -> AppResul
     request_with_timeout("DELETE", port, path, timeout)
 }
 
+/// `PUT` with a JSON body, used by the Clash API to switch a selector.
+///
+/// Kept separate from [`request_with_timeout`] rather than teaching that one
+/// about bodies: dozens of `GET`/`DELETE` call sites depend on its exact
+/// request shape, and none of them should risk changing because one caller
+/// needed a payload.
+pub fn put_json_timeout(
+    port: u16,
+    path: &str,
+    body: &str,
+    timeout: Duration,
+) -> AppResult<String> {
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let mut stream = TcpStream::connect_timeout(&addr, timeout)
+        .map_err(|e| AppError::Engine(format!("连接内核 127.0.0.1:{port} 失败：{e}")))?;
+    stream.set_read_timeout(Some(timeout))?;
+    stream.set_write_timeout(Some(timeout))?;
+
+    // `Content-Length` is bytes, not chars: the body is ASCII here, but writing
+    // `body.len()` is what makes that assumption unnecessary.
+    let request = format!(
+        "PUT {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAccept: application/json\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    );
+    stream.write_all(request.as_bytes())?;
+
+    let mut raw = Vec::new();
+    stream.read_to_end(&mut raw)?;
+    parse_response(&raw)
+}
+
 /// One request/response round trip against a kernel on loopback.
 pub fn request_with_timeout(
     method: &str,
@@ -197,5 +228,67 @@ mod tests {
         };
         let err = get_with_timeout(port, "/x", Duration::from_millis(200)).unwrap_err();
         assert!(matches!(err, AppError::Engine(_)));
+    }
+
+    /// Read one whole request (headers plus the body promised by
+    /// `Content-Length`), answer it, and hand the raw request back.
+    fn serve_capture_full(response: &'static str) -> (u16, thread::JoinHandle<String>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = thread::spawn(move || {
+            let mut data = Vec::new();
+            if let Ok((mut socket, _)) = listener.accept() {
+                let mut buf = [0u8; 1024];
+                loop {
+                    let read = socket.read(&mut buf).unwrap_or(0);
+                    if read == 0 {
+                        break;
+                    }
+                    data.extend_from_slice(&buf[..read]);
+                    let text = String::from_utf8_lossy(&data);
+                    if let Some((head, body)) = text.split_once("\r\n\r\n") {
+                        let length = head
+                            .lines()
+                            .find_map(|line| {
+                                let lower = line.to_ascii_lowercase();
+                                lower
+                                    .strip_prefix("content-length:")
+                                    .map(|v| v.trim().parse::<usize>().unwrap_or(0))
+                            })
+                            .unwrap_or(0);
+                        if body.len() >= length {
+                            break;
+                        }
+                    }
+                }
+                let _ = socket.write_all(response.as_bytes());
+            }
+            String::from_utf8_lossy(&data).into_owned()
+        });
+        (port, handle)
+    }
+
+    #[test]
+    fn a_selector_switch_is_a_put_with_a_json_body() {
+        let (port, handle) = serve_capture_full("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n");
+        let body = r#"{"name":"node:n2"}"#;
+        put_json_timeout(port, "/proxies/group%3Ag1", body, Duration::from_secs(1)).unwrap();
+
+        let request = handle.join().unwrap();
+        assert!(
+            request.starts_with("PUT /proxies/group%3Ag1 HTTP/1.1\r\n"),
+            "unexpected request: {request:?}"
+        );
+        // The kernel reads the body by byte count, so the header has to match
+        // the bytes actually sent.
+        assert!(
+            request.contains(&format!("Content-Length: {}\r\n", body.len())),
+            "content-length does not match the body: {request:?}"
+        );
+        assert!(request.contains("Content-Type: application/json"));
+        assert!(
+            request.ends_with(&format!("\r\n\r\n{body}")),
+            "the body must be the last thing on the wire: {request:?}"
+        );
     }
 }

@@ -1449,3 +1449,52 @@ app stderr 同步佐证：托盘行从 `模式 rule · 内核运行中` 重新�
 5. **`szExeFile` 只有 basename**，没有全路径也没有用户名；同名不同程序会被合到一行（这是数据形状的取舍，不是 bug，见设计理由 1）。
 
 **一句实话**：证的是「真实进程表 → 收窄 → 写进值域 → 空态文案 → 两层弹窗各自收口」。没证的四件事：① 进程名全是 ASCII，中文/非 ASCII 进程名没验；② 没有走「挑完保存 → 重开规则看值是否留存」（脚本以取消收尾，规则没落库），「选完不自动提交」也只是从「编辑器还开着 + 取消收尾」推出来的，没单独断言；③ `group()` 只把同名合并，没列路径/用户，同名不同程序在界面上分不开；④ Xray 运行期是否真按 `process` 匹配没验（内核版本相关），界面已经如实写了这一条。
+
+## 52. 回退组与负载均衡组：内核没有这两种出口，就由本进程看着表去喂选择器（2026-11-25，云电脑 cloudpc-test）
+
+**要证的事**（S9，`docs/PARITY-PLAN.md`）：
+
+1. sing-box 下 `fallback` 组：第一个成员不可用时，内核自己报告的当前出站会落到下一个健康的成员，并且落定后不再抖；
+2. sing-box 下 `load-balance` 组：健康成员之间按时间轮换「现在走谁」，轮换在内核里真的发生了（读内核自己的 `now`，不是读我们的日志）；
+3. Xray 下这两种组如实降级成静态副本，界面把差异说出来（不回退、不轮换）；
+4. 两个新类型能从 Clash yaml 导入（不被悄悄降级成 url-test）；
+5. 不新增 IPC 命令、不新增 crate，`select`/`url-test` 的渲染一字不变。
+
+**验法**：
+
+- 起两个本地 shadowsocks 服务（`ss-server.json`，`127.0.0.1:8388` 与 `:8389`，aes-128-gcm / `xm-test`），用 `schtasks /sc once /st 23:59 /it` 在会话 1 里起——**不能用 `start /b`**，它会随 ssh 控制台一起死（见坑 2）。
+- `bash /d/tmp/shots/52-group-run.sh [exe] [label]`（新增）：把 store 钉成三个节点（两个指向真服务，`SS-Dead` 指向 9999 死端口）× 两个组（`g-fb` = `fallback`，成员 `[ss-dead-1, ss-local-1, ss-local-2]`；`g-lb` = `load-balance`，成员 `[ss-local-1, ss-local-2]`），`auto_connect=true` 让应用自己起内核，`system_proxy/pac_enabled=false`（这一节只验选择器，不碰代理）。
+- 两个会话：sing-box 会话跑 72 秒，每 3 秒用 `GET /proxies/group%3A<id>` 读 `now`（= 内核自己认为当前走的是哪个成员），同时打一行健康度；xray 会话只导航到策略组页，断言那两句说明出现。
+- 判定靠内核的 `now` 序列与健康探测数字，不靠「看起来切了」。
+
+**判据（`label=s9c`，exe 10,522,624 B，md5 `b2397c8b92234a54aa180485ec321bc2`）**：
+
+| # | 检查 | 观察 |
+|---|------|------|
+| 1 | 健康度（`/proxies/<node>/delay`） | `probe ss-dead-1: ERR 远程服务器返回错误: (503) 服务器不可用。`、`probe ss-local-1: delay=99`、`probe ss-local-2: delay=111` |
+| 2 | 组渲染的起点是第一个成员 | `t+3s fb=node:ss-dead-1` 之前的第一拍即可见（渲染 `default: node:ss-dead-1`），随即被兜住 |
+| 3 | fallback 回退 | `t+3s fb=node:ss-local-1` → `t+72s` 仍是 `node:ss-local-1`（一次回退，之后不抖） |
+| 4 | load-balance 轮换 | `t+3s..t+18s = node:ss-local-1` → `t+21s..t+39s = node:ss-local-2` → `t+42s..t+57s = node:ss-local-1` → `t+60s..t+72s = node:ss-local-2`（20 秒一轮、四次真切换） |
+| 5 | 应用侧日志 | 5 条：`策略组 g-fb 切到 node:ss-local-1`、`策略组 g-lb 切到 node:ss-local-2`、`切到 node:ss-local-1`、`切到 node:ss-local-2`、`切到 node:ss-local-1`，原因都是「健康探测」 |
+| 6 | 界面（sing-box） | 策略组页两行都在：`row fallback group present: 1`、`row rotate group present: 1`；类型下拉读回 `手动选择` 是未编辑态 |
+| 7 | 界面（Xray） | `xray static note shown: True`：表格上方「Xray 没有选择器 outbound…」+ 组旁「Xray 没有选择器出口：…不会回退也不会轮换」两句都在 |
+| 8 | 不碰代理 | 两轮 `reg` 全程 `ProxyEnable=0 ProxyServer= AutoConfigURL=`；`cleanup.sh` → `ProxyEnable REG_DWORD 0x0`、`tasks-above-should-be-empty` |
+| 9 | 门槛 | IPC **82**（+0）、`cargo test --lib` **421 passed**（+16）、`npm run check` 全绿（architecture 65 文件、vitest **116**/12 文件）、i18n **789** 键、`check-design.py` 两视图 0 error 0 warning |
+
+**设计理由**：
+
+1. **不做假开关。** Xray 与 sing-box 都没有 `fallback`/`load-balance` 这种出口，界面上也就不会出现一个「能回退」的假承诺：sing-box 下渲染成原生 `selector` + 由本进程切换；Xray 下仍是选中成员的静态副本，页面明说不回退也不轮换。
+2. **决策在应用侧，执行在内核里。** 应用只做两件事：探健康、改 selector（`PUT /proxies/group%3A<id>`，body `{"name":"node:<member>"}`）。切完之后「当前走谁」是内核的回答（读 `now`），所以判据用的是内核的答复而不是我们自己的日志。
+3. **轮换按时间，不按连接。** Clash 的 selector 模型只能换「现在走谁」，做不到按连接分摊；20 秒一轮是真能兑现的语义，写在界面提示里（`groups.kind.loadBalance.hint`：「按时间轮换，不是按连接分摊」）。宁可说小，不说满。
+4. **探针与手动测速用同一把尺。** watcher 的探针就是「真实延迟」那条路径（同一个 `test_url`、同样 3 秒预算、同样走 Clash API 的 `/delay`），所以界面上的健康与切换依据不会互相打架。
+5. **无人健康就不动。** `choose()` 在没有任何健康成员时返回 `None`，selector 保持在原地——随便挑一个上去等于赌，而且会让「回退」变成「跳来跳去」。
+
+**坑**：
+
+1. **store 里节点的枚举名是 PascalCase。** `Protocol`/`Transport`/`Security` 只有 `#[serde(tag = "kind")]`、没有 `rename_all`，所以真名是 `Shadowsocks`/`Tcp`/`None`，写成小写会让**整份文档被判 corrupt**（远端出现 `store.corrupt`、应用以默认值启动、节点和组一个都不剩）。第一轮 `label=s9` 就是这样白跑的。注意 `last_engine`/`mode` 反而都是小写（`xray`/`rule`），两种风格并存。
+2. **`start /b` 起的本地服务活不过 ssh 会话。** 用 `schtasks /sc once /st 23:59 /it` 在会话 1 里起，收尾 `schtasks /delete`。第二轮 `s9b` 的现象是「健康探测全失败 → watcher 一动不动」，那是**设计行为**（无人健康就不切），不是 watcher bug。
+3. **驱动里的 `sed -n '1,45p'` 会把证据截掉。** watcher 的 5 条日志在这份 53 行的文件末尾，整份读才看得见；日志里的中文在 bash 里显示成 GBK 乱码是显示层的事，文件本身是 UTF-8。
+4. **`sing-box#4560` 不是应用的第二个内核**，那是我们起的测试服务器进程；`kernels at start` 列出的是这台机器上所有同名进程。
+5. **组改动仍需重启内核才生效**（既有架构：组是渲染期决定的），这次没有改这一点。
+
+**一句实话**：轮换只证到「内核的 selector 被一轮一轮切走、内核自己也认这个 `now`」，**没证**并发连接真的分摊到两台服务器上（Clash API 做不到，界面也这么写）；Xray 下这两类组不参与任何切换，是设计里的诚实降级。另外「杀掉首选成员」是用一个指向死端口的成员模拟的，而不是真的 kill 一个服务进程。

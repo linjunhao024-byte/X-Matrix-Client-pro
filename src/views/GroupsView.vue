@@ -12,6 +12,7 @@ import { useNodesStore } from '../stores/nodes'
 import {
   api,
   describeError,
+  type GroupKind,
   type ProxyGroup_Deserialize,
   type ProxyGroup_Serialize,
 } from '../services/contract'
@@ -65,6 +66,34 @@ onMounted(async () => {
 const isEmpty = computed(() => store.loaded && store.items.length === 0)
 const enabledCount = computed(() => store.items.filter((group) => group.enabled).length)
 const xraySelected = computed(() => engine.kind === 'xray')
+
+/**
+ * Badge text per kind. A map, not a ternary: every new kind used to mean
+ * editing the template, and a `Record<GroupKind, …>` makes the next one fail
+ * to typecheck until it is named here.
+ */
+const KIND_LABEL: Record<GroupKind, string> = {
+  select: 'groups.kind.select',
+  'url-test': 'groups.kind.urlTest',
+  fallback: 'groups.kind.fallback',
+  'load-balance': 'groups.kind.loadBalance',
+}
+
+/**
+ * The two kinds the app switches itself, by rewriting a selector through the
+ * control API. They only work under sing-box — Xray renders them as one static
+ * outbound, so the page says so instead of letting the badge imply a switch
+ * that will never happen.
+ */
+const appSwitched = (kind: GroupKind): boolean =>
+  kind === 'fallback' || kind === 'load-balance'
+
+const hasAppSwitchedGroup = computed(() => store.items.some((group) => appSwitched(group.kind)))
+
+/** Static chips are all "the kernel picks"; these two deserve their own line. */
+function chipTitle(group: ProxyGroup_Serialize): string {
+  return appSwitched(group.kind) ? t(`${KIND_LABEL[group.kind]}.hint`) : t('groups.autoHint')
+}
 
 function nodeName(id: string): string {
   return nodes.items.find((node) => node.id === id)?.name ?? id
@@ -229,6 +258,11 @@ async function confirmDelete() {
     </EmptyState>
 
     <div v-else-if="store.items.length > 0" class="surface-plain">
+      <!-- Xray has no selector to rewrite, so fallback and load-balance stay
+           whichever single member they were rendered with. -->
+      <p v-if="xraySelected && hasAppSwitchedGroup" class="muted small">
+        {{ t('groups.xrayStatic') }}
+      </p>
       <div class="table-wrap">
         <table class="data-table">
         <thead>
@@ -246,9 +280,7 @@ async function confirmDelete() {
           <tr v-for="group in store.items" :key="group.id" :class="{ dimmed: !group.enabled }">
             <td>{{ group.name }}</td>
             <td>
-              <span class="badge">{{
-                t(group.kind === 'select' ? 'groups.kind.select' : 'groups.kind.urlTest')
-              }}</span>
+              <span class="badge">{{ t(KIND_LABEL[group.kind]) }}</span>
             </td>
             <td>
               <div class="chips">
@@ -260,7 +292,7 @@ async function confirmDelete() {
                     v-for="member in group.members"
                     :key="member"
                     class="chip chip-static"
-                    :title="t('groups.autoHint')"
+                    :title="chipTitle(group)"
                   >
                     {{ nodeName(member) }}
                   </span>
@@ -300,7 +332,10 @@ async function confirmDelete() {
                 {{ t('nodes.latency.ms', { value: delayOf('group', group.id)?.value ?? 0 }) }}
               </span>
               <span v-else class="latency latency-unknown">{{ t('nodes.latency.none') }}</span>
-              <div v-if="group.kind === 'url-test'" class="muted small member-delays">
+              <div
+                v-if="appSwitched(group.kind) || group.kind === 'url-test'"
+                class="muted small member-delays"
+              >
                 <span
                   v-for="member in group.members"
                   :key="member"

@@ -658,7 +658,24 @@ export type GroupKind =
 /**  Always the member the user picked. */
 "select" | 
 /**  Probe the members and use the fastest one. */
-"url-test";
+"url-test" | 
+/**
+ *  Use the first member that answers, in the order the user arranged.
+ * 
+ *  Neither kernel has a `fallback` outbound, so this is *app-driven*: the
+ *  renderer emits a plain `selector` (sing-box) or a static copy (Xray) and
+ *  [`crate::engine::groupwatch`] flips the selector when the head member
+ *  stops answering.
+ */
+"fallback" | 
+/**
+ *  Rotate through the healthy members, one per probe round.
+ * 
+ *  Rotation is by time, not per connection — neither kernel can spread
+ *  individual connections across outbounds. Like [`GroupKind::Fallback`],
+ *  the renderer emits a selector and the watcher does the rotating.
+ */
+"load-balance";
 
 /**  What an import actually changed. */
 export type ImportOutcome = ImportOutcome_Serialize | ImportOutcome_Deserialize;

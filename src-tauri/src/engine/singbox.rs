@@ -185,6 +185,10 @@ fn singbox_inbounds(input: &RenderInput<'_>, endpoints: Endpoints) -> Vec<Value>
 /// group becomes a real `selector` or `urltest` outbound and every member node
 /// gets its own `node:<id>` outbound for the group to point at. A node shared
 /// by two groups is emitted once.
+///
+/// `fallback` / `load-balance` are rendered as selectors, not as their Clash
+/// counterparts: sing-box has neither, and the switching is done by this app
+/// (see [`crate::engine::groupwatch`]).
 fn singbox_outbounds(input: &RenderInput<'_>) -> AppResult<Vec<Value>> {
     let mux = input.mux_streams();
     let mut outbounds = vec![singbox_outbound(input.node, "proxy", mux)?];
@@ -225,6 +229,19 @@ fn singbox_outbounds(input: &RenderInput<'_>) -> AppResult<Vec<Value>> {
                 entry.insert("url".into(), json!(input.probe_url.as_str()));
                 entry.insert("interval".into(), json!("3m"));
                 entry.insert("tolerance".into(), json!(50));
+            }
+            GroupKind::Fallback | GroupKind::LoadBalance => {
+                // sing-box has no fallback or load-balance outbound. The
+                // decision belongs to this app (see `engine::groupwatch`): it
+                // probes every member and rewrites the selector through the
+                // Clash API, so the kernel side must be a plain `selector` that
+                // accepts an external switch. `default` is the first member
+                // because `chosen()` already means "first member unless the
+                // user pinned one"; the watcher takes over from there.
+                entry.insert("type".into(), json!("selector"));
+                if let Some(chosen) = group.chosen() {
+                    entry.insert("default".into(), json!(format!("node:{chosen}")));
+                }
             }
         }
         outbounds.push(Value::Object(entry));
@@ -632,6 +649,39 @@ mod tests {
         assert_eq!(outbounds[3]["type"], json!("selector"));
         assert_eq!(outbounds[3]["outbounds"], json!(["node:n1", "node:n2"]));
         assert_eq!(outbounds[3]["default"], json!("node:n1"));
+    }
+
+    #[test]
+    fn a_fallback_group_is_a_selector_the_watcher_can_switch() {
+        let (first, second) = two_nodes();
+        let nodes = vec![first.clone(), second.clone()];
+        let groups = vec![group("g1", GroupKind::Fallback, &["n1", "n2"])];
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
+        let input = RenderInput::new(&first, endpoints)
+            .with_options(RunOptions::new().with_catalog(&nodes, &groups));
+
+        let cfg = SingBoxEngine.render_config(&input).unwrap();
+        let group_out = &cfg["outbounds"][3];
+        // sing-box has no fallback outbound: the app switches this selector.
+        assert_eq!(group_out["type"], json!("selector"));
+        assert_eq!(group_out["outbounds"], json!(["node:n1", "node:n2"]));
+        assert_eq!(group_out["default"], json!("node:n1"));
+    }
+
+    #[test]
+    fn a_load_balance_group_is_also_a_selector() {
+        let (first, second) = two_nodes();
+        let nodes = vec![first.clone(), second.clone()];
+        let groups = vec![group("g1", GroupKind::LoadBalance, &["n1", "n2"])];
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
+        let input = RenderInput::new(&first, endpoints)
+            .with_options(RunOptions::new().with_catalog(&nodes, &groups));
+
+        let cfg = SingBoxEngine.render_config(&input).unwrap();
+        let group_out = &cfg["outbounds"][3];
+        // Rotation is app-side too; the kernel only sees a selector.
+        assert_eq!(group_out["type"], json!("selector"));
+        assert_eq!(group_out["default"], json!("node:n1"));
     }
 
     #[test]

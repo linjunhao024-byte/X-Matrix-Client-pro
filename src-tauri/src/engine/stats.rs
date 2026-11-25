@@ -249,7 +249,11 @@ pub fn clash_delay(port: u16, tag: &str, url: &str, timeout_ms: u64) -> AppResul
 
 /// Percent-encode a query-string value. Tags (`group:abc`) and probe URLs both
 /// travel inside a path, so `:` and `/` must not be left raw.
-fn encode(value: &str) -> String {
+///
+/// Crate-visible because the group watcher has to build the same
+/// `/proxies/<encode(tag)>` path when it reads and rewrites a selector; two
+/// encoders would drift.
+pub(crate) fn encode(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
     for byte in value.as_bytes() {
         match byte {
@@ -260,6 +264,21 @@ fn encode(value: &str) -> String {
         }
     }
     out
+}
+
+/// sing-box: which outbound a selector is currently on, or `None` when the
+/// kernel reports no choice (e.g. the group has no members left).
+///
+/// The Clash API answers `{"type":"Selector","now":"node:n1","all":[...]}`.
+/// `"now"` is only trustworthy as a string: some kernels send `null`, and a
+/// seatbelt against a numeric or object value is the difference between a
+/// clean switch and a panic in a background thread.
+pub fn clash_now(port: u16, tag: &str) -> AppResult<Option<String>> {
+    if tag.trim().is_empty() {
+        return Err(AppError::InvalidInput("出站 tag 为空".into()));
+    }
+    let doc = http::get_json(port, &format!("/proxies/{}", encode(tag)))?;
+    Ok(doc.get("now").and_then(Value::as_str).map(str::to_string))
 }
 
 /// sing-box: ask the Clash API to drop one connection.
@@ -454,6 +473,30 @@ mod tests {
             clash_delay(port, "node:a", "http://www.gstatic.com/generate_204", 1000).unwrap(),
             u32::MAX
         );
+    }
+
+    #[test]
+    fn a_selector_reports_the_outbound_it_is_on() {
+        let (port, handle) = serve_capture(r#"{"type":"Selector","now":"node:n1","all":["node:n1","node:n2"]}"#);
+        let now = clash_now(port, "group:g1").unwrap();
+        assert_eq!(now.as_deref(), Some("node:n1"));
+        // The tag travels in the path, so it has to be encoded exactly like the
+        // delay probe does.
+        let request = handle.join().unwrap();
+        assert!(
+            request.starts_with("GET /proxies/group%3Ag1 "),
+            "unexpected request line: {request}"
+        );
+    }
+
+    #[test]
+    fn a_selector_without_a_string_now_is_none() {
+        // The Clash API sends `null` before the first pick; a number or object
+        // would be a kernel bug, and neither may panic the watcher.
+        let port = serve_once(r#"{"type":"Selector","now":null}"#);
+        assert_eq!(clash_now(port, "group:g1").unwrap(), None);
+        let port = serve_once(r#"{"type":"Selector","now":7}"#);
+        assert_eq!(clash_now(port, "group:g1").unwrap(), None);
     }
 
     #[test]

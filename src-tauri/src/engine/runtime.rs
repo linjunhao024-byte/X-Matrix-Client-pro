@@ -20,7 +20,8 @@ use std::io::Write;
 use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use parking_lot::{Mutex, RwLock};
@@ -28,7 +29,8 @@ use serde::Serialize;
 use specta::Type;
 
 use super::job::KillOnCloseJob;
-use super::{Endpoints, EngineKind, LoadedRuleSet, RenderInput, RunOptions, StatsChannel};
+use super::{groupwatch, Endpoints, EngineKind, LoadedRuleSet, RenderInput, RunOptions, StatsChannel};
+use crate::domain::group::GroupKind;
 use crate::domain::node::Node;
 use crate::domain::routing::RoutingRule;
 use crate::domain::settings::ProxyMode;
@@ -379,6 +381,11 @@ pub struct EngineRuntime {
     /// Created on the first start; see [`crate::engine::job`] for why the kernel
     /// is adopted into it.
     job: OnceLock<Option<KillOnCloseJob>>,
+    /// The stop flag of the group watcher for the current kernel, when one is
+    /// running. Setting it is the only way that thread is told to go away, so
+    /// [`EngineRuntime::stop`] takes it (leaving `None`) before killing the
+    /// kernel it was probing.
+    watcher: Mutex<Option<Arc<AtomicBool>>>,
 }
 
 impl EngineRuntime {
@@ -410,6 +417,7 @@ impl EngineRuntime {
             last_exit_code: Mutex::new(None),
             unexpected_exit: Mutex::new(None),
             job: OnceLock::new(),
+            watcher: Mutex::new(None),
         }
     }
 
@@ -473,6 +481,28 @@ impl EngineRuntime {
         let fragment_length = options.fragment_length.clone();
         let fragment_interval = options.fragment_interval.clone();
         let test_url = options.probe_url.clone();
+        // Neither kernel has a fallback or load-balance outbound: those two
+        // kinds are rendered as a plain selector and moved from here, through
+        // the control API. Collect what the watcher needs before `with_options`
+        // consumes the groups. Xray gets nothing on purpose — it has no
+        // selector to rewrite, so a watcher there would only log.
+        let watch_groups: Vec<groupwatch::GroupSpec> = if kind == EngineKind::SingBox {
+            options
+                .groups
+                .iter()
+                .filter(|group| {
+                    group.enabled
+                        && matches!(group.kind, GroupKind::Fallback | GroupKind::LoadBalance)
+                })
+                .map(|group| groupwatch::GroupSpec {
+                    id: group.id.clone(),
+                    kind: group.kind,
+                    members: group.members.clone(),
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
         let mut input = RenderInput::new(node, endpoints).with_options(options);
         if kind == EngineKind::SingBox {
             input = input.with_rule_set_dir(&rule_set_dir);
@@ -533,6 +563,17 @@ impl EngineRuntime {
         // process would contradict the "running" badge.
         *self.unexpected_exit.lock() = None;
 
+        // Only after readiness: before this line there is no control API to
+        // ask, and a probing thread would spend its budget on refused
+        // connections. The thread is detached on purpose — `stop` trips the
+        // flag and the kernel outlives the last probe by well under a second.
+        if !watch_groups.is_empty() {
+            let stop = Arc::new(AtomicBool::new(false));
+            *self.watcher.lock() = Some(Arc::clone(&stop));
+            let runner = groupwatch::Runner::new(endpoints.api_port, test_url.clone(), watch_groups);
+            std::thread::spawn(move || groupwatch::run(runner, stop));
+        }
+
         Ok(EngineStatus {
             running: true,
             mode,
@@ -559,8 +600,24 @@ impl EngineRuntime {
         })
     }
 
+    /// Signal the group watcher (if any) to exit, and forget its flag so a
+    /// second call cannot re-signal a thread that is already gone.
+    ///
+    /// Always called while `running` is held, which is the single lock order
+    /// this type uses (`running` then `watcher`): taking them the other way
+    /// round in one method would let `status` and `stop` deadlock.
+    fn stop_watcher(&self) {
+        if let Some(stop) = self.watcher.lock().take() {
+            stop.store(true, Ordering::SeqCst);
+        }
+    }
+
     pub fn stop(&self) -> AppResult<()> {
         let mut guard = self.running.lock();
+        // Wake the group watcher before killing the process it probes: it is
+        // about to lose its control port, and a probe against a closed one only
+        // produces noise.
+        self.stop_watcher();
         let Some(running) = guard.as_mut() else {
             return Ok(());
         };
@@ -618,6 +675,9 @@ impl EngineRuntime {
                 Ok(Some(code)) => {
                     let unexpected = !running.expected;
                     *guard = None;
+                    // The kernel is gone; there is no control port left for
+                    // the watcher to probe.
+                    self.stop_watcher();
                     *self.last_exit_code.lock() = Some(code);
                     if unexpected {
                         *self.unexpected_exit.lock() = Some(code);
@@ -889,6 +949,7 @@ impl Drop for EngineRuntime {
     fn drop(&mut self) {
         // Never leave an orphaned kernel behind when the app closes.
         if let Some(mut running) = self.running.lock().take() {
+            self.stop_watcher();
             let _ = running.handle.kill();
         }
     }

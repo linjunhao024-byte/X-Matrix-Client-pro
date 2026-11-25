@@ -12,6 +12,7 @@
 //! milestones and are layered on top of this module, not inside it.
 
 pub mod geo;
+pub mod groupwatch;
 mod job;
 mod render;
 // Crate-visible so command tests can reuse the runtime fakes instead of

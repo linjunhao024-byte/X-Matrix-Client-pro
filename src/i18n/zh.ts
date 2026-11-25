@@ -234,6 +234,10 @@ export const zh: Record<string, string> = {
   "groups.empty.body": "策略组把多个节点打包成一个出口，规则指向它就行。没有组时，规则只能指向当前节点。",
   "groups.empty.title": "还没有策略组",
   "groups.hint": "规则可以指向策略组，组内再挑节点。",
+  "groups.kind.fallback": "回退",
+  "groups.kind.fallback.hint": "按成员顺序，第一个测得通的接管；它不通了就顺延下一个（sing-box 由界面每 20 秒测一次并切换；Xray 下是静态副本）",
+  "groups.kind.loadBalance": "负载均衡",
+  "groups.kind.loadBalance.hint": "在健康的成员之间轮换，每 20 秒换一个。按时间轮换，不是按连接分摊（sing-box 由界面切换；Xray 下是静态副本）",
   "groups.kind.select": "手动选择",
   "groups.kind.select.hint": "永远用你选中的那个节点",
   "groups.kind.urlTest": "自动测速",
@@ -243,6 +247,7 @@ export const zh: Record<string, string> = {
   "groups.pick": "选它",
   "groups.title": "策略组",
   "groups.xrayHint": "Xray 没有选择器 outbound，所以策略组在 Xray 下会渲染成「选中成员的静态副本」：换成员等于换一条出站，需要重启内核。sing-box 下是内核原生 selector，切换即时生效。",
+  "groups.xrayStatic": "Xray 没有选择器出口：这个组在配置里是启动时定下的静态副本，不会回退也不会轮换。",
   "groups.delay.noKernel": "先启动内核才能测真实延迟",
   "groups.delay.noKernelHint": "内核没在运行，测不到真实延迟；先启动内核",
   // home

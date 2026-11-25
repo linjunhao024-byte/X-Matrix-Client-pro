@@ -17,16 +17,16 @@
 
 | 项 | 值 |
 |---|---|
-| 代码 HEAD | 「feat(routing): pick a running process instead of typing its name」，含 §51（S11 进程选择器）——就是 `git log --oneline -- src-tauri/src/sysproc.rs` 的第一条；再往前：§50（S10 强调色，查 `src/services/accent.ts`）、§49（S8）、`a794438`（§48）、`6fd790f`（§47） |
-| 未提交 | 无。§51（S11 进程选择器）的代码、构建、真机验收、`docs/ACCEPTANCE.md` §51 与 `docs/PARITY-PLAN.md` 都在同一次提交里（见 §0.7） |
+| 代码 HEAD | 「feat(groups): fall back and rotate by watching the kernel, not by pretending」，含 §52（S9 回退/负载组）——就是 `git log --oneline -- src-tauri/src/engine/groupwatch.rs` 的第一条；再往前：§51（S11，查 `src-tauri/src/sysproc.rs`）、§50（S10，查 `src/services/accent.ts`）、§49（S8）、`a794438`（§48）、`6fd790f`（§47） |
+| 未提交 | 无。§52（S9 回退/负载组）的代码、构建、真机验收、`docs/ACCEPTANCE.md` §52 与 `docs/PARITY-PLAN.md` 都在同一次提交里（见 §0.8） |
 | 上一版未提交清单（留档） | `src-tauri/src/domain/settings.rs`、`src-tauri/src/engine/{mod,render,runtime,xray}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§39 分片）；再上一版：`src-tauri/src/engine/{mod,runtime}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§37 统一提示）；再上一版：`src-tauri/src/commands/settings.rs`、`src-tauri/src/commands/sysproxy.rs`、`src/stores/sysproxy.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`、`docs/ACCEPTANCE.md`（§36 系统代理即时生效） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库；之后每次收尾都跟着更新 |
 | IPC 命令 | **82**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
-| Rust 单测 | **405 passed**（`ARCHITECTURE.md:278` 已同步） |
+| Rust 单测 | **421 passed**（`ARCHITECTURE.md:278` 已同步） |
 | 前端检查 | `npm run check` 全绿：vue-tsc / architecture（65 文件）/ contract / vitest **116**（12 文件） |
-| i18n | **784** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
-| 桌面产物 | 桌面上的旧副本**已不存在**；唯一产物是 `src-tauri/target/release/x-matrix.exe`（10,511,360 B @2026-11-25 07:25，md5 `fc01826477a1ef4fe075eaca5ee01afa`，含 §21–§51 全部改动） |
-| 验收文档 | `docs/ACCEPTANCE.md` §0–§51（§7 历史空缺，编号不连续但内容完整） |
+| i18n | **789** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
+| 桌面产物 | 桌面上的旧副本**已不存在**；唯一产物是 `src-tauri/target/release/x-matrix.exe`（10,522,624 B @2026-11-25 08:10，md5 `b2397c8b92234a54aa180485ec321bc2`，含 §21–§52 全部改动） |
+| 验收文档 | `docs/ACCEPTANCE.md` §0–§52（§7 历史空缺，编号不连续但内容完整） |
 | 云电脑 | 干净：`ProxyEnable=0x0`、无 X-Matrix/sing-box/xray 进程、无 `xm*` 计划任务 |
 
 **下一步的确定顺序**（做完一条打一个勾，别跳）：
@@ -37,13 +37,14 @@
 - [x] 4. `docs/ACCEPTANCE.md` 写到 §26
 - [x] 5. 提交（`fix(tray)` / `feat(update)` / `feat(geo,nodes)` / `feat(engine)` 各一条）
 - [x] 6. `FEED_URL` 已指向真实仓库 `linjunhao024-byte/X-Matrix-Client-pro`，`v0.1.0` 已发布并带 `X-Matrix.exe` 资产
-- [x] 7. 计数已同步：82 命令 / 405 单测 / 116 vitest / 784 i18n 键 × 3
+- [x] 7. 计数已同步：82 命令 / 421 单测 / 116 vitest / 789 i18n 键 × 3
 - [x] 8. `bash /d/tmp/shots/cleanup.sh` 收尾云电脑（2026-11-24 23:55 再跑一次：`ProxyEnable 0x0`、无 `xm*` 任务）
 - [x] 9. §47 订阅刷新后前端握着死 ID：补丁 → 构建 → 云电脑两轮对比验收 → 写 §47 → 提交（2026-11-25 02:36）
 - [x] 10. §48（S2）PAC 自动配置：生成脚本 + 注册表互斥 + 回环/私网兜底 → 构建 → 云电脑验收 → 写 §48 → 提交（2026-11-25 04:20）；后续 S10/S11/S9/S3/S6/S5/S4/S1/S7 见 `docs/PARITY-PLAN.md`
 - [x] 11. §49（S8）HTTP 与 SOCKS 分离端口：`Endpoints` 一处决议 + 两个渲染器 + 界面生效值 → 构建 → 云电脑三阶段验收 → 写 §49 → 提交（2026-11-25 06:5x）
 - [x] 12. §50（S10）六个强调色 + 自定义 hex：`tokens.css` 每预设两块 + `accent.ts` 现算对比度 → 构建 → 云电脑像素计数验收 → 写 §50 → 提交（2026-11-25 07:0x）
 - [x] 13. §51（S11）进程选择器：`sysproc.rs` 归并 + 一条 `list_processes` + 规则编辑器第二个弹窗 → 构建 → 云电脑 57 行真实进程/收窄/回读/空态验收 → 写 §51 → 提交（2026-11-25 07:3x）
+- [x] 14. §52（S9）回退组与负载均衡组：`groupwatch.rs` 每 20 秒探健康、只改 selector → 构建 → 云电脑两个会话（sing-box 三轮、xray 一轮）验收 → 写 §52 → 提交（2026-11-25 08:3x）
 
 ### 0.2 这个窗口（2026-11-24）新完成的六件事
 
@@ -101,6 +102,16 @@
 
 ---
 
+### 0.8 §52（S9）回退组与负载均衡组（已完成，2026-11-25）
+
+- **为什么做**：`docs/PARITY-PLAN.md` 的第 5 项。两个内核都没有 `fallback`/`load-balance` 这种出口，但 Clash Verge 用户天天用它们；不做就只能回退到手动切组。
+- **做了什么**：`GroupKind` 加 `Fallback`/`LoadBalance`（Kebab-case serde，Clash yaml 的 `fallback`/`load-balance` 不再降级成 `url-test`）；新 `src-tauri/src/engine/groupwatch.rs`（`choose()` 纯函数 + `Runner::tick_once` + 500ms 分片睡眠的 `run()`）：每 20 秒对每个启用的这两类组探一次健康（走 Clash API 的 `/proxies/node:<member>/delay`，3 秒预算、同一个 `test_url` 与手动测速一把尺），Fallback 取第一个健康成员、LoadBalance 取健康集合里 `tick % len` 那个，只有和内核当前 `now` 不同才 `PUT /proxies/group%3A<id>`（body `{"name":"node:<member>"}`）改 selector；无人健康就原地不动。`net/http.rs` 加 `put_json_timeout`（带 JSON body），`stats.rs` 加 `clash_now`。sing-box 两类都渲染成原生 `selector`（`default` 是第一个成员），Xray 保持静态副本。界面：组编辑器多两个类型、组页对 Xray 明说「不回退也不轮换」、成员延迟列表覆盖这三类。
+- **验收**：`bash /d/tmp/shots/52-group-run.sh`（`mk_52_b.py` 生成两个驱动；本地两个 shadowsocks 服务 + 一个死端口成员）在云电脑跑通：health 探测 `ss-dead-1` 503、`ss-local-1` delay=99、`ss-local-2` delay=111；fallback 从 `node:ss-dead-1` 一次落到 `node:ss-local-1` 后 72 秒不抖；load-balance 每 20 秒真切换（local-1 → local-2 → local-1 → local-2）；应用日志 5 条「原因：健康探测」；Xray 会话两句说明都在。细节见 `docs/ACCEPTANCE.md` §52。
+- **坑（真机脚本）**：① store 里 `Protocol`/`Transport`/`Security` 的 serde 名是 **PascalCase**（`Shadowsocks`/`Tcp`/`None`），写小写会让整份文档被判 corrupt（远端落成 `store.corrupt`、应用以默认值启动）——第一轮就白跑在这上面；而 `last_engine`/`mode` 是两个小写词，两种风格并存；② `ssh` 里 `start /b` 起的本地服务会随控制台死，必须 `schtasks /sc once /st 23:59 /it` 在会话 1 里起；③ 驱动日志别用 `sed -n '1,45p'` 截断，watcher 的切换证据常在文件末尾。
+- **计数**：命令 **82**（+0）、Rust **421**（+16）、vitest **116**（+0）、i18n **789**（+5）。
+
+---
+
 ## 1. 项目坐标与命令
 
 | 项 | 值 |
@@ -115,8 +126,8 @@
 | 桌面产物 | `/c/Users/83611/Desktop/X-Matrix.exe`、`/c/Users/83611/Desktop/X-Matrix_0.1.0_x64-setup.exe` |
 | 当前构建产物 | `src-tauri/target/release/x-matrix.exe` **10,481,152 B @2026-11-25 06:51，md5 `dd36d82a50a89d55a47485d52acc01c9`**（含 §21–§50）；桌面副本已不在，需要时自己 `cp` 过去 |
 
-**计数基线（改动后记得同步文档）**：命令 **82**、`cargo test --lib` **405**、vitest **116**（12 个文件）、i18n **784** 键。
-> `README.md:81` 与 `ARCHITECTURE.md:277-278` 已同步为 82 条命令 / 405 项测试。
+**计数基线（改动后记得同步文档）**：命令 **82**、`cargo test --lib` **421**、vitest **116**（12 个文件）、i18n **789** 键。
+> `README.md:81` 与 `ARCHITECTURE.md:277-278` 已同步为 82 条命令 / 421 项测试。
 
 命令数核算法：
 
@@ -365,7 +376,7 @@ scp -i /c/Users/83611/.ssh/id_ed25519_cpc 本地文件 Administrator@100.106.121
 
 1. `cd /d/GitHub-Warehouse/X-Matrix-Client-Pro && git status` —— 工作区应当干净；有改动先弄清是谁的。
 2. 读本文件的 §5 与 `docs/ACCEPTANCE.md` 的最后两节，对齐上下文。
-3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 405 passed）。
+3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 421 passed）。
 4. `cd .. && npm run check`（应为全绿）。
 5. 从 §6 表里挑一项（按性价比排序），**一项一提交**，提交信息用英文 `feat(...)/fix(...)/docs: ...`。
 6. 真机验证前先跑 `bash /d/tmp/shots/deploy-tray.sh <exe>`；远端被 `cleanup.sh` 清过的话，先 `scp x-act.ps1 uia2.ps1 ocr.ps1` 上去。

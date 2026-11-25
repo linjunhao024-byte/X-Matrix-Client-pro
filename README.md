@@ -62,7 +62,7 @@ cd src-tauri && cargo test --lib
 
 - `npm run check:arch`：禁止 `src/services/` 之外出现 `invoke(` / `listen(` / `@tauri-apps/api` —— 组件不许直接碰 IPC。
 - `npm run check:contract`：`bindings.ts` 必须与 Rust 命令签名一致，过期就报错。
-- 前端单测只测纯函数（格式化）；业务逻辑的测试都在 Rust 侧（405 项），因为渲染配置是纯函数，不需要任何内核。
+- 前端单测只测纯函数（格式化）；业务逻辑的测试都在 Rust 侧（421 项），因为渲染配置是纯函数，不需要任何内核。
 
 ## 结构
 

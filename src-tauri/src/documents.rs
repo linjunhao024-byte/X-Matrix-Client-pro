@@ -347,15 +347,19 @@ fn from_clash_yaml(text: &str) -> Option<ParseReport> {
 
 /// Read one `proxy-groups` entry.
 ///
-/// Only the two kinds the app can render are kept. `fallback` and
-/// `load-balance` have no equivalent outbound in either kernel, so they become
-/// a `url-test` and the preview says so — a silent rewrite would leave the user
-/// wondering why a config behaves differently than it did in Clash.
+/// The four kinds the app implements are kept as-is, including `fallback` and
+/// `load-balance` — neither kernel has such an outbound, but the app itself
+/// executes them (see `engine::groupwatch`), so they must not be rewritten on
+/// import. Anything else still becomes a `url-test` and the preview says so: a
+/// silent rewrite would leave the user wondering why a config behaves
+/// differently than it did in Clash.
 fn clash_group(group: &Yaml, report: &mut ParseReport) {
     let Some(name) = yaml_str(group, "name") else { return };
     let kind = match yaml_str(group, "type").unwrap_or_else(|| "select".into()).as_str() {
         "select" => GroupKind::Select,
         "url-test" => GroupKind::UrlTest,
+        "fallback" => GroupKind::Fallback,
+        "load-balance" => GroupKind::LoadBalance,
         other => {
             report.skipped.push(format!(
                 "策略组「{name}」类型 {other}，已按 url-test 导入（两个内核都没有这种出站）"
@@ -616,7 +620,7 @@ proxy-groups:
     type: select
     proxies: [one, DIRECT]
   - name: 自动
-    type: fallback
+    type: relay
     proxies: [one]
   - name: 空的
     type: select
@@ -634,10 +638,13 @@ rules:
         assert_eq!(report.groups[0].name, "手动");
         assert!(matches!(report.groups[0].kind, GroupKind::Select));
         assert_eq!(report.groups[0].members, vec!["one".to_string(), "DIRECT".to_string()]);
-        // `fallback` has no equivalent outbound in either kernel.
+        // An unknown Clash kind has no equivalent outbound in either kernel.
+        // (`fallback` / `load-balance` used to land here too; the app now
+        // implements those itself, so the fixture uses a genuinely unknown
+        // kind to keep this degradation path covered.)
         assert!(matches!(report.groups[1].kind, GroupKind::UrlTest));
         assert!(
-            report.skipped.iter().any(|line| line.contains("fallback")),
+            report.skipped.iter().any(|line| line.contains("relay")),
             "a rewrite must be announced: {:?}",
             report.skipped
         );
@@ -647,6 +654,36 @@ rules:
         assert!(matches!(report.rules[1].matcher, RuleMatcher::GeoIp { .. }));
         assert!(report.skipped.iter().any(|line| line.contains("兜底")));
         assert!(report.skipped.iter().any(|line| line.contains("RULE-SET")));
+    }
+
+    #[test]
+    fn fallback_and_load_balance_keep_their_kind() {
+        // These two are not native kernel outbounds, but the app executes them
+        // itself, so an import must not quietly turn them into `url-test`.
+        let text = r#"proxies:
+  - name: one
+    type: ss
+    server: a.example.com
+    port: 8388
+    cipher: aes-128-gcm
+    password: secret
+proxy-groups:
+  - name: 回退
+    type: fallback
+    proxies: [one]
+  - name: 轮换
+    type: load-balance
+    proxies: [one]
+"#;
+        let report = parse_document(text);
+        assert_eq!(report.groups.len(), 2, "groups: {:?}", report.groups);
+        assert!(matches!(report.groups[0].kind, GroupKind::Fallback));
+        assert!(matches!(report.groups[1].kind, GroupKind::LoadBalance));
+        assert!(
+            report.skipped.is_empty(),
+            "a supported kind must not be announced as rewritten: {:?}",
+            report.skipped
+        );
     }
 
     #[test]

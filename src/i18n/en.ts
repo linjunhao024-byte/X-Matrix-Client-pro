@@ -234,6 +234,10 @@ export const en: Record<string, string> = {
   "groups.empty.body": "A group bundles several nodes into one outbound that rules can point at. Without groups, rules can only target the current node.",
   "groups.empty.title": "No groups yet",
   "groups.hint": "Rules can point at a group, and the group picks the node.",
+  "groups.kind.fallback": "Fallback",
+  "groups.kind.fallback.hint": "Members in order: the first one that answers takes the traffic, and the next one takes over when it stops answering (sing-box: this app probes every 20 s and switches; Xray: static copy)",
+  "groups.kind.loadBalance": "Load balance",
+  "groups.kind.loadBalance.hint": "Rotates through the healthy members, one every 20 s. Rotation by time, not per-connection balancing (sing-box: this app switches; Xray: static copy)",
   "groups.kind.select": "Select",
   "groups.kind.select.hint": "Always use the node you picked",
   "groups.kind.urlTest": "URL test",
@@ -243,6 +247,7 @@ export const en: Record<string, string> = {
   "groups.pick": "Use this",
   "groups.title": "Proxy groups",
   "groups.xrayHint": "Xray has no selector outbound, so under Xray a group renders as a static copy of the chosen member: switching members means restarting the kernel. Under sing-box it is a native selector and switches live.",
+  "groups.xrayStatic": "Xray has no selector outbound: this group is a static copy fixed at start, so it neither falls back nor rotates.",
   "groups.delay.noKernel": "Start the kernel before measuring",
   "groups.delay.noKernelHint": "The kernel is not running, so there is nothing to measure; start it first",
   // home

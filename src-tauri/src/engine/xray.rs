@@ -171,6 +171,11 @@ fn xray_inbounds(input: &RenderInput<'_>, endpoints: Endpoints) -> Vec<Value> {
 /// its chosen member under the group's tag. That is the honest mapping: an
 /// Xray `urltest` group behaves like `select` pinned to the first member, and
 /// the UI says so.
+///
+/// `fallback` and `load-balance` degrade the same way: whatever
+/// [`ProxyGroup::chosen`] says is copied once at render time. There is nothing
+/// in an Xray config the app could rewrite later, so the group neither falls
+/// back nor rotates under this kernel.
 fn xray_outbounds(input: &RenderInput<'_>) -> AppResult<Vec<Value>> {
     let mux = input.mux_streams();
     // One decision, taken by `RenderInput::fragment`, shared by the active node
@@ -626,6 +631,47 @@ mod tests {
         // The group copy must carry the *chosen* member's server, not the
         // active node's: that is the whole point of a group.
         assert_eq!(outbounds[1]["settings"]["servers"][0]["address"], json!("two.example.com"));
+    }
+
+    #[test]
+    fn a_fallback_group_is_still_static_under_xray() {
+        let (first, second) = two_nodes();
+        let mut group = crate::domain::group::ProxyGroup {
+            id: "g1".into(),
+            name: "回退".into(),
+            enabled: true,
+            kind: crate::domain::group::GroupKind::Fallback,
+            members: vec!["n1".into(), "n2".into()],
+            selected: None,
+        };
+        let nodes = vec![first.clone(), second.clone()];
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
+
+        // With no pick, `chosen()` is the first member: that is the copy Xray
+        // gets, and nothing in this kernel will ever move it.
+        let groups = vec![group.clone()];
+        let options = RunOptions::new().with_catalog(&nodes, &groups);
+        let cfg = XrayEngine
+            .render_config(&RenderInput::new(&first, endpoints).with_options(options))
+            .unwrap();
+        assert_eq!(
+            cfg["outbounds"][1]["settings"]["servers"][0]["address"],
+            json!("one.example.com")
+        );
+
+        // `chosen()` still honours an explicit pick, so the copy follows it —
+        // asserted here so this test documents the real rule instead of
+        // pretending a fallback group ignores `selected`.
+        group.selected = Some("n2".into());
+        let groups = vec![group];
+        let options = RunOptions::new().with_catalog(&nodes, &groups);
+        let cfg = XrayEngine
+            .render_config(&RenderInput::new(&first, endpoints).with_options(options))
+            .unwrap();
+        assert_eq!(
+            cfg["outbounds"][1]["settings"]["servers"][0]["address"],
+            json!("two.example.com")
+        );
     }
 
     #[test]

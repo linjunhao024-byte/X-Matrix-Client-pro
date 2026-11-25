@@ -234,6 +234,10 @@ export const tw: Record<string, string> = {
   "groups.empty.body": "策略組把多個節點打包成一個出口，規則指向它就行。沒有組時，規則只能指向當前節點。",
   "groups.empty.title": "還沒有策略組",
   "groups.hint": "規則可以指向策略組，組內再挑節點。",
+  "groups.kind.fallback": "回退",
+  "groups.kind.fallback.hint": "按成員順序，第一個測得通的接管；它不通了就順延下一個（sing-box 由介面每 20 秒測一次並切換；Xray 下是靜態副本）",
+  "groups.kind.loadBalance": "負載均衡",
+  "groups.kind.loadBalance.hint": "在健康的成員之間輪換，每 20 秒換一個。按時間輪換，不是按連線分攤（sing-box 由介面切換；Xray 下是靜態副本）",
   "groups.kind.select": "手動選擇",
   "groups.kind.select.hint": "永遠用你選中的那個節點",
   "groups.kind.urlTest": "自動測速",
@@ -243,6 +247,7 @@ export const tw: Record<string, string> = {
   "groups.pick": "選它",
   "groups.title": "策略組",
   "groups.xrayHint": "Xray 沒有選擇器 outbound，所以策略組在 Xray 下會渲染成「選中成員的靜態副本」：換成員等於換一條出站，需要重啟內核。sing-box 下是內核原生 selector，切換即時生效。",
+  "groups.xrayStatic": "Xray 沒有選擇器出口：這個組在配置裡是啟動時定下的靜態副本，不會回退也不會輪換。",
   "groups.delay.noKernel": "先啟動內核才能測真實延遲",
   "groups.delay.noKernelHint": "內核沒在運行，測不到真實延遲；先啟動內核",
   // home

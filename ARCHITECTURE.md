@@ -275,7 +275,7 @@ pub enum StatsChannel {
 | 层 | 状态 | 证据 |
 |---|---|---|
 | 契约层 | 完成 | `tauri-specta` 生成 `src/services/bindings.ts`，82 个命令；`npm run check:contract` 校验不过期 |
-| 引擎层 | Xray + sing-box 配置渲染、启停、就绪探测、统计读取、日志尾部、启动前端口预检 | `cargo test --lib`（全库 405 项）；渲染是纯函数，测试不需要任何内核二进制 |
+| 引擎层 | Xray + sing-box 配置渲染、启停、就绪探测、统计读取、日志尾部、启动前端口预检 | `cargo test --lib`（全库 421 项）；渲染是纯函数，测试不需要任何内核二进制 |
 | 数据层 | 单文件 JSON 原子替换 + 坏文件留证 | `store.rs`，重启后节点/设置/规则都在 |
 | 导入 | vless / vmess / trojan / ss + 整包 base64 | `import.rs`，不支持的行进 `skipped` 而不是报错 |
 | 路由 | 7 种匹配器 × 4 种动作（代理/直连/拦截/策略组），双内核各自渲染 | `domain/routing.rs` + `render.rs`（唯一的内核差异点） |
@@ -293,7 +293,7 @@ pub enum StatsChannel {
 | 前端 | 9 个视图 + 组件库 + 单一轮询器 | `vue-tsc` / `vite build` / `check:arch`（65 文件）/ `vitest`（116 项，含 store → IPC 接线测试）全绿 |
 | 套餐提醒 | 后端只如实存「已用 / 总量 / 到期」，判断留给前端一处：`quotaReport` 按「已过期 > 用尽 > 用掉九成 > 一周内到期」出结论，`quotaAlerts` 过滤掉停用的源并按严重度排序；首页在启动控制卡里以 `alert-warn` 提示「快用完 / 已用尽 / 快到期 / 已过期」并给出订阅页入口。停用源不提醒——用户已经说了不用它，再唠叨就是噪音 | `src/services/quota.ts`（8 项测试）、`HomeView` 的 `quotaNotices` |
 | 订阅 | 拉取（HTTP，UA 可配置）、整包解析（Clash YAML / sing-box / Xray / 分享链接）、只替换自己那批节点、**跨订阅按 `kind|server|port|credential` 去重**（手工节点不参与比较）、后台每 60 秒扫一次到期项、`subscription-userinfo` 头 → 已用/总量/到期 | `commands/subscription.rs`、`documents.rs`、`net/remote.rs`（`Fetched` 带响应头），含配额解析 3 项测试、去重 2 项测试 |
-| 策略组 | `select` / `url-test`；sing-box 渲染成原生 selector/urltest，Xray 渲染成选中成员的静态副本（Xray 没有 selector，UI 会说出来）；删组时指向它的规则自动回落到「代理」，删节点时从各组里摘掉 | `domain/group.rs`、`commands/group.rs`、`engine/{xray,singbox}.rs` |
+| 策略组 | `select` / `url-test` / `fallback` / `load-balance`；sing-box 四个都渲染成原生 selector/urltest，其中 `fallback`/`load-balance` 由 `engine/groupwatch.rs` 每 20 秒探一次健康并 `PUT /proxies/group%3A<id>` 改 selector（只换「现在走谁」，不做按连接分摊）；Xray 渲染成选中成员的静态副本（Xray 没有 selector，UI 会说出来）；删组时指向它的规则自动回落到「代理」，删节点时从各组里摘掉 | `domain/group.rs`、`commands/group.rs`、`engine/{xray,singbox}.rs` |
 | 界面多语言 | 中文 / English 全量；`scripts/i18n-pairs.json` 是唯一真相源，`scripts/gen_i18n.py` 生成两份字典，测试断言键集一致（半翻译会 fail 而不是上线）；语言存 `localStorage['xm.ui.locale']` | `src/i18n/`、`src/i18n/i18n.test.ts` |
 | 节点页 | Clash 式卡片 + 延迟排序（未测速的排在最后，避免列表跳动）+ 一键全部测速（串行，避免测到队列而不是节点）+ 搜索 / 多选 / 批量测速 / 批量删除 / 复制分享链接 | `views/NodesView.vue` |
 | 节点标签 | 自由标签（导入/订阅之外的归类手段）：编辑器里逗号分隔输入、卡片显示 chip、按标签筛选、选中后批量打/移除；`sub:` 前缀被保留给订阅（刷新按 tag 删节点，手写同名标签会被悄悄吃掉），所以后端拒绝用户写它，编辑器把它显示成只读 | `domain/node.rs` 的 `normalized_tags` / `check_user_tags`、`commands/node.rs` 的 `apply_tag`（6 项测试） |
