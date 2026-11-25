@@ -28,7 +28,7 @@ use crate::store::Document;
 const BACKUP_KIND: &str = "x-matrix-backup";
 
 #[derive(Debug, Serialize, Deserialize)]
-struct Backup {
+pub(crate) struct Backup {
     kind: String,
     document: Document,
     /// Rule-set id → raw list text. Remote sets could be fetched again, local
@@ -61,9 +61,57 @@ fn stamp() -> u64 {
         .unwrap_or(0)
 }
 
+/// Render the whole configuration as the JSON text a backup file holds.
+///
+/// Shared with the WebDAV upload, so the bytes sent to a server are exactly the
+/// bytes a local export would contain - one backup format, not two.
+pub(crate) fn collect(state: &AppState) -> AppResult<String> {
+    let document = state.document();
+
+    let mut rule_sets = BTreeMap::new();
+    for set in &document.rule_sets {
+        let text = state.rule_set_files.read(set)?;
+        if !text.trim().is_empty() {
+            rule_sets.insert(set.id.clone(), text);
+        }
+    }
+
+    let backup = Backup {
+        kind: BACKUP_KIND.to_string(),
+        document,
+        rule_sets,
+    };
+    serde_json::to_string_pretty(&backup)
+        .map_err(|error| AppError::Internal(format!("配置无法序列化：{error}")))
+}
+
+/// Put a vetted backup into the live state.
+///
+/// Lists first, then the document: if a list fails to land, the state still
+/// points at the old sets instead of at files that were never written. Shared
+/// with the WebDAV restore, which must replace exactly what a file restore does.
+pub(crate) fn apply(state: &AppState, backup: Backup) -> AppResult<BackupSummary> {
+    for set in &backup.document.rule_sets {
+        if let Some(body) = backup.rule_sets.get(&set.id) {
+            state.rule_set_files.write(set, body)?;
+        }
+    }
+
+    let summary = BackupSummary {
+        nodes: backup.document.nodes.len() as u32,
+        subscriptions: backup.document.subscriptions.len() as u32,
+        rules: backup.document.rules.len() as u32,
+        groups: backup.document.groups.len() as u32,
+        rule_sets: backup.document.rule_sets.len() as u32,
+    };
+
+    state.replace(backup.document)?;
+    Ok(summary)
+}
+
 /// Read and vet a backup document. Kept separate from the dialog so the rules
 /// that matter (marker, node validity) are testable without a file picker.
-fn parse_backup(text: &str) -> AppResult<Backup> {
+pub(crate) fn parse_backup(text: &str) -> AppResult<Backup> {
     let backup: Backup = serde_json::from_str(text)
         .map_err(|error| AppError::InvalidInput(format!("这个文件不是配置备份：{error}")))?;
     if backup.kind != BACKUP_KIND {
@@ -86,23 +134,7 @@ fn parse_backup(text: &str) -> AppResult<Backup> {
 #[tauri::command]
 #[specta::specta]
 pub async fn backup_save(app: AppHandle, state: State<'_, AppState>) -> AppResult<Option<String>> {
-    let document = state.document();
-
-    let mut rule_sets = BTreeMap::new();
-    for set in &document.rule_sets {
-        let text = state.rule_set_files.read(set)?;
-        if !text.trim().is_empty() {
-            rule_sets.insert(set.id.clone(), text);
-        }
-    }
-
-    let backup = Backup {
-        kind: BACKUP_KIND.to_string(),
-        document,
-        rule_sets,
-    };
-    let text = serde_json::to_string_pretty(&backup)
-        .map_err(|error| AppError::Internal(format!("配置无法序列化：{error}")))?;
+    let text = collect(&state)?;
 
     let handle = app.clone();
     let name = format!("x-matrix-{}.json", stamp());
@@ -164,23 +196,7 @@ pub async fn backup_load(
     let text = std::fs::read_to_string(&path)?;
     let backup = parse_backup(&text)?;
 
-    // Lists first, then the document: if a list fails to land, the state still
-    // points at the old sets instead of at files that were never written.
-    for set in &backup.document.rule_sets {
-        if let Some(body) = backup.rule_sets.get(&set.id) {
-            state.rule_set_files.write(set, body)?;
-        }
-    }
-
-    let summary = BackupSummary {
-        nodes: backup.document.nodes.len() as u32,
-        subscriptions: backup.document.subscriptions.len() as u32,
-        rules: backup.document.rules.len() as u32,
-        groups: backup.document.groups.len() as u32,
-        rule_sets: backup.document.rule_sets.len() as u32,
-    };
-
-    state.replace(backup.document)?;
+    let summary = apply(&state, backup)?;
     crate::refresh_tray(&app);
     Ok(Some(summary))
 }

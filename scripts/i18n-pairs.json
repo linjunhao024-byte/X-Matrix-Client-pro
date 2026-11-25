@@ -3462,6 +3462,96 @@
     "備份與恢復"
   ],
   [
+    "settings.webdav.title",
+    "WebDAV 云备份",
+    "WebDAV backup",
+    "WebDAV 雲端備份"
+  ],
+  [
+    "settings.webdav.hint",
+    "把同一份配置备份放到你的 WebDAV 目录里。上传的内容和「导出配置」写出的文件逐字节相同，所以两边恢复出来的结果是同一个。",
+    "Keep the same configuration backup in a WebDAV folder of your own. The upload contains exactly the bytes an export would write, so restoring from either source lands in the same place.",
+    "把同一份設定備份放到你的 WebDAV 目錄裡。上傳的內容和「匯出設定」寫出的檔案逐位元組相同，所以兩邊恢復出來的結果是同一個。"
+  ],
+  [
+    "settings.webdav.address",
+    "地址",
+    "Address",
+    "位址"
+  ],
+  [
+    "settings.webdav.addressPlaceholder",
+    "https://dav.example.com/backups/",
+    "https://dav.example.com/backups/",
+    "https://dav.example.com/backups/"
+  ],
+  [
+    "settings.webdav.username",
+    "用户名",
+    "User name",
+    "使用者名稱"
+  ],
+  [
+    "settings.webdav.password",
+    "密码",
+    "Password",
+    "密碼"
+  ],
+  [
+    "settings.webdav.passwordHint",
+    "密码存在 Windows 凭据管理器里，不会写进配置文件和任何备份。留空表示沿用已保存的那个；想在服务器上换密码，就在这里填新的再保存。",
+    "The password lives in the Windows Credential Manager; it is never written into the configuration file or into any backup. Leave it blank to keep the stored one, or type a new one and save to change it.",
+    "密碼存在 Windows 認證管理員裡，不會寫進設定檔和任何備份。留空表示沿用已儲存的那個；想在伺服器上換密碼，就在這裡填新的再儲存。"
+  ],
+  [
+    "settings.webdav.passwordStored",
+    "已保存，留空表示不改",
+    "Stored; leave blank to keep",
+    "已儲存，留空表示不改"
+  ],
+  [
+    "settings.webdav.passwordEmpty",
+    "还没有存密码",
+    "No password stored",
+    "還沒有存密碼"
+  ],
+  [
+    "settings.webdav.viaProxy",
+    "走代理上传",
+    "Upload through the kernel",
+    "走代理上傳"
+  ],
+  [
+    "settings.webdav.viaProxyHint",
+    "服务器只能从墙外访问时打开。内核没跑的时候会直接拒绝，而不是偷偷改成直连——「备份好了」是会被当作事实的一句话。",
+    "Turn this on when the server is only reachable from outside. With no kernel running the upload refuses instead of quietly going direct: \"it is backed up\" is a sentence people act on.",
+    "伺服器只能從牆外存取時打開。內核沒跑的時候會直接拒絕，而不是偷偷改成直連——「備份好了」是會被當作事實的一句話。"
+  ],
+  [
+    "settings.webdav.upload",
+    "上传到云端",
+    "Upload",
+    "上傳到雲端"
+  ],
+  [
+    "settings.webdav.restore",
+    "从云端恢复",
+    "Restore from cloud",
+    "從雲端恢復"
+  ],
+  [
+    "settings.webdav.uploaded",
+    "已上传 {bytes} 字节到 {url}",
+    "Uploaded {bytes} bytes to {url}",
+    "已上傳 {bytes} 位元組到 {url}"
+  ],
+  [
+    "settings.webdav.restored",
+    "已从云端恢复：{nodes} 个节点、{rules} 条规则、{groups} 个策略组、{ruleSets} 个规则集",
+    "Restored from the cloud: {nodes} nodes, {rules} rules, {groups} groups, {ruleSets} rule sets",
+    "已從雲端恢復：{nodes} 個節點、{rules} 條規則、{groups} 個策略組、{ruleSets} 個規則集"
+  ],
+  [
     "settings.bypass",
     "代理例外（bypass）",
     "Proxy bypass",

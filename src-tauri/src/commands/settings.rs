@@ -103,8 +103,30 @@ pub fn save_settings(
     runtime: State<'_, Arc<EngineRuntime>>,
     proxy: Proxy<'_>,
     settings: Settings,
+    webdav_password: Option<String>,
 ) -> AppResult<Settings> {
+    let mut settings = settings;
     settings.validate().map_err(AppError::InvalidInput)?;
+
+    // The WebDAV address is checked here, at save time, because a typo should
+    // fail while the user is looking at the field instead of surfacing minutes
+    // later as a network error. `None` means "keep the stored password": the
+    // page sends nothing when the field was left untouched, and an empty
+    // `Some("")` is the only way to forget one.
+    let webdav_url = settings.webdav_url.trim().to_string();
+    if !webdav_url.is_empty() {
+        crate::net::webdav::resolve_target(&webdav_url)?;
+    }
+    settings.webdav_url = webdav_url;
+    settings.webdav_username = settings.webdav_username.trim().to_string();
+    match webdav_password {
+        // Not trimmed: spaces are legal inside a password.
+        Some(secret) if secret.is_empty() => {
+            crate::syscreds::delete_secret(crate::syscreds::WEBDAV_TARGET)?
+        }
+        Some(secret) => crate::syscreds::set_secret(crate::syscreds::WEBDAV_TARGET, &secret)?,
+        None => {}
+    }
 
     // The proxy we may be holding was taken over from the old values, so the
     // decision below needs the document as it stood before this save.

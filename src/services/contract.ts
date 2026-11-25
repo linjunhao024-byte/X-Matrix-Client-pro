@@ -49,6 +49,8 @@ import type {
   Subscription_Serialize,
   SystemProxyStatus,
   TrafficPoint,
+  WebdavPush,
+  WebdavState,
   TrafficSample,
   RuleSet_Deserialize,
   RuleSet_Serialize,
@@ -152,8 +154,17 @@ export const api = {
   // exists because specta models both directions, so narrow it here.
   getSettings: async (): Promise<Settings_Serialize> =>
     (await unwrap(commands.getSettings())) as Settings_Serialize,
-  saveSettings: async (settings: Settings_Deserialize): Promise<Settings_Serialize> =>
-    (await unwrap(commands.saveSettings(settings))) as Settings_Serialize,
+  /**
+   * Save the whole form. `webdavPassword` is `null` when the field was left
+   * untouched (keep what the Credential Manager holds) and `''` when it was
+   * cleared (forget it). It is a separate argument because a password must not
+   * travel inside `Settings`, which is what ends up in the JSON store.
+   */
+  saveSettings: async (
+    settings: Settings_Deserialize,
+    webdavPassword: string | null,
+  ): Promise<Settings_Serialize> =>
+    (await unwrap(commands.saveSettings(settings, webdavPassword))) as Settings_Serialize,
   /**
    * Change only the language. The picker applies immediately, so it must not
    * send the whole form: unsaved edits on the page would be saved with it.
@@ -232,6 +243,13 @@ export const api = {
   backupSave: (): Promise<string | null> => unwrap(commands.backupSave()),
   /** Replace the whole configuration from a picked file; null = cancelled. */
   backupLoad: (): Promise<BackupSummary | null> => unwrap(commands.backupLoad()),
+  /** Whether a WebDAV password is stored, and the saved address for the form. */
+  webdavState: async (): Promise<WebdavState> =>
+    (await unwrap(commands.webdavState())) as WebdavState,
+  /** Upload the current configuration; the result carries the URL and size. */
+  webdavUpload: (): Promise<WebdavPush> => unwrap(commands.webdavUpload()),
+  /** Replace the configuration from the cloud copy; null = nothing to apply. */
+  webdavRestore: (): Promise<BackupSummary | null> => unwrap(commands.webdavRestore()),
   engineStart: (kind: EngineKind, nodeId: string): Promise<EngineStatus_Serialize> =>
     unwrap(commands.engineStart(kind, nodeId)),
   engineApply: (kind: EngineKind, nodeId: string): Promise<EngineStatus_Serialize> =>

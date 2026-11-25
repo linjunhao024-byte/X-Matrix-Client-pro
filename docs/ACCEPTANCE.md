@@ -1552,3 +1552,70 @@ app stderr 同步佐证：托盘行从 `模式 rule · 内核运行中` 重新�
 7. **`.old` 只留最近一份**：再更新一次会把上一个 `.old` 覆盖掉，不保留历史。这次没有为它加编号轮转。
 
 **一句实话**：这次验收里**「从 GitHub 真下载」这一段被本机镜像替代了**——测试二进制只改了两条 feed URL（等长原地替换，其余字节未动），下载的是同一个官方压缩包、走的是同一套解析/校验/解压/换文件/停启内核代码。真 GitHub 路径只验到一面：5.5 KB/s 下 120 秒超时，文件不动、内核不停。未验的还有：GitHub API 的 rate limit / 403 分支、`.old` 的历史保留、以及应用自身更新（About 页）与内核更新的交叉影响。
+
+## 54. WebDAV 云备份：上传的就是导出文件本身，密码只进 Windows 凭据管理器（2026-11-25，云电脑 cloudpc-test）
+
+### 要证的事
+
+1. 「上传到云端」送出去的内容，与「导出配置」写出的文件**逐字节同形**——同一个 `collect()`、同一份 JSON、同一个 `"kind": "x-matrix-backup"` 外壳，WebDAV 只是传输层，不是第二种备份格式。
+2. 「从云端恢复」走的是导出文件的恢复路径（`parse_backup` → `apply`），也就是**整体替换**而不是合并。
+3. 密码**不进** `store.json`（那份文件会被整份写盘，也会随导出/备份离开本机）。
+4. 内核在跑时拒绝恢复：正在跑的内核是按旧配置渲染的，替换 store 之后它会与新配置不一致。
+5. 服务器拒绝认证（401/403）、地址不存在（404）、没有目录（409）要落成**一句话**，不是裸状态码。
+6. 勾了「走代理上传」但内核没跑时，拒绝而不是偷偷改直连。
+
+### 验法
+
+```bash
+bash /d/tmp/shots/54-webdav-accept.sh "" dav1
+```
+
+五段会话（每段独立应用进程、独立 store 钉值）：
+
+| 段 | 钉的 store | 驱动做什么 |
+|---|---|---|
+| push | 内核不跑，`webdav_via_proxy=false` | 填地址/用户名/密码 → 点「保存」→ 点「上传到云端」 |
+| restore | 先删掉一个节点（托盘菜单从 5 个节点变 4 个），内核不跑 | 点「从云端恢复」 |
+| refuse | 内核**在跑**（`auto_connect` + `system_proxy` 打开，`xray#5692`） | 点「从云端恢复」 |
+| auth | 内核不跑 | 密码填 `nope` → 保存 → 上传 |
+| proxy | `webdav_via_proxy=true`，内核不跑 | 直接点「上传到云端」 |
+
+服务器是本机手写的 175 行 PowerShell 假 WebDAV（`D:\tmp\shots\dav.ps1`，`TcpListener` 手写 HTTP/1.1，Basic 认证 `webtest:secret`，只认 `/dav/x-matrix-backup.json`，PUT 存盘回 201、GET 回字节回 200、认证不符回 401、`/quit` 退出），日志逐行记 `方法 路径 -> 状态码 字节数 认证`。`dav.bat` 由 `schtasks /it` 在会话 1 起（`ssh` 里 `start /b` 起的进程活不过控制台，§52 已记）。
+
+### 判据与实测
+
+| # | 判据 | 实测（`dav1`） |
+|---|---|---|
+| 1 | 上传成功且字节数等于导出文件 | 界面 `已上传 4889 字节到 http://127.0.0.1:8099/dav/x-matrix-backup.json`；`dav.log` `PUT /dav/x-matrix-backup.json -> 201 bytes=4889 auth=ok` |
+| 2 | 上传内容是备份外壳 | 服务器侧 `backup.json` 4889 B，首行 `"kind": "x-matrix-backup"`，内含 5 个节点（`Shadowsocks`×3、`Vless`×2）与 2 个策略组（`fallback`、`load-balance`） |
+| 3 | store.json 里搜不到密码 | `password string present in store.json: False`；同时 `webdav_url http://127.0.0.1:8099/dav/`、`user webtest`、`via_proxy False` 三个字段在 |
+| 4 | 恢复是整体替换 | restore 段开始前托盘菜单 `4 个节点`，点完恢复后 `5 个节点`；`dav.log` `GET /dav/x-matrix-backup.json -> 200 bytes=4889 auth=ok` |
+| 5 | 内核在跑时拒绝且不联网 | `refuse` 段 `kernels: xray#5692` → 提示 `先停止内核再恢复配置：正在跑的内核还是按旧配置渲染的`；`dav.log` 在 10:49:24–10:51:11 之间**没有任何请求** |
+| 6 | 密码错落成一句话 | `dav.log` `PUT … -> 401 auth=[Basic d2VidGVzdDpub3Bl]`（base64 `webtest:nope`）→ 界面 `服务器拒绝认证（HTTP 401）：检查用户名和密码` |
+| 7 | 走代理但内核没跑要拒绝 | `proxy` 段提示 `设置了走代理上传，但内核没有运行：先在首页启动内核，或者关掉这个开关`；该时段 `dav.log` 无请求 |
+| 8 | 收尾干净 | `ProxyEnable REG_DWORD 0x0`、`tasks-above-should-be-empty`、`credential removed`（`cmdkey /delete:X-Matrix/WebDAV` 之后 `cmdkey /list` 里查不到） |
+
+### 设计理由
+
+1. **只做传输，不做第二种格式。** 上传用导出那条 `collect()`，恢复用导入那条 `parse_backup`/`apply`。两边一套代码，云端那份文件因此也能当成本地导出文件用——反过来也一样。
+2. **密码不进 `Settings`。** `Settings` 会被整份写进 `store.json`；把它放进结构体，就等于让密码随配置、随备份一起流动。所以密码单独走 Windows 凭据管理器（target `X-Matrix/WebDAV`，`CRED_TYPE_GENERIC` + `CRED_PERSIST_LOCAL_MACHINE`），`store.json` 里只留地址与用户名。
+3. **密码框是「只写」的。** 界面只知道有没有存过密码（`has_password`），不回显、不回读。留空＝沿用旧的，填新值＝覆盖，显式填空＝删掉——三种意图靠 `Option<String>` 区分，而不是靠猜。
+4. **拒绝发生在网络之前。** 内核在跑时恢复会被拒（`runtime.status().running` 先查）；勾了走代理但内核没跑也拒。两处都是「宁可让你多点一步，也不偷偷换一条路走」。
+5. **状态码翻译成句子。** 401/403、404（上传与恢复两句不同的话）、409 各有对应文案——因为「HTTP 404」对用户不构成任何行动指引，而「地址要写到文件，或者以 / 结尾」构成。
+
+### 坑
+
+1. **任务书里的第四条命令被合并掉了。** 原计划 `webdav_state` / `webdav_save` / `webdav_upload` / `webdav_restore` 四条（IPC 84 → 88）。真机一看，设置页只有一个「保存」按钮，地址、用户名、密码本来就在同一个表单里——于是密码保存并进 `save_settings`，多一个 `webdav_password: Option<String>` 参数（`None` 不动、`""` 删除、其他覆盖）。命令数最终 84 → **87**，比计划少一条，且不需要第二个「保存」。
+2. **WebView2 把 `<label>` 的文本挂成输入框自己的可访问名。** 驱动里按「标签文字 → 找它下面的输入框」一律失败（`label missing`），因为 `<span>用户名</span>` 并不是一个独立元素，它被并进了 `Edit` 的 `Name`。改成直接按 `Name` 匹配输入框（`Fill-Edit '用户名' 'webtest'`）才对。
+3. **`reqwest`/`hyper` 把 header 名写成小写。** 单测里断言原始请求文本时，`Content-Length: …` 永远匹配不上，得先 `to_lowercase()` 再断 `content-length:`。
+4. **specta 只给 `WebdavState` / `WebdavPush` 生成类型，没有 `_Serialize` 后缀。** 前端照着 `Settings_Serialize` 的规律写成 `WebdavState_Serialize`，直接 TS2305。
+5. **真机没有真实 WebDAV 服务器。** 用自己写的 175 行 PowerShell 假服务器（Basic 认证、PUT/GET、401），所以「服务器一侧」只证到协议层：真实服务的重定向、`Transfer-Encoding: chunked`、TLS 证书、目录不存在时 404 还是 409，都没有验。
+6. **`cleanup.sh` 会删 home 目录里的 `*.ps1` / `*.bat` / `*.txt` / `*.png`。** 每轮验收结束都要把驱动脚本重新推上去，别指望上一轮留下的还能用。
+7. **第一轮 push 白跑一次。** 密码没填进去（第 2 个坑），于是 `PUT` 带了 `Basic base64("webtest:")` 被 401 —— 顺带证明了「密码空时确实不带 secret」和 401 文案，但上传本身要重跑。
+
+### 一句实话
+
+- **只在自己写的假服务器上验过。** Nextcloud / 群晖 / 坚果云的认证跳转、证书链、大文件分块都没验；「地址必须以 / 结尾或者写到文件」这条规则，也是按本项目自己的拼接逻辑定的，不是按 RFC 4918 校验过的。
+- **密码交给 Windows 凭据管理器，不等于「别人读不到」。** 同一个登录用户下的其它程序，按 Windows 的权限模型是可以读出来的；本项目没有额外加密，也没做「每次使用前重新输入」。
+- **上传是整份覆盖，没有版本、没有冲突检测。** 两个设备交替上传，后一次会安静地盖掉前一次；`store.json` 的 `.old`/`.corrupt` 那套兜底只保护本地文件，不保护云端。
+- **恢复是整体替换。** 云端那份是旧配置的话，本地新增的节点会被抹掉——界面上写了这句话（「整体替换而不是合并」），但没有二次确认框。

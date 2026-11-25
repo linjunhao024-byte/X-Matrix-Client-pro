@@ -16,7 +16,7 @@
 | 4 | S11 | 按进程分流的进程选择器 | — | 匹配器与平台枚举都在，缺的只是枚举命令 + 选择器 UI |
 | 5 | S9 | 回退组 / 负载均衡组 | 需要运行中内核验收 | 策略组模型要扩，sing-box 侧才诚实 |
 | 6 | S3 | 内核下载 / 更新 | 需要网络 + 代理 | 与 S1 无耦合，但要处理「换文件时内核在跑」 |
-| 7 | S6 | WebDAV 云备份 | — | 复用现有备份包，加一层传输 |
+| 7 | S6 | WebDAV 云备份 | 已完成（2026-11-25） | 复用现有备份包，加一层传输 |
 | 8 | S5 | 轻量模式 | — | WebView2 内存与轮询降载，独立 |
 | 9 | S4 | 提权 / 服务模式 | — | TUN 的前置：不解决权限，TUN 每次都要 UAC |
 | 10 | S1 | TUN 虚拟网卡 | **S4** | 需要管理员权限与 sing-box `tun` 入站；只对 sing-box 诚实支持 |
@@ -71,6 +71,13 @@ PAC 只表达**能表达的**：绕过列表 + 规则里「直连」的域名类
 在现有备份包之上加 WebDAV 上传/下载（URL + 用户名 + 密码，密码进 Credential Manager 或本地加密，不明文进 store）。提供「立即上传」「从云端恢复」。
 判据：上传后云端文件可被另一台/清空后恢复；凭据不以明文出现在 `store.json`。
 
+结果（2026-11-25）：已完成，见 `docs/ACCEPTANCE.md` §54。
+
+- 做了三件事，顺序是钉死的：备份格式不再分叉（`commands/backup.rs` 提出 `collect()` / `apply()`，导出与上传、导入与恢复各走同一条）→ 密码不进 `Settings`（`syscreds.rs` 走 Windows 凭据管理器，target `X-Matrix/WebDAV`；`Settings` 只留 `webdav_url` / `webdav_username` / `webdav_via_proxy`）→ 传输层单独一层（`net/webdav.rs`，`resolve_target` / `basic` / `put_bytes` / `get_bytes`，状态码本层不判）。
+- **比计划少一条命令**：原计划四条（`webdav_state` / `webdav_save` / `webdav_upload` / `webdav_restore`，IPC 84 → 88）。真机上设置页只有一个「保存」按钮，地址、用户名、密码本来就在同一张表单里，于是密码保存并进 `save_settings` 的第 6 个参数 `webdav_password: Option<String>`（`None` 不动 / `""` 删除 / 其他覆盖）。最终 IPC 84 → **87**。
+- 判据收窄（要如实说的）：① 只在自己写的 175 行假 WebDAV（`dav.ps1`，Basic 认证、PUT/GET、401）上验过，真实服务的重定向、chunked、TLS 证书、目录不存在到底是 404 还是 409 都没验；② 密码交给 Windows 凭据管理器不等于「别人读不到」——同一登录用户下的其它程序按权限模型可读，没有额外加密；③ 上传是整份覆盖，没有版本与冲突检测；④ 恢复是整体替换，界面写了这句话但没有二次确认框。
+- 真机脚本坑：WebView2 把 `<label>` 文本挂成输入框自己的可访问名（按标签找输入框会 `label missing`，要直接按 `Edit.Name` 匹配）；`hyper` 把 header 名写小写（单测断言先 `to_lowercase()`）；specta 只生成 `WebdavState`/`WebdavPush`，没有 `_Serialize` 后缀。
+
 ### S5 · 轻量模式
 隐藏到托盘后：暂停图表与轮询定时器、`SetMemoryUsageTargetLevel(Low)`、按需清理 WebView2 缓存；恢复窗口时还原。
 判据：内存占用可见下降；恢复窗口后数据立刻刷新、无空白。
@@ -98,7 +105,7 @@ sing-box `tun` 入站（`auto_route`、`strict_route`、`stack: system`），需
 | S11 进程选择器 | **已完成**（2026-11-25） | 与 `src-tauri/src/sysproc.rs` 同一次提交（`git log --oneline -- src-tauri/src/sysproc.rs` 最新一条） | `docs/ACCEPTANCE.md` §51；真机脚本 `D:\tmp\shots\51-proc-accept.sh` |
 | S9 回退/负载组 | **已完成**（2026-11-25） | 与 `src-tauri/src/engine/groupwatch.rs` 同一次提交（`git log --oneline -- src-tauri/src/engine/groupwatch.rs` 最新一条） | `docs/ACCEPTANCE.md` §52；真机脚本 `D:/tmp/shots/52-group-run.sh` |
 | S3 内核更新 | **已完成**（2026-11-25） | 与 `src-tauri/src/engine/release.rs` 同一次提交（`git log --oneline -- src-tauri/src/engine/release.rs` 最新一条） | `docs/ACCEPTANCE.md` §53；真机脚本 `D:/tmp/shots/53-kernel-accept.sh`、`mk_53_kernel.py`、`mirror.ps1` |
-| S6 WebDAV | 未开始 | — | — |
+| S6 WebDAV | 已完成（2026-11-25） | 与 `src-tauri/src/net/webdav.rs` 同一次提交 | §54；真机脚本 `54-webdav-accept.sh`、`mk_54_webdav.py`、`dav.ps1` |
 | S5 轻量模式 | 未开始 | — | — |
 | S4 提权/服务 | 未开始 | — | — |
 | S1 TUN | 未开始 | — | — |

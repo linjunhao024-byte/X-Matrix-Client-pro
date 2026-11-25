@@ -11,3 +11,4 @@ pub mod settings;
 pub mod subscription;
 pub mod sysproxy;
 pub mod system;
+pub mod webdav;

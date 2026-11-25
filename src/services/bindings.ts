@@ -13,6 +13,16 @@ export const commands = {
 	backupSave: () => typedError<string | null, AppError>(__TAURI_INVOKE("backup_save")),
 	/**  Replace the whole configuration with the one in a file the user picks. */
 	backupLoad: () => typedError<BackupSummary | null, AppError>(__TAURI_INVOKE("backup_load")),
+	webdavState: () => typedError<WebdavState, AppError>(__TAURI_INVOKE("webdav_state")),
+	webdavUpload: () => typedError<WebdavPush, AppError>(__TAURI_INVOKE("webdav_upload")),
+	/**
+	 *  Replace the configuration with the one in the cloud.
+	 * 
+	 *  Refused while a kernel runs, for the same reason a file restore is: the
+	 *  kernel is still rendering the document being replaced. The check happens
+	 *  before the download, so a refused restore costs no traffic.
+	 */
+	webdavRestore: () => typedError<BackupSummary | null, AppError>(__TAURI_INVOKE("webdav_restore")),
 	listNodes: () => typedError<Node_Serialize[], AppError>(__TAURI_INVOKE("list_nodes")),
 	upsertNode: (node: Node_Deserialize) => typedError<Node_Serialize[], AppError>(__TAURI_INVOKE("upsert_node", { node })),
 	deleteNode: (id: string) => typedError<Node_Serialize[], AppError>(__TAURI_INVOKE("delete_node", { id })),
@@ -70,7 +80,7 @@ export const commands = {
 	 */
 	autostartStatus: () => typedError<boolean, AppError>(__TAURI_INVOKE("autostart_status")),
 	getSettings: () => typedError<Settings_Serialize, AppError>(__TAURI_INVOKE("get_settings")),
-	saveSettings: (settings: Settings_Deserialize) => typedError<Settings_Serialize, AppError>(__TAURI_INVOKE("save_settings", { settings })),
+	saveSettings: (settings: Settings_Deserialize, webdavPassword: string | null) => typedError<Settings_Serialize, AppError>(__TAURI_INVOKE("save_settings", { settings, webdavPassword })),
 	/**
 	 *  Change only the language.
 	 * 
@@ -1415,6 +1425,26 @@ export type Settings_Deserialize = {
 	 */
 	test_concurrency?: number,
 	/**
+	 *  WebDAV collection the cloud backup writes into. Empty switches the
+	 *  feature off entirely: there is no default server to point at, and a
+	 *  guessed one would be someone else's disk.
+	 */
+	webdav_url?: string,
+	/**
+	 *  User name for that server. The password deliberately does *not* live
+	 *  here: it goes to the Windows Credential Manager (`syscreds`), because a
+	 *  `store.json` that carried it would leak it into every local export —
+	 *  including the one this feature uploads.
+	 */
+	webdav_username?: string,
+	/**
+	 *  Send the upload through the running tunnel, for servers that only answer
+	 *  from outside your ISP. Same trade-off as `subscription_via_proxy`: with
+	 *  no kernel running the upload refuses instead of silently going direct,
+	 *  because "backed up" is a claim the user will act on.
+	 */
+	webdav_via_proxy?: boolean,
+	/**
 	 *  Bypass list written into the Windows proxy settings while X-Matrix owns
 	 *  them. Loopback and RFC1918 are in the default; users behind a corporate
 	 *  PAC or a local gateway usually need to add one more entry.
@@ -1598,6 +1628,26 @@ export type Settings_Serialize = {
 	 *  make that tediously slow, so the knob exists with a low default.
 	 */
 	test_concurrency: number,
+	/**
+	 *  WebDAV collection the cloud backup writes into. Empty switches the
+	 *  feature off entirely: there is no default server to point at, and a
+	 *  guessed one would be someone else's disk.
+	 */
+	webdav_url: string,
+	/**
+	 *  User name for that server. The password deliberately does *not* live
+	 *  here: it goes to the Windows Credential Manager (`syscreds`), because a
+	 *  `store.json` that carried it would leak it into every local export —
+	 *  including the one this feature uploads.
+	 */
+	webdav_username: string,
+	/**
+	 *  Send the upload through the running tunnel, for servers that only answer
+	 *  from outside your ISP. Same trade-off as `subscription_via_proxy`: with
+	 *  no kernel running the upload refuses instead of silently going direct,
+	 *  because "backed up" is a claim the user will act on.
+	 */
+	webdav_via_proxy: boolean,
 	/**
 	 *  Bypass list written into the Windows proxy settings while X-Matrix owns
 	 *  them. Loopback and RFC1918 are in the default; users behind a corporate
@@ -1842,6 +1892,26 @@ export type UpdateStatus = {
 	url: string,
 	/**  The release notes, trimmed by the caller for display. */
 	notes: string,
+};
+
+/**  What an upload actually did, so the page can say it with numbers. */
+export type WebdavPush = {
+	url: string,
+	bytes: number | null,
+	status: number,
+};
+
+/**  What the settings page needs to render the WebDAV section. */
+export type WebdavState = {
+	url: string,
+	username: string,
+	via_proxy: boolean,
+	/**
+	 *  Whether a password is stored. The password itself never crosses the IPC
+	 *  boundary in either direction: the page only needs to know if one exists,
+	 *  and "leave it alone" is expressed by not sending a new one.
+	 */
+	has_password: boolean,
 };
 
 /* Tauri Specta runtime */

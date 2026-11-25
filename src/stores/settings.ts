@@ -34,10 +34,10 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   /** Throws on rejection so the form can surface the field-level message. */
-  async function save(next: Settings_Deserialize) {
+  async function save(next: Settings_Deserialize, webdavPassword: string | null = null) {
     saving.value = true
     try {
-      settings.value = await api.saveSettings(next)
+      settings.value = await api.saveSettings(next, webdavPassword)
       loaded.value = true
       return settings.value
     } finally {

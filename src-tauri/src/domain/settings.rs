@@ -79,6 +79,23 @@ pub struct Settings {
     /// numbers then measure the queue rather than the nodes. Dozens of nodes
     /// make that tediously slow, so the knob exists with a low default.
     pub test_concurrency: u32,
+    /// WebDAV collection the cloud backup writes into. Empty switches the
+    /// feature off entirely: there is no default server to point at, and a
+    /// guessed one would be someone else's disk.
+    #[serde(default)]
+    pub webdav_url: String,
+    /// User name for that server. The password deliberately does *not* live
+    /// here: it goes to the Windows Credential Manager (`syscreds`), because a
+    /// `store.json` that carried it would leak it into every local export —
+    /// including the one this feature uploads.
+    #[serde(default)]
+    pub webdav_username: String,
+    /// Send the upload through the running tunnel, for servers that only answer
+    /// from outside your ISP. Same trade-off as `subscription_via_proxy`: with
+    /// no kernel running the upload refuses instead of silently going direct,
+    /// because "backed up" is a claim the user will act on.
+    #[serde(default)]
+    pub webdav_via_proxy: bool,
     /// Bypass list written into the Windows proxy settings while X-Matrix owns
     /// them. Loopback and RFC1918 are in the default; users behind a corporate
     /// PAC or a local gateway usually need to add one more entry.
@@ -349,6 +366,9 @@ impl Default for Settings {
             test_url: DEFAULT_TEST_URL.to_string(),
             subscription_user_agent: String::new(),
             subscription_via_proxy: false,
+            webdav_url: String::new(),
+            webdav_username: String::new(),
+            webdav_via_proxy: false,
             dns_servers: String::new(),
             mux_enabled: false,
             mux_concurrency: default_mux_concurrency(),

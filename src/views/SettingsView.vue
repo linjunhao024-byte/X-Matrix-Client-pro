@@ -74,6 +74,18 @@ const backupNote = ref<string | null>(null)
 const backupBusy = ref(false)
 
 /**
+ * WebDAV password, kept out of `draft` on purpose: `draft` is the settings
+ * document, and a password must never reach `store.json` (nor the backups it
+ * produces). `touched` is what separates "left the field alone" from "cleared
+ * it": the first keeps the stored secret, the second forgets it.
+ */
+const webdavPassword = ref('')
+const webdavPasswordTouched = ref(false)
+const webdavHasPassword = ref(false)
+const webdavNote = ref<string | null>(null)
+const webdavBusy = ref(false)
+
+/**
  * Compare resolver lists by content, not spelling: the kernel gets the parsed
  * list, so "1.1.1.1, 8.8.8.8" and "1.1.1.1 ,8.8.8.8" are the same setting.
  */function dnsList(raw: string): string {
@@ -295,6 +307,66 @@ async function restoreConfig(): Promise<void> {
   }
 }
 
+/**
+ * Whether a password is stored, for the field's placeholder. The password
+ * itself never comes back over IPC, so "stored" is all the page can know.
+ */
+async function refreshWebdav(): Promise<void> {
+  try {
+    const state = await api.webdavState()
+    webdavHasPassword.value = state.has_password
+  } catch {
+    // The block still works without this hint; failing to read it must not
+    // paint an error over a settings page that is otherwise fine.
+  }
+}
+
+/** Upload the configuration to the configured WebDAV folder. */
+async function uploadBackup(): Promise<void> {
+  webdavBusy.value = true
+  webdavNote.value = null
+  try {
+    const result = await api.webdavUpload()
+    webdavNote.value = t('settings.webdav.uploaded', {
+      bytes: result.bytes ?? 0,
+      url: result.url,
+    })
+  } catch (error) {
+    webdavNote.value = describeError(error)
+  } finally {
+    webdavBusy.value = false
+  }
+}
+
+/**
+ * Replace the configuration with the cloud copy.
+ *
+ * Same rule as a file restore: the backend refuses while a kernel runs, because
+ * that kernel was rendered from the document being replaced.
+ */
+async function restoreBackup(): Promise<void> {
+  webdavBusy.value = true
+  webdavNote.value = null
+  try {
+    const summary = await api.webdavRestore()
+    if (summary) {
+      webdavNote.value = t('settings.webdav.restored', {
+        nodes: summary.nodes ?? 0,
+        rules: summary.rules ?? 0,
+        groups: summary.groups ?? 0,
+        ruleSets: summary.rule_sets ?? 0,
+      })
+      await store.load(true)
+      if (store.settings) draft.value = { ...store.settings }
+      await refreshWebdav()
+    }
+  } catch (error) {
+    webdavNote.value = describeError(error)
+  } finally {
+    webdavBusy.value = false
+  }
+}
+
 async function refreshAutostart() {
   try {
     autostart.value = await api.autostartStatus()
@@ -492,6 +564,7 @@ onMounted(async () => {
   await proxy.refresh()
   await refreshAutostart()
   await refreshKernelBinaries()
+  await refreshWebdav()
 })
 
 async function save() {
@@ -499,8 +572,18 @@ async function save() {
   error.value = null
   saved.value = false
   try {
-    await store.save({ ...draft.value })
+    // `null` means "keep what is stored"; `''` means "forget it". Both only
+    // ever happen on an explicit edit, so an untouched field is not a silent
+    // erase of a working password.
+    await store.save(
+      { ...draft.value },
+      webdavPasswordTouched.value ? webdavPassword.value : null,
+    )
     draft.value = { ...(store.settings as Settings_Serialize) }
+    // The secret now lives in the Credential Manager; the field keeps nothing.
+    webdavPassword.value = ''
+    webdavPasswordTouched.value = false
+    await refreshWebdav()
     saved.value = true
     await refreshAutostart()
     // Saving may have just taken or released the system proxy (the backend
@@ -912,6 +995,58 @@ async function save() {
           </button>
         </div>
         <p v-if="backupNote" class="field-hint">{{ backupNote }}</p>
+      </section>
+
+      <section class="surface-plain panel">
+        <h2 class="section-title">{{ t('settings.webdav.title') }}</h2>
+        <p class="field-hint">{{ t('settings.webdav.hint') }}</p>
+        <div class="grid" v-if="draft">
+          <label class="field">
+            <span>{{ t('settings.webdav.address') }}</span>
+            <input
+              v-model="draft.webdav_url"
+              class="input input-mono"
+              type="text"
+              :placeholder="t('settings.webdav.addressPlaceholder')"
+            />
+          </label>
+          <label class="field">
+            <span>{{ t('settings.webdav.username') }}</span>
+            <input v-model="draft.webdav_username" class="input" type="text" autocomplete="username" />
+          </label>
+          <label class="field">
+            <span>{{ t('settings.webdav.password') }}</span>
+            <input
+              v-model="webdavPassword"
+              class="input"
+              type="password"
+              autocomplete="current-password"
+              :placeholder="
+                webdavHasPassword
+                  ? t('settings.webdav.passwordStored')
+                  : t('settings.webdav.passwordEmpty')
+              "
+              @input="webdavPasswordTouched = true"
+            />
+          </label>
+        </div>
+        <p class="field-hint">{{ t('settings.webdav.passwordHint') }}</p>
+        <div v-if="draft">
+          <ToggleSwitch
+            v-model="draft.webdav_via_proxy"
+            :label="t('settings.webdav.viaProxy')"
+            :description="t('settings.webdav.viaProxyHint')"
+          />
+        </div>
+        <div class="row">
+          <button class="btn btn-sm" type="button" :disabled="webdavBusy" @click="uploadBackup()">
+            {{ t('settings.webdav.upload') }}
+          </button>
+          <button class="btn btn-sm" type="button" :disabled="webdavBusy" @click="restoreBackup()">
+            {{ t('settings.webdav.restore') }}
+          </button>
+        </div>
+        <p v-if="webdavNote" class="field-hint">{{ webdavNote }}</p>
       </section>
 
       <p class="field-hint">

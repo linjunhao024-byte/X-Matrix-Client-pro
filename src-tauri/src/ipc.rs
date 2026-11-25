@@ -12,6 +12,9 @@ pub fn builder() -> Builder<tauri::Wry> {
     Builder::<tauri::Wry>::new().commands(collect_commands![
         commands::backup::backup_save,
         commands::backup::backup_load,
+        commands::webdav::webdav_state,
+        commands::webdav::webdav_upload,
+        commands::webdav::webdav_restore,
         commands::node::list_nodes,
         commands::node::upsert_node,
         commands::node::delete_node,
