@@ -199,7 +199,7 @@ fn windows_is_elevated() -> bool {
 }
 
 #[cfg(windows)]
-fn wide(text: impl AsRef<std::ffi::OsStr>) -> Vec<u16> {
+pub(crate) fn wide(text: impl AsRef<std::ffi::OsStr>) -> Vec<u16> {
     use std::os::windows::ffi::OsStrExt;
 
     text.as_ref().encode_wide().chain(std::iter::once(0)).collect()

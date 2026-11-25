@@ -16,6 +16,7 @@ import {
   type EngineKind,
   type KernelRelease_Serialize,
   type ProxyMode,
+  type ServiceState_Serialize,
   type Settings_Serialize,
 } from '../services/contract'
 import { useEngineStore } from '../stores/engine'
@@ -460,6 +461,64 @@ const elevateLine = computed(() => {
 })
 
 /**
+ * The kernel service: `null` until the backend answers, then the whole state.
+ *
+ * The state is read from the service control manager, so it is the real answer
+ * to 「装了没有 / 在不在跑」 rather than an echo of what we asked for.
+ */
+const service = ref<ServiceState_Serialize | null>(null)
+const serviceError = ref<string | null>(null)
+const serviceBusy = ref(false)
+
+async function refreshService() {
+  try {
+    service.value = await api.serviceState()
+  } catch {
+    service.value = null
+  }
+}
+
+/**
+ * Install the service, or remove it.
+ *
+ * Both need an administrator token, and both are refused by the backend when
+ * the token is ordinary — the wording comes from Rust so it reads the same as
+ * a failed restart. On success the backend re-probes, so a kernel started from
+ * now on is handed to the service (or spawned here again after a removal).
+ */
+async function installService(): Promise<void> {
+  if (serviceBusy.value) return
+  serviceBusy.value = true
+  serviceError.value = null
+  try {
+    service.value = await api.serviceInstall()
+  } catch (cause) {
+    serviceError.value = describeError(cause)
+  } finally {
+    serviceBusy.value = false
+  }
+}
+
+async function uninstallService(): Promise<void> {
+  if (serviceBusy.value) return
+  serviceBusy.value = true
+  serviceError.value = null
+  try {
+    service.value = await api.serviceUninstall()
+  } catch (cause) {
+    serviceError.value = describeError(cause)
+  } finally {
+    serviceBusy.value = false
+  }
+}
+
+/** What the service line says: the backend's own sentence, or a fault. */
+const serviceLine = computed(() => {
+  if (serviceError.value) return serviceError.value
+  return service.value?.detail ?? null
+})
+
+/**
  * The two kernels, in the order a user meets them.
  *
  * `Xray` and `sing-box` are product names, so they are not translated — the
@@ -648,6 +707,7 @@ onMounted(async () => {
   await proxy.refresh()
   await refreshAutostart()
   await refreshElevated()
+  await refreshService()
   await refreshKernelBinaries()
   await refreshWebdav()
 })
@@ -887,6 +947,31 @@ async function save() {
         <div class="divider" />
         <ToggleSwitch v-model="draft.prompt_elevation" :label="t('settings.elevate.prompt')" />
         <p class="field-hint">{{ t('settings.elevate.promptHint') }}</p>
+        <div class="divider" />
+        <h3 class="service-title">{{ t('settings.service.title') }}</h3>
+        <p v-if="serviceLine" class="field-hint" :class="{ 'elevate-failed': serviceError }">
+          {{ serviceLine }}
+        </p>
+        <div class="row">
+          <button
+            class="btn btn-sm"
+            type="button"
+            :disabled="serviceBusy || service === null || elevated === false || service.installed"
+            @click="installService()"
+          >
+            {{ t('settings.service.install') }}
+          </button>
+          <button
+            class="btn btn-ghost btn-sm"
+            type="button"
+            :disabled="serviceBusy || service === null || elevated === false || !service.installed"
+            @click="uninstallService()"
+          >
+            {{ t('settings.service.uninstall') }}
+          </button>
+        </div>
+        <p v-if="service?.running" class="field-hint">{{ t('settings.service.installed') }}</p>
+        <p class="field-hint">{{ t('settings.service.hint') }}</p>
       </section>
 
       <section class="surface-plain panel">
@@ -1437,6 +1522,16 @@ kbd {
  */
 .elevate-failed {
   color: var(--danger);
+}
+
+/*
+ * The service is the second half of 权限: same card, one step below the
+ * elevation line, so 「谁在跑内核」 reads top to bottom.
+ */
+.service-title {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .kernel-path {

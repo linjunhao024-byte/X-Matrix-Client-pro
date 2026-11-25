@@ -99,5 +99,8 @@ pub fn builder() -> Builder<tauri::Wry> {
         commands::process::list_processes,
         commands::elevate::app_elevated,
         commands::elevate::restart_elevated,
+        commands::service::service_state,
+        commands::service::service_install,
+        commands::service::service_uninstall,
     ])
 }

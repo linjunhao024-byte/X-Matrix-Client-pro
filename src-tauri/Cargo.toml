@@ -77,6 +77,9 @@ windows-sys = { version = "0.60", features = [
     # 所以两个 feature 都要开。
     "Win32_UI_Shell",
     "Win32_System_Registry",
+    # 内核托管服务：SCM 的安装/启动/查询/删除，以及同一个二进制用 --service
+    # 跑成服务时的 StartServiceCtrlDispatcherW / SetServiceStatus。
+    "Win32_System_Services",
 ] }
 # Lite mode asks WebView2 itself to shrink: `SetMemoryUsageTargetLevel` lives on
 # `ICoreWebView2_13`, and the controller Tauri hands out is a webview2-com object,

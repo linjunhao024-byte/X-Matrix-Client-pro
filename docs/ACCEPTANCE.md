@@ -1729,3 +1729,57 @@ bash /d/tmp/shots/56-elev-accept.sh "" elev3      # PHASES 可覆盖，默认 ui
 ### 一句实话
 
 这一节验到的是「识别 + 门禁 + 偏好持久化」三件事：状态行、按钮禁用、开关默认值与持久化，都有真机记录。**「点一下真的换成管理员令牌」没在这台机器上验过**——原因是环境造不出那个前置状态（坑 1），不是代码没写。这条路径目前的证据只有单测（错误码文案、`--relaunch-wait` 解析、宽字符结尾）与「先起后停」的代码顺序；要补它，需要一台开着 UAC 管理审批、且能用普通用户登录的机器。补的时候请照判据 7、8 走，别只看 `clicked: True`。
+
+## 57. 内核交给 Windows 服务：装上以后内核是 SYSTEM，卸掉以后回到界面自己拉起（2026-11-25，云电脑 cloudpc-test）
+
+### 要证的事
+
+1. 点「安装服务」之后，`sc query XMatrixKernel` 真的是 `RUNNING`（不是「界面以为装了」）。
+2. 服务要能知道内核在哪：`HKLM\Software\X-Matrix\Service` 的 `EnginesDir` 写进去了，值是当前内核目录。
+3. 作业目录 `C:\ProgramData\X-Matrix\jobs` 对 `BUILTIN\Users` 有写权限（界面要能往里丢作业，否则服务模式对普通用户等于关着）。
+4. 从界面启动内核，内核必须跑在服务下面：进程用户名 `NT AUTHORITY\SYSTEM`、会话 `Services`、会话号 `0`；不是服务时是 `Administrator`、会话 `1`。
+5. 点「卸载服务」之后：`sc query` 回到 1060（没这个服务）、注册表键被删掉、内核回到界面的普通子进程（`Administrator` / 会话 `1`）。
+6. 没装服务时「卸载服务」按钮必须是 disabled 的；装好之后反过来——安装 disabled、卸载 enabled。
+
+### 验法
+
+```bash
+cd /d/tmp/shots && ./57-service-accept.sh "" svc6
+```
+
+一次会话里跑两个阶段（`install` → `uninstall`），驱动 `57-service.ps1` 用 UIA 点按钮、用 `sc query` / `reg query` / `icacls` / `tasklist /v` 当场取证；宿主侧再独立查一遍同样的四样东西，驱动日志和机器说法不一致就会被看见。
+
+### 判据（`del/57-svc6-install.txt` / `del/57-svc6-uninstall.txt`）
+
+| # | 判据 | 结果 |
+|---|---|---|
+| 1 | 点安装前：`sc query` 1060、两个按钮里只有安装 enabled | ✅ `sc before: absent`、`安装服务 enabled=True / 卸载服务 enabled=False` |
+| 2 | 点安装后：服务 RUNNING | ✅ `STATE : 4 RUNNING (STOPPABLE, NOT_PAUSABLE, IGNORES_SHUTDOWN)`、`sc became running: True` |
+| 3 | 注册表写下内核目录 | ✅ `EnginesDir REG_SZ C:\Users\Administrator\AppData\Roaming\com.xmatrix.client\engines` |
+| 4 | 作业目录给 Users 写权限 | ✅ `BUILTIN\Users:(OI)(CI)(M)`；另有 SYSTEM/Administrators 的 `(F)` 继承项 |
+| 5 | 界面状态行如实说清身份 | ✅ `服务在运行：内核由 SYSTEM 启动` |
+| 6 | 从界面启动的内核跑在服务下 | ✅ `"xray.exe","1332","Services","0",…,"NT AUTHORITY\SYSTEM"` |
+| 7 | 点卸载后服务消失、注册表键删掉 | ✅ `sc: 1060 指定的服务未安装`、`reg:`（空）、`sc became absent: True` |
+| 8 | 卸载后内核回到界面自己拉起 | ✅ `"xray.exe","3988","Console","1",…,"Administrator"` |
+| 9 | 装/卸后按钮 enabled 跟着翻 | ✅ 装完 `安装=False / 卸载=True`；卸完 `安装=True / 卸载=False` |
+
+### 设计理由
+
+1. **作业用目录，不用命名管道。** 管道要自己写安全描述符，写错就是提权洞（任何进程都能让 SYSTEM 起任意 exe）。用目录把「谁能请求」交给 ACL：`jobs\` 允许 Users 写，服务只读，`CreateFile` 时加 `FILE_SHARE_READ`，认领用同卷 `fs::rename`——原子，两个实例也只有一个能拿住同一个作业。
+2. **服务不给客户端传 exe 路径。** 作业里只有 `kind`（xray/sing-box），真正的 exe 由服务从 `HKLM\Software\X-Matrix\Service\EnginesDir` 读，而且**每个作业重读一次**。就算有人往 `jobs\` 里塞一条 `kind=xray` 的作业，也只能启动服务自己登记的那个 `xray.exe`。
+3. **先探测就绪再回话。** 服务起内核后每 100ms 探一次控制端口，最多 8 秒；没开就 kill 并回错误。这既让界面能立刻判断成败，也避免把「进程起来了但没在服务」报成成功。
+4. **卸载保留目录与 ACL。** 卸载删服务、删注册表键，但 `%ProgramData%\X-Matrix\jobs` 和它的 ACL 留着——下次装回来不用重新授权，也不会有「目录还在但权限被回收」的中间态。这个决定要写在文档里，不然下一个人会以为是漏删。
+5. **结果文件用 `.tmp` + rename。** 界面读到的结果永远是完整 JSON，不会读到半个文件；超时就把作业删掉，服务那边即使晚到也认领不到。
+
+### 坑
+
+1. **UIA 给的按钮坐标可能在窗口外面。** 权限卡在设置页很下面，`Buttons-Named` 返回 `rect=444,1152`，点 1174 等于点在窗口边框上——按钮 enabled 还是 True、日志里 `click install` 也返回 True，看起来「点了」，其实什么都没发生。必须按 `Get-Win` 的 `BoundingRectangle` 判断可点区间（这次是 `Top=64..800 底部-24`）。
+2. **disabled 按钮点下去也返回成功。** 与 §56 同一个坑：`Click` 不报错、日志 `clicked: True`，区别只在 enabled 是 False。判断「禁用状态」要读 `El.Current.IsEnabled`，不要读点击返回值。
+3. **`Buttons-Named` 返回的是 PSCustomObject，不是 AutomationElement。** `$b.Current…` 永远是空串，会让人误以为「按钮没渲染」；要取 `$b.Left/$b.Top/$b.W/$b.H` 与 `$b.El.Current.IsEnabled`。
+4. **python 打印日志会在 GBK 控制台崩。** 日志里有 PUA 字符（图标字），`print` 直接 `UnicodeEncodeError: 'gbk' codec can't encode character '\ue047'`；`show_log.py` 里 `sys.stdout.reconfigure(encoding='utf-8', errors='replace')` 才稳。
+5. **`sc query` 的中文经 ssh 管道是乱码**（`EnumQueryServicesStatus:OpenService 失败 1060`），判定要按 `STATE :`、`1060`、`RUNNING` 这些 ASCII 关键字，不要按中文。
+6. **每次会话开头会先 `sc stop` + `sc delete` 老服务。** 所以只跑 `uninstall` 单个阶段时，服务一开始就是 absent——那只能证明「没装时按钮是禁用的」，不能证明卸载；验卸载必须同一轮先 install 再 uninstall。
+
+### 一句实话
+
+这次真机验到了：装服务、服务 RUNNING、注册表登记、作业目录 ACL、内核以 SYSTEM 起在服务下、卸载后服务与键消失、内核回到界面的普通子进程、按钮 enabled 跟随状态。**没验到的**：服务启动慢到 SCM 判 1053 的那种时序（8 秒就绪探测只在「快」的一侧验过）、`icacls` 失败分支、以及服务模式下内核日志写在 `%ProgramData%\X-Matrix\service\<kind>.log` 而界面「日志」面板仍读 app-data 的 `logs\<kind>.log`——服务分支没有回填 `log_path`，界面上看不到服务内核的日志，这一处是已知缺口，不当成「已经对齐」。

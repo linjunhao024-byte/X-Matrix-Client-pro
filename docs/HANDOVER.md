@@ -10,7 +10,7 @@
 ## 0. 三句话现状
 
 1. 主体功能已追平 V2RayN / Clash 的日常面：双内核（Xray / sing-box）渲染与启停、系统代理接管与还原、订阅/整包导入、Clash 配置连同 **策略组与规则** 一起导入、运行中热切换节点与代理模式、托盘子菜单、日志页、hysteria2 / tuic、真实延迟（分组与节点）、流量历史落盘、一键断开全部 + 进程归属、测速预算与「选最快」、域名正则 / 域名分类匹配器、诊断包导出、全局快捷键。
-2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§56）。
+2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§57）。
 3. 交接时那处未提交的工作（N12 应用内更新检查）已经构建、真机验收并提交；此后又合入四件事：`--quit` 正常退出并删除托盘图标（§21）、GEO 数据文件卡片与镜像回退下载（§23）、测速记录落盘（§24）。工作区现在是干净的。
 
 ### 0.1 进度快照（交接这一刻的硬数字）
@@ -18,15 +18,15 @@
 | 项 | 值 |
 |---|---|
 | 代码 HEAD | 「feat(backup): put the same backup file on a WebDAV server, and keep the password out of it」，含 §54（S6 WebDAV 云备份）；前一条是「feat(kernel): download an official release, check it against the upstream digest when there is one」（§53）——就是 `git log --oneline -- src-tauri/src/engine/release.rs` 的第一条；再往前：§52（S9，查 `src-tauri/src/engine/groupwatch.rs`）、§51（S11，查 `src-tauri/src/sysproc.rs`）、§50（S10）、§49（S8）、`a794438`（§48）、`6fd790f`（§47） |
-| 未提交 | 无。§56（S4a 提权）的代码、构建、真机验收、`docs/ACCEPTANCE.md` §56 与 `docs/PARITY-PLAN.md` 都在同一次提交里（见 §0.12） |
+| 未提交 | 无。§57（S4b 内核服务）的代码、构建、真机验收、`docs/ACCEPTANCE.md` §57 与 `docs/PARITY-PLAN.md` 都在同一次提交里（见 §0.13） |
 | 上一版未提交清单（留档） | `src-tauri/src/domain/settings.rs`、`src-tauri/src/engine/{mod,render,runtime,xray}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§39 分片）；再上一版：`src-tauri/src/engine/{mod,runtime}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§37 统一提示）；再上一版：`src-tauri/src/commands/settings.rs`、`src-tauri/src/commands/sysproxy.rs`、`src/stores/sysproxy.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`、`docs/ACCEPTANCE.md`（§36 系统代理即时生效） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库；之后每次收尾都跟着更新 |
-| IPC 命令 | **89**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
-| Rust 单测 | **464 passed**（`ARCHITECTURE.md:278` 已同步） |
+| IPC 命令 | **92**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
+| Rust 单测 | **489 passed**（`ARCHITECTURE.md:278` 已同步） |
 | 前端检查 | `npm run check` 全绿：vue-tsc / architecture（66 文件）/ contract / vitest **116**（12 文件） |
-| i18n | **824** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
-| 桌面产物 | 桌面上的旧副本**已不存在**；唯一产物是 `src-tauri/target/release/x-matrix.exe`（10,780,160 B @2026-11-25 13:15，md5 `ceb34418e96886759b8a38d24539f904`，含 §21–§56 全部改动） |
-| 验收文档 | `docs/ACCEPTANCE.md` §0–§56（§7 历史空缺，编号不连续但内容完整） |
+| i18n | **829** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
+| 桌面产物 | 桌面上的旧副本**已不存在**；唯一产物是 `src-tauri/target/release/x-matrix.exe`（10,882,560 B @2026-11-25 15:04，md5 `9bafd2050acc3428ca2e8a5fad180b98`，含 §21–§57 全部改动） |
+| 验收文档 | `docs/ACCEPTANCE.md` §0–§57（§7 历史空缺，编号不连续但内容完整） |
 | 云电脑 | 干净：`ProxyEnable=0x0`、无 X-Matrix/sing-box/xray 进程、无 `xm*` 计划任务 |
 
 **下一步的确定顺序**（做完一条打一个勾，别跳）：
@@ -37,7 +37,7 @@
 - [x] 4. `docs/ACCEPTANCE.md` 写到 §26
 - [x] 5. 提交（`fix(tray)` / `feat(update)` / `feat(geo,nodes)` / `feat(engine)` 各一条）
 - [x] 6. `FEED_URL` 已指向真实仓库 `linjunhao024-byte/X-Matrix-Client-pro`，`v0.1.0` 已发布并带 `X-Matrix.exe` 资产
-- [x] 7. 计数已同步：89 命令 / 464 单测 / 116 vitest / 824 i18n 键 × 3
+- [x] 7. 计数已同步：92 命令 / 489 单测 / 116 vitest / 829 i18n 键 × 3
 - [x] 8. `bash /d/tmp/shots/cleanup.sh` 收尾云电脑（2026-11-24 23:55 再跑一次：`ProxyEnable 0x0`、无 `xm*` 任务）
 - [x] 9. §47 订阅刷新后前端握着死 ID：补丁 → 构建 → 云电脑两轮对比验收 → 写 §47 → 提交（2026-11-25 02:36）
 - [x] 10. §48（S2）PAC 自动配置：生成脚本 + 注册表互斥 + 回环/私网兜底 → 构建 → 云电脑验收 → 写 §48 → 提交（2026-11-25 04:20）；后续 S10/S11/S9/S3/S6/S5/S4/S1/S7 见 `docs/PARITY-PLAN.md`
@@ -149,6 +149,17 @@
 
 ---
 
+### 0.13 §57（S4b）内核服务：装上以后内核是 SYSTEM（已完成，2026-11-25）
+
+- **为什么做**：`docs/PARITY-PLAN.md` 第 9 项的后半，也是 S1（TUN）的前置——TUN 要管理员权限，每次点都弹 UAC 不是能用的产品。
+- **做了什么**：新 `src-tauri/src/service.rs`（1274 行：`--service` 入口走真的 SCM dispatcher `StartServiceCtrlDispatcherW` → `RegisterServiceCtrlHandlerW` → `SetServiceStatus`，不再是裸循环；作业协议 `<nonce>.job.json` → `rename` 认领 → `<nonce>.result.json`；`EnginesDir` 每作业重读、`engine_binary()` 只认两个内核名；就绪 100ms 探测 ≤8s；`running.json` 平铺、启动最前只回收 exe 名属于两个内核的孤儿；install/uninstall 走 `CreateServiceW`/`ChangeServiceConfigW` + `icacls *S-1-5-32-545:(OI)(CI)M`）、`service_client.rs`（386 行：作业往返 10s 超时、`probe()` 只在「已安装且运行中」返回、`ServiceProcess` 停内核走作业、存活判断用 Toolhelp 快照避免读不到 SYSTEM 进程而误判）、`commands/service.rs`（111 行：三条命令，未提权报书里原文）。`engine/runtime.rs` 里 `service: RwLock<Option<...>>` + `refresh_service()`，有服务就交作业、不再本地 spawn，`Running.via_service` 决定停止路径。命令 89 → **92**。
+- **验收**：`bash /d/tmp/shots/57-service-accept.sh "" svc6`（一轮里先 install 再 uninstall）。已验：`sc query` 由 1060 → `STATE : 4 RUNNING`；`EnginesDir REG_SZ C:\Users\Administrator\AppData\Roaming\com.xmatrix.client\engines`；`C:\ProgramData\X-Matrix\jobs` 上 `BUILTIN\Users:(OI)(CI)(M)`；界面状态行「服务在运行：内核由 SYSTEM 启动」；从界面启动的内核是 `"xray.exe","1332","Services","0",…,"NT AUTHORITY\SYSTEM"`；卸载后 `sc 1060`、`reg` 空、内核回到 `"xray.exe","3988","Console","1",…,"Administrator"`；按钮 enabled 跟着状态翻。**未验**：服务启动慢到 SCM 判 1053 的时序、`icacls` 失败分支、服务内核日志在 `%ProgramData%\X-Matrix\service\<kind>.log` 而界面日志面板仍读 app-data 的 `logs\<kind>.log`（服务分支没回填 `log_path`，是已知缺口）。
+- **坑**：① UIA 给的按钮坐标可能在窗口外（`rect=444,1152`，点 1174 等于点在边框上，按钮 enabled 还是 True、日志还说 clicked），必须按 `Get-Win` 的 `BoundingRectangle` 算可点区间；② disabled 按钮点下去也返回 True（§56 同一个坑）；③ `Buttons-Named` 返回 `PSCustomObject`，要取 `$b.Left/$b.Top/$b.W/$b.H` 与 `$b.El.Current.IsEnabled`；④ python 打印日志在 GBK 控制台崩（PUA 字符），`show_log.py` 里 `sys.stdout.reconfigure(encoding='utf-8', errors='replace')`；⑤ `sc query` 中文经 ssh 管道乱码，判定按 `STATE :`/`1060`/`RUNNING` 关键字；⑥ 每次会话开头先 `sc stop` + `sc delete`，只跑 uninstall 单阶段时服务本来就 absent——验卸载必须同一轮先 install。
+- **计数**：命令 **89 → 92**（+3）、Rust **464 → 489**（+25）、vitest **116**（+0）、i18n **824 → 829**（+5）。
+
+
+---
+
 ## 1. 项目坐标与命令
 
 | 项 | 值 |
@@ -161,10 +172,10 @@
 | 后端测试 | `cd src-tauri && cargo test --lib` |
 | 契约重生成 | `npm run gen:contract`（改了命令签名就必须跑，`check:contract` 会拦） |
 | 桌面产物 | `/c/Users/83611/Desktop/X-Matrix.exe`、`/c/Users/83611/Desktop/X-Matrix_0.1.0_x64-setup.exe` |
-| 当前构建产物 | `src-tauri/target/release/x-matrix.exe` **10,780,160 B @2026-11-25 13:15，md5 `ceb34418e96886759b8a38d24539f904`**（含 §21–§56）；桌面副本已不在，需要时自己 `cp` 过去 |
+| 当前构建产物 | `src-tauri/target/release/x-matrix.exe` **10,882,560 B @2026-11-25 15:04，md5 `9bafd2050acc3428ca2e8a5fad180b98`**（含 §21–§57）；桌面副本已不在，需要时自己 `cp` 过去 |
 
-**计数基线（改动后记得同步文档）**：命令 **89**、`cargo test --lib` **464**、vitest **116**（12 个文件）、i18n **824** 键。
-> `README.md:81` 与 `ARCHITECTURE.md:277-278` 已同步为 84 条命令 / 434 项测试。
+**计数基线（改动后记得同步文档）**：命令 **92**、`cargo test --lib` **489**、vitest **116**（12 个文件）、i18n **829** 键。
+> `README.md:81` 与 `ARCHITECTURE.md:277-278` 已同步为 92 条命令 / 489 项测试。
 
 命令数核算法：
 
@@ -217,7 +228,7 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 
 ## 4. 已完成的功能与验收索引
 
-`docs/ACCEPTANCE.md` 是**唯一可信的进度表**（§0–§56 共 56 节，每节都有「验法 + 判据 + 设计理由 + 坑」）：
+`docs/ACCEPTANCE.md` 是**唯一可信的进度表**（§0–§57 共 57 节，每节都有「验法 + 判据 + 设计理由 + 坑」）：
 
 | 节 | 内容 |
 |---|---|
@@ -413,7 +424,7 @@ scp -i /c/Users/83611/.ssh/id_ed25519_cpc 本地文件 Administrator@100.106.121
 
 1. `cd /d/GitHub-Warehouse/X-Matrix-Client-Pro && git status` —— 工作区应当干净；有改动先弄清是谁的。
 2. 读本文件的 §5 与 `docs/ACCEPTANCE.md` 的最后两节，对齐上下文。
-3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 464 passed）。
+3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 489 passed）。
 4. `cd .. && npm run check`（应为全绿）。
 5. 从 §6 表里挑一项（按性价比排序），**一项一提交**，提交信息用英文 `feat(...)/fix(...)/docs: ...`。
 6. 真机验证前先跑 `bash /d/tmp/shots/deploy-tray.sh <exe>`；远端被 `cleanup.sh` 清过的话，先 `scp x-act.ps1 uia2.ps1 ocr.ps1` 上去。

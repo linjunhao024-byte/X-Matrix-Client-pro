@@ -353,6 +353,9 @@ export const commands = {
 	 *  should treat a resolved promise as "gone".
 	 */
 	restartElevated: () => typedError<null, AppError>(__TAURI_INVOKE("restart_elevated")),
+	serviceState: () => __TAURI_INVOKE<ServiceState_Serialize>("service_state"),
+	serviceInstall: () => typedError<ServiceState_Serialize, AppError>(__TAURI_INVOKE("service_install")),
+	serviceUninstall: () => typedError<ServiceState_Serialize, AppError>(__TAURI_INVOKE("service_uninstall")),
 };
 
 /* Types */
@@ -1335,6 +1338,37 @@ pinned_cert_sha256: string[] } | { kind: "Reality"; public_key: string; short_id
 fingerprint: string; 
 /**  Reality spider path (`spx`). Only Xray consumes it. */
 spider_x: string };
+
+/**
+ *  What the settings page shows. The four fields are pinned by the task book;
+ *  the pid already lives in `detail` where it belongs (one sentence, not a
+ *  separate value the UI has to format).
+ */
+export type ServiceState = ServiceState_Serialize | ServiceState_Deserialize;
+
+/**
+ *  What the settings page shows. The four fields are pinned by the task book;
+ *  the pid already lives in `detail` where it belongs (one sentence, not a
+ *  separate value the UI has to format).
+ */
+export type ServiceState_Deserialize = {
+	installed: boolean,
+	running: boolean,
+	engines_dir?: string | null,
+	detail: string,
+};
+
+/**
+ *  What the settings page shows. The four fields are pinned by the task book;
+ *  the pid already lives in `detail` where it belongs (one sentence, not a
+ *  separate value the UI has to format).
+ */
+export type ServiceState_Serialize = {
+	installed: boolean,
+	running: boolean,
+	engines_dir: string | null,
+	detail: string,
+};
 
 /**
  *  Backend-owned settings: everything here must survive an app restart.

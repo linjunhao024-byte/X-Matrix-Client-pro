@@ -16,6 +16,7 @@
 //!   behind.
 
 use std::collections::HashMap;
+use std::fs;
 use std::io::Write;
 use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
@@ -358,6 +359,9 @@ struct Running {
     /// taken the process down: either way the exit was the user's decision, not
     /// a crash worth a notification.
     expected: bool,
+    /// True when the kernel was started by the installed service: this process
+    /// has no child handle to kill, so stopping goes through a job file.
+    via_service: bool,
 }
 
 /// Owns at most one running kernel.
@@ -381,6 +385,10 @@ pub struct EngineRuntime {
     /// Created on the first start; see [`crate::engine::job`] for why the kernel
     /// is adopted into it.
     job: OnceLock<Option<KillOnCloseJob>>,
+    /// When a kernel service is installed and running, kernels are started by
+    /// it (as SYSTEM) instead of by this process. `None` means "spawn locally",
+    /// which is also what an ordinary user without the service gets.
+    service: RwLock<Option<Arc<Mutex<crate::service_client::ServiceClient>>>>,
     /// The stop flag of the group watcher for the current kernel, when one is
     /// running. Setting it is the only way that thread is told to go away, so
     /// [`EngineRuntime::stop`] takes it (leaving `None`) before killing the
@@ -416,9 +424,26 @@ impl EngineRuntime {
             running: Mutex::new(None),
             last_exit_code: Mutex::new(None),
             unexpected_exit: Mutex::new(None),
+            service: RwLock::new(None),
             job: OnceLock::new(),
             watcher: Mutex::new(None),
         }
+    }
+
+    /// Hand kernels to the installed service (see [`crate::service`]) instead
+    /// of spawning them here. The service decides which executables may run, so
+    /// this is also how a TUN inbound gets an administrator token without the
+    /// GUI holding one.
+    pub fn set_service(&self, client: Option<Arc<Mutex<crate::service_client::ServiceClient>>>) {
+        *self.service.write() = client;
+    }
+
+    /// Re-probe the service after an install or uninstall, so the next start
+    /// uses it (or stops using it) without restarting the app.
+    pub fn refresh_service(&self) {
+        self.set_service(
+            crate::service_client::probe().map(|client| Arc::new(Mutex::new(client))),
+        );
     }
 
     /// Put a freshly spawned kernel under the kill-on-close job, so it cannot
@@ -519,8 +544,21 @@ impl EngineRuntime {
         let args = engine.args(&config_path.to_string_lossy());
         let log_path = self.log_dir.join(format!("{}.log", kind.as_str()));
 
-        let mut handle = self.spawner.spawn(&exe, &args, &log_path)?;
-        self.adopt_into_job(handle.pid());
+        let service = self.service.read().clone();
+        let via_service = service.is_some();
+        let mut handle: Box<dyn ProcessHandle> = match service {
+            Some(client) => {
+                let config = fs::read_to_string(&config_path)
+                    .map_err(|e| AppError::Io(format!("读不到刚写好的配置：{e}")))?;
+                let pid = client.lock().start(kind, &config, endpoints.api_port)?;
+                Box::new(crate::service_client::ServiceProcess { pid, kind, client })
+            }
+            None => {
+                let handle = self.spawner.spawn(&exe, &args, &log_path)?;
+                self.adopt_into_job(handle.pid());
+                handle
+            }
+        };
 
         if let Err(ready_err) = self.probe.wait_for_port(endpoints.api_port, READY_TIMEOUT) {
             // A kernel that never became ready is dead weight: kill it and
@@ -556,6 +594,7 @@ impl EngineRuntime {
             fragment_interval: fragment_interval.clone(),
             test_url: test_url.clone(),
             expected: false,
+            via_service,
         });
         *self.last_exit_code.lock() = None;
         // A report left over from the previous kernel must not be announced
@@ -626,6 +665,20 @@ impl EngineRuntime {
         // announced as a crash — not even if `kill` returns an error after
         // having taken the process down.
         running.expected = true;
+        if running.via_service {
+            // The kernel runs as SYSTEM under the service. This token may not
+            // even be allowed to signal it, and a half-performed kill would be
+            // a lie: let the service stop its own child, then forget the state.
+            if let Some(client) = self.service.read().clone() {
+                client.lock().stop(running.kind)?;
+            } else {
+                // The service vanished between the start and this stop; the
+                // handle still holds its own client, so it can say what is left.
+                running.handle.kill()?;
+            }
+            *guard = None;
+            return Ok(());
+        }
         running.handle.kill()?;
         *guard = None;
         Ok(())

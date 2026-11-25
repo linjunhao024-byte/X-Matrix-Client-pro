@@ -18,8 +18,8 @@
 | 6 | S3 | 内核下载 / 更新 | 需要网络 + 代理 | 与 S1 无耦合，但要处理「换文件时内核在跑」 |
 | 7 | S6 | WebDAV 云备份 | 已完成（2026-11-25） | 复用现有备份包，加一层传输 |
 | 8 | S5 | 轻量模式 | — | WebView2 内存与轮询降载，独立 |
-| 9 | S4 | 提权 / 服务模式 | — | TUN 的前置：不解决权限，TUN 每次都要 UAC |
-| 10 | S1 | TUN 虚拟网卡 | **S4** | 需要管理员权限与 sing-box `tun` 入站；只对 sing-box 诚实支持 |
+| 9 | S4 | 提权 / 内核服务（已完成 2026-11-25） | — | TUN 的前置：不解决权限，TUN 每次都要 UAC |
+| 10 | S1 | TUN 虚拟网卡 | **S4（已完成）** | 需要管理员权限与 sing-box `tun` 入站；只对 sing-box 诚实支持 |
 | 11 | S7 | 多配置（profile 层） | 前面各项都会改 `render.rs` | 架构级改动，放最后，避免前面的成果反复重写 |
 
 ## 每一项的判据（写完打勾）
@@ -89,6 +89,8 @@ PAC 只表达**能表达的**：绕过列表 + 规则里「直连」的域名类
 ### S4 · 提权 / 服务模式
 **结果（2026-11-25，只做完前半 S4a）**：`src-tauri/src/elevate.rs` 判断令牌、`ShellExecuteExW` 的 `runas` 起新进程；`--relaunch-wait=<父 pid>` 让新实例等旧实例退出，绕开 `tauri-plugin-single-instance` 的「第二次启动就自杀」；设置页「权限」节 = 状态行 + 只有非管理员时才可点的按钮 + 「需要提权时提示我」开关（默认开、存进 `store.json`）。命令 87 → 89。真机只验到「识别 + 门禁 + 偏好持久化」：这台测试机造不出「非管理员但可提权」的进程（原始 `EnableLUA=0`；打开 UAC 后 `runas /trustlevel` 起不来、任务计划仍是 High、ssh 在会话 0 够不到会话 1），所以「点一下真的换成管理员令牌」这条**未验**，见 `docs/ACCEPTANCE.md` §56 的判据 7、8 与坑 1。服务模式（S4b）没动。
 
+**结果（2026-11-25，S4b 内核服务）**：内核交给一个 Windows 服务跑。作业走 `%ProgramData%\X-Matrix\jobs` 目录（管道要自己写安全描述符，写错就是提权洞；目录把权限交给 ACL，`BUILTIN\Users:(OI)(CI)(M)`），认领用同卷 `fs::rename`；作业只写 `kind`，exe 由服务从 `HKLM\Software\X-Matrix\Service\EnginesDir` 每作业重读，客户端塞不进自己的路径；起完 100ms 探控制端口、8 秒不开就 kill。真机（`57-service-accept.sh "" svc6`，一轮先 install 再 uninstall）：`sc query` 1060 → `STATE : 4 RUNNING`、`EnginesDir` 写入、`jobs` 的 `Users:(OI)(CI)(M)`、界面「服务在运行：内核由 SYSTEM 启动」、内核 `Services/0/NT AUTHORITY\SYSTEM`；卸载后 `sc 1060`、注册表键删掉、内核回到 `Console/1/Administrator`。命令 89 → 92，Rust 464 → 489。**未验**：SCM 1053 慢启动时序、`icacls` 失败分支、服务内核日志未回填到界面日志面板（服务分支没写 `log_path`）。
+
 服务模式（未做）：
 再做服务：`x-matrix.exe --service` 注册为 Windows 服务（SYSTEM），命名管道 IPC 转发内核启停，非管理员也能带 TUN 跑。
 判据：未提权时 TUN 开关给出可执行的提示；服务已装时内核以 SYSTEM 身份运行且 UI 可启停。
@@ -114,6 +116,6 @@ sing-box `tun` 入站（`auto_route`、`strict_route`、`stack: system`），需
 | S6 WebDAV | 已完成（2026-11-25） | 与 `src-tauri/src/net/webdav.rs` 同一次提交 | §54；真机脚本 `54-webdav-accept.sh`、`mk_54_webdav.py`、`dav.ps1` |
 | S5 轻量模式 | **已完成**（2026-11-25） | 与 `src-tauri/src/power.rs` 同一次提交（`git log --oneline -- src-tauri/src/power.rs` 最新一条） | `docs/ACCEPTANCE.md` §55；真机脚本 `D:/tmp/shots/55-lite-accept.sh`、`mk_55_lite.py` |
 | S4a 提权 | **已完成**（2026-11-25，判据 7、8 未验） | 与 `src-tauri/src/elevate.rs` 同一次提交（`git log --oneline -- src-tauri/src/elevate.rs` 最新一条） | `docs/ACCEPTANCE.md` §56；真机脚本 `D:/tmp/shots/56-elev-accept.sh`、`mk_56_elev.py` |
-| S4b 服务模式 | 未开始 | — | — |
+| S4b 内核服务 | **已完成**（判据全过，见 §57） | 与 `src-tauri/src/service.rs` 同一次提交（`git log --oneline -- src-tauri/src/service.rs` 最新一条） | `docs/ACCEPTANCE.md` §57；真机脚本 `D:/tmp/shots/57-service-accept.sh`、`mk_57_service.py` |
 | S1 TUN | 未开始 | — | — |
 | S7 多配置 | 未开始 | — | — |

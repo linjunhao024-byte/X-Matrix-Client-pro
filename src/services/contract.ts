@@ -44,6 +44,7 @@ import type {
   RuleMatcher,
   Settings,
   Settings_Deserialize,
+  ServiceState_Serialize,
   Settings_Serialize,
   Subscription_Deserialize,
   Subscription_Serialize,
@@ -194,6 +195,25 @@ export const api = {
   restartElevated: async (): Promise<void> => {
     await unwrap(commands.restartElevated())
   },
+
+  /**
+   * Whether the kernel service is installed, and whether it is running.
+   *
+   * The service is the only way a kernel gets an administrator token without
+   * the GUI holding one; `detail` is a sentence meant to be shown verbatim.
+   */
+  serviceState: (): Promise<ServiceState_Serialize> => commands.serviceState(),
+
+  /**
+   * Install (or repair) the service and start it. Needs an elevated token; the
+   * refusal wording comes from Rust so both paths read the same.
+   */
+  serviceInstall: async (): Promise<ServiceState_Serialize> =>
+    unwrap(commands.serviceInstall()),
+
+  /** Stop and delete the service. Also needs an elevated token. */
+  serviceUninstall: async (): Promise<ServiceState_Serialize> =>
+    unwrap(commands.serviceUninstall()),
 
   importPreview: (text: string): Promise<ImportPreview_Serialize> => commands.importPreview(text),
   importNodes: (text: string): Promise<ImportOutcome_Serialize> => unwrap(commands.importNodes(text)),
@@ -376,6 +396,7 @@ export type {
   RuleMatcher,
   Settings,
   Settings_Deserialize,
+  ServiceState_Serialize,
   Settings_Serialize,
   Subscription_Deserialize,
   Subscription_Serialize,

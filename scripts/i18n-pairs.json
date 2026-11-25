@@ -3660,6 +3660,36 @@
     "只在 TUN 或安裝服務這類真的需要系統管理員的功能上提示；不會在你不知情的時候提升權限。"
   ],
   [
+    "settings.service.title",
+    "内核服务",
+    "Kernel service",
+    "核心服務"
+  ],
+  [
+    "settings.service.install",
+    "安装服务",
+    "Install service",
+    "安裝服務"
+  ],
+  [
+    "settings.service.uninstall",
+    "卸载服务",
+    "Remove service",
+    "卸載服務"
+  ],
+  [
+    "settings.service.hint",
+    "服务在运行时，内核以 SYSTEM 身份启动，界面不再直接拉起内核；关掉服务就回到原来的行为。",
+    "While the service is running, kernels start as SYSTEM and the window stops launching them itself; stop the service and everything goes back to the old behaviour.",
+    "服務在運行時，核心以 SYSTEM 身份啟動，介面不再直接拉起核心；關掉服務就回到原來的行為。"
+  ],
+  [
+    "settings.service.installed",
+    "服务在运行：内核由 SYSTEM 启动",
+    "The service is running: kernels start as SYSTEM",
+    "服務在運行：核心由 SYSTEM 啟動"
+  ],
+  [
     "settings.clearCache",
     "清理界面缓存",
     "Clear UI cache",

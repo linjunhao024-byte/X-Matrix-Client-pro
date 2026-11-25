@@ -8,6 +8,7 @@ pub mod node;
 pub mod process;
 pub mod routing;
 pub mod ruleset;
+pub mod service;
 pub mod settings;
 pub mod subscription;
 pub mod sysproxy;

@@ -11,6 +11,8 @@ pub mod ipc;
 mod import;
 mod net;
 mod power;
+mod service;
+mod service_client;
 mod rulesets;
 mod state;
 mod autostart;
@@ -42,6 +44,13 @@ pub fn export_contract(path: impl AsRef<std::path::Path>) -> Result<(), Box<dyn 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // A kernel service copy of this same executable: it must not build a window
+    // or a tray, it only hosts kernels for the GUI. Checked before anything
+    // else so a service start never touches the window state or the store.
+    if service::wants_service(std::env::args()) {
+        std::process::exit(service::run_service());
+    }
+
     let specta_builder = ipc::builder();
 
     // An elevated relaunch starts before the old process has finished exiting
@@ -105,6 +114,11 @@ pub fn run() {
             // of the session would silently use the engines directory.
             let saved = app.state::<AppState>().settings.read().clone();
             crate::commands::settings::apply_engine_binaries(&runtime, &saved);
+
+            // An installed-and-running kernel service takes over starting
+            // kernels; the probe runs once here and again after an install or
+            // uninstall, because that is the only time the answer changes.
+            runtime.refresh_service();
             app.manage(runtime);
 
             // If a snapshot survived the last run, that run died while holding
