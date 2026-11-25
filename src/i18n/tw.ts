@@ -888,4 +888,9 @@ export const tw: Record<string, string> = {
   "profiles.switched": "已切到 {name}",
   "profiles.restarted": "內核已按 {name} 重新啟動",
   "profiles.stoppedNoNode": "新設定裡沒有節點，內核保持停止",
+  "profiles.merge": "覆蓋（merge）",
+  "profiles.mergeHint": "YAML 合併進渲染後的內核設定：陣列整段替換（不拼接），只影響下一次啟動內核；這是 YAML 不是 JavaScript，Clash Verge 的 script 覆蓋在這裡不生效。",
+  "profiles.mergeSave": "儲存覆蓋",
+  "profiles.mergeSaved": "覆蓋已儲存，下一次啟動內核時生效",
+  "profiles.mergePlaceholder": "dns:\n  servers:\n    - https://1.1.1.1/dns-query",
 }

@@ -888,4 +888,9 @@ export const en: Record<string, string> = {
   "profiles.switched": "Switched to {name}",
   "profiles.restarted": "The kernel restarted on {name}",
   "profiles.stoppedNoNode": "The new profile has no nodes, so the kernel stays stopped",
+  "profiles.merge": "Overlay (merge)",
+  "profiles.mergeHint": "YAML merged into the rendered kernel config: an array is replaced whole (never appended), and only the next kernel start sees it. This is YAML, not JavaScript — Clash Verge script overrides do not work here.",
+  "profiles.mergeSave": "Save overlay",
+  "profiles.mergeSaved": "Overlay saved; it takes effect when the kernel next starts",
+  "profiles.mergePlaceholder": "dns:\n  servers:\n    - https://1.1.1.1/dns-query",
 }

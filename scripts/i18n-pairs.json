@@ -5136,6 +5136,36 @@
     "新設定裡沒有節點，內核保持停止"
   ],
   [
+    "profiles.merge",
+    "覆盖（merge）",
+    "Overlay (merge)",
+    "覆蓋（merge）"
+  ],
+  [
+    "profiles.mergeHint",
+    "YAML 合并进渲染后的内核配置：数组整段替换（不拼接），只影响下一次启动内核；这是 YAML 不是 JavaScript，Clash Verge 的 script 覆盖在这里不生效。",
+    "YAML merged into the rendered kernel config: an array is replaced whole (never appended), and only the next kernel start sees it. This is YAML, not JavaScript — Clash Verge script overrides do not work here.",
+    "YAML 合併進渲染後的內核設定：陣列整段替換（不拼接），只影響下一次啟動內核；這是 YAML 不是 JavaScript，Clash Verge 的 script 覆蓋在這裡不生效。"
+  ],
+  [
+    "profiles.mergeSave",
+    "保存覆盖",
+    "Save overlay",
+    "儲存覆蓋"
+  ],
+  [
+    "profiles.mergeSaved",
+    "覆盖已保存，下一次启动内核时生效",
+    "Overlay saved; it takes effect when the kernel next starts",
+    "覆蓋已儲存，下一次啟動內核時生效"
+  ],
+  [
+    "profiles.mergePlaceholder",
+    "dns:\n  servers:\n    - https://1.1.1.1/dns-query",
+    "dns:\n  servers:\n    - https://1.1.1.1/dns-query",
+    "dns:\n  servers:\n    - https://1.1.1.1/dns-query"
+  ],
+  [
     "settings.hotkeyModeHint",
     "按一下切换代理模式：规则 → 全局 → 直连 → 规则",
     "One press walks the proxy mode: rule → global → direct → rule",

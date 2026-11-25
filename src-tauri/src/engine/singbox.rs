@@ -64,7 +64,7 @@ impl Engine for SingBoxEngine {
         Ok(())
     }
 
-    fn render_config(&self, input: &RenderInput<'_>) -> AppResult<Value> {
+    fn render_config_raw(&self, input: &RenderInput<'_>) -> AppResult<Value> {
         self.validate_node(input.node)?;
         let endpoints = input.endpoints;
         let outbounds = singbox_outbounds(input)?;

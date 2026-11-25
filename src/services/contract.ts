@@ -308,6 +308,13 @@ export const api = {
   /** Make a profile active; a running kernel is restarted on it. */
   profileSwitch: (id: string): Promise<SwitchReport_Serialize> =>
     unwrap(commands.profileSwitch(id)),
+  /**
+   * Save one profile's YAML overlay. The text is validated by the backend with
+   * the same rules the kernel start will apply, so a rejection arrives here
+   * instead of at the next launch; the message is the parser's own wording.
+   */
+  profileMergeSet: (id: string, text: string): Promise<ProfileView> =>
+    unwrap(commands.profileMergeSet(id, text)),
   engineStart: (kind: EngineKind, nodeId: string): Promise<EngineStatus_Serialize> =>
     unwrap(commands.engineStart(kind, nodeId)),
   engineApply: (kind: EngineKind, nodeId: string): Promise<EngineStatus_Serialize> =>

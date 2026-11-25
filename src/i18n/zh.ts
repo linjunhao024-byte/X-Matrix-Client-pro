@@ -888,4 +888,9 @@ export const zh: Record<string, string> = {
   "profiles.switched": "已切到 {name}",
   "profiles.restarted": "内核已按 {name} 重启",
   "profiles.stoppedNoNode": "新配置里没有节点，内核保持停止",
+  "profiles.merge": "覆盖（merge）",
+  "profiles.mergeHint": "YAML 合并进渲染后的内核配置：数组整段替换（不拼接），只影响下一次启动内核；这是 YAML 不是 JavaScript，Clash Verge 的 script 覆盖在这里不生效。",
+  "profiles.mergeSave": "保存覆盖",
+  "profiles.mergeSaved": "覆盖已保存，下一次启动内核时生效",
+  "profiles.mergePlaceholder": "dns:\n  servers:\n    - https://1.1.1.1/dns-query",
 }

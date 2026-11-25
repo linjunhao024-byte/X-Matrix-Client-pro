@@ -77,5 +77,19 @@ export const useProfilesStore = defineStore('profiles', () => {
     return items.value.find((profile) => profile.id === id)
   }
 
-  return { items, loading, error, loaded, load, create, rename, remove, activate, byId }
+  /**
+   * Save one profile's YAML overlay and put the stored text back in the row.
+   *
+   * No full reload: the row is updated in place so the editor above it keeps
+   * its cursor and scroll position. A rejection (bad YAML, unknown profile)
+   * throws with the backend's wording so the view can show it verbatim.
+   */
+  async function setMerge(id: string, text: string): Promise<ProfileView> {
+    const updated = await api.profileMergeSet(id, text)
+    const index = items.value.findIndex((profile) => profile.id === id)
+    if (index >= 0) items.value[index] = updated
+    return updated
+  }
+
+  return { items, loading, error, loaded, load, create, rename, remove, activate, byId, setMerge }
 })

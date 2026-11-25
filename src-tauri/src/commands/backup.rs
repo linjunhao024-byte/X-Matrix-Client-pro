@@ -415,6 +415,53 @@ mod tests {
     }
 
     #[test]
+    fn both_halves_of_a_backup_carry_the_profile_overlays() {
+        let dir = scratch();
+        let state = state_at(&dir);
+        state.nodes.write().push(node());
+        state.persist().unwrap();
+        // The active profile's overlay lives in the document...
+        crate::commands::profile::set_merge(&state, "default", "a: 1\n".into()).unwrap();
+        // ...and a non-active one lives in its own file, next to its nodes.
+        state.profiles.write().push(ProfileMeta {
+            id: "p-work".into(),
+            name: "公司".into(),
+        });
+        state.persist().unwrap();
+        state
+            .save_profile_parts(
+                "p-work",
+                "公司",
+                &ProfileParts {
+                    merge: "b: 2\n".into(),
+                    ..ProfileParts::default()
+                },
+            )
+            .unwrap();
+
+        let text = collect(&state).unwrap();
+        let parsed = parse_backup(&text).unwrap();
+        assert_eq!(parsed.document.merge, "a: 1\n", "the active overlay travels in the document");
+        assert_eq!(
+            parsed.profiles[0].parts.merge, "b: 2\n",
+            "the other one travels in the profile file"
+        );
+
+        // Restoring into an empty installation must bring both back: an overlay
+        // that survived export but not import would be a silent loss.
+        let fresh_dir = scratch();
+        let fresh = state_at(&fresh_dir);
+        apply(&fresh, parsed).unwrap();
+        assert_eq!(fresh.merge.read().as_str(), "a: 1\n");
+        assert_eq!(
+            fresh.profile_parts("p-work").unwrap().unwrap().merge,
+            "b: 2\n"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::remove_dir_all(&fresh_dir).ok();
+    }
+
+    #[test]
     fn an_old_backup_without_profiles_restores_as_the_default_profile() {
         // Exactly the shape this build's predecessor wrote: no profile keys at
         // all, at the top level or inside the document.

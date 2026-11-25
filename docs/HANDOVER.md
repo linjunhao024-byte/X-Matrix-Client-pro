@@ -10,7 +10,7 @@
 ## 0. 三句话现状
 
 1. 主体功能已追平 V2RayN / Clash 的日常面：双内核（Xray / sing-box）渲染与启停、系统代理接管与还原、订阅/整包导入、Clash 配置连同 **策略组与规则** 一起导入、运行中热切换节点与代理模式、托盘子菜单、日志页、hysteria2 / tuic、真实延迟（分组与节点）、流量历史落盘、一键断开全部 + 进程归属、测速预算与「选最快」、域名正则 / 域名分类匹配器、诊断包导出、全局快捷键。
-2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§60）。
+2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§61）。
 3. 交接时那处未提交的工作（N12 应用内更新检查）已经构建、真机验收并提交；此后又合入四件事：`--quit` 正常退出并删除托盘图标（§21）、GEO 数据文件卡片与镜像回退下载（§23）、测速记录落盘（§24）。工作区现在是干净的。
 
 ### 0.1 进度快照（交接这一刻的硬数字）
@@ -18,15 +18,15 @@
 | 项 | 值 |
 |---|---|
 | 代码 HEAD | 「feat(profiles): several configurations, one kernel at a time」，含 §59（S7 多配置）；前一条是「feat(tun): take over the machine at the adapter, and only when sing-box and admin can do it」（§58）；前一条是「feat(service): let a Windows service own the kernel, so it can run as SYSTEM」（§57）；再往前：§56（S4a 提权）、§54（S6，查 `src-tauri/src/engine/release.rs`/`net/webdav.rs`）、§53（S3，查 `src-tauri/src/engine/release.rs`）、§52（S9）、§51（S11）、§50（S10）、§49（S8）、`a794438`（§48）、`6fd790f`（§47） |
-| 未提交 | 无。§60（候选表剩余两项）的代码、构建、真机验收、`docs/ACCEPTANCE.md` §60 与 `docs/CANDIDATES-PLAN.md` 都在同一次提交里（见 §0.16） |
+| 未提交 | 无。§61（覆盖层 merge + 服务日志路径）的代码、构建、`docs/ACCEPTANCE.md` §61 都在同一次提交里（见 §0.17）；**§61 的真机验收没跑成**——测试机 02:25 掉线，判据表里需要真机的行都标 ⏸ |
 | 上一版未提交清单（留档） | `src-tauri/src/domain/settings.rs`、`src-tauri/src/engine/{mod,render,runtime,xray}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§39 分片）；再上一版：`src-tauri/src/engine/{mod,runtime}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§37 统一提示）；再上一版：`src-tauri/src/commands/settings.rs`、`src-tauri/src/commands/sysproxy.rs`、`src/stores/sysproxy.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`、`docs/ACCEPTANCE.md`（§36 系统代理即时生效） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库；之后每次收尾都跟着更新 |
-| IPC 命令 | **97**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
-| Rust 单测 | **519 passed**（`ARCHITECTURE.md:278` 已同步） |
+| IPC 命令 | **98**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
+| Rust 单测 | **539 passed**（`ARCHITECTURE.md:278` 已同步） |
 | 前端检查 | `npm run check` 全绿：vue-tsc / architecture（68 文件）/ contract / vitest **116**（12 文件） |
-| i18n | **856** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
-| 桌面产物 | 桌面上的旧副本**已不存在**；唯一产物是 `src-tauri/target/release/x-matrix.exe`（11,084,288 B @2026-11-25 20:37，md5 `8ebbcba7fbd37af649bff3af4d2d56d2`，含 §21–§60 全部改动） |
-| 验收文档 | `docs/ACCEPTANCE.md` §0–§60（§7 历史空缺，编号不连续但内容完整） |
+| i18n | **865** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
+| 桌面产物 | 桌面上的旧副本**已不存在**；产物是 `src-tauri/target/release/x-matrix.exe`（11,115,008 B @2026-11-26 02:14，md5 `e5ec8f604cd4e63da510f05897010693`），以及第一次打出来的安装包 `src-tauri/target/release/bundle/msi/X-Matrix_0.1.0_x64_en-US.msi`（5,156,864 B）与 `bundle/nsis/X-Matrix_0.1.0_x64-setup.exe`（3,587,111 B），含 §21–§61 全部改动 |
+| 验收文档 | `docs/ACCEPTANCE.md` §0–§61（§7 历史空缺，编号不连续但内容完整） |
 | 云电脑 | 干净：`ProxyEnable=0x0`、无 X-Matrix/sing-box/xray 进程、无 `xm*` 计划任务 |
 
 **下一步的确定顺序**（做完一条打一个勾，别跳）：
@@ -49,6 +49,7 @@
 - [x] 17. §55（S5）轻量模式：`power.rs` 两半记账 + `set_quiet()` 接三藏一显 + 前端 `quiet` 停表 → 构建 → 云电脑两阶段（对照/实验）验收 → 写 §55 → 提交（2026-11-25 12:4x）
 - [x] 18. §56（S4a）提权：`elevate.rs` 令牌判断 + `ShellExecuteEx` runas + `--relaunch-wait` 握手 + 设置页「权限」节；判据 7、8（非管理员文案、真提权）在这台机器上造不出条件，已如实标未验
 - [x] 20. §59（S7）多配置：`store.json` v2（激活内联 + 非激活每份一个文件）+ 五条 profile 命令 + `ProfilesView` + 备份带全部配置 → 构建 → 云电脑 v1 升级/两向切换/云备份三段验收 → 写 §59 → 提交（2026-11-25 18:4x）
+- [x] 22. §61（代码缺口）覆盖层 merge + 服务日志路径：代码/门槛已过，真机待补（测试机掉线）
 - [x] 21. §60（候选表剩余）热键加 `mode` / `test_all` 两个动作 + 启动时测速：四个组合注册、清空单个组合、独占性、四个动作的副作用、`test_on_start` 真假两态都验了；**真实按键 → `RegisterHotKey` 那一段没验**（这台机器的模拟输入到不了别的进程的注册）→ 写 §60 → 提交（2026-11-25 20:5x）
 - [x] 19. §58（S1）TUN：`Settings.tun_enabled/tun_stack` + sing-box tun 入站与 `sniff` + `start_engine` 三条渲染前拒绝 + 界面开关 → 构建 → 云电脑四阶段验收（两条拒绝、网卡与路由接管、隧道 204、停止复原）→ 写 §58 → 提交（2026-11-25 17:4x）
 - [x] 15. §53（S3）内核下载/更新：`release.rs` 解析 + sha256 核对 + `stage/promote` → 构建 → 云电脑三阶段验收（xray 真换文件并用同节点重启、sing-box 无校验值照装但明说未核、自定义路径拒绝且不下载）→ 写 §53 → 提交（2026-11-25 10:10）
@@ -206,6 +207,21 @@
 
 **计数**：IPC 97（未加命令）、Rust **519 passed**（+5）、vitest 116、i18n **860**。
 
+### 0.17 覆盖层 merge 与服务日志路径（2026-11-26）
+
+**为什么做**：§57 的服务模式验完时我自己在「没验/缺口」里写过「服务分支没回填 `log_path`，界面日志面板看不到服务内核日志」；S7 的结论里也明写「merge / script 覆盖脚本未做」。这两件都是交付时说得清、但用户真正用起来会撞上的缺口。
+
+**做了什么**：
+- `EngineRuntime` 加 `log_override`：服务模式启动内核时指向 `%ProgramData%\X-Matrix\service`，卸载服务时清空；`log_path()`、日志页、「清空日志」共用它，清空失败给出「SYSTEM 写的，普通权限改不了」的说明。
+- 新模块 `src-tauri/src/engine/merge.rs`：`merge_text(base, overlay)` 深合并（映射递归、数组整段替换、标量覆盖、`null` 覆盖成 `null`、空覆盖逐字节原样）；合并点在 `Engine::render_config` 的默认实现，渲染器改名 `render_config_raw`。
+- `Document.merge` / `ProfileParts.merge` / `ProfileView.merge`，新命令 `profile_merge_set`（IPC 97 → 98）；界面「配置」页每行可展开一个 YAML 编辑区，写明「数组整段替换 / 重启才生效 / 不是 JavaScript」。
+
+**真机结论**：**没有**。测试机 02:25 左右整机掉线（Tailscale 显示 active、`ping`/`ssh` 100% 丢包、`tailscale ping` 超时 `rx 0`），`61-merge-accept.sh m1` 跑到 merge 阶段时断在 ssh 上。`docs/ACCEPTANCE.md` §61 的判据表因此把「覆盖进落盘配置」「服务日志页能看到行」等行标 ⏸，只留了纯函数与命令层测试能证的那些行。
+
+**计数**：IPC **98**、Rust **539 passed**、vitest 116（12 文件）、i18n **865** 键。
+
+**下一步**：机器回来后依次跑 `bash /d/tmp/shots/61-merge-accept.sh m1`（§61）与 `bash /d/tmp/shots/62-msi-e2e.sh fresh`（§62 安装包 E2E，脚本待写），把 ⏸ 换成实测数字后再改这一节与 §61。
+
 ## 1. 项目坐标与命令
 
 | 项 | 值 |
@@ -274,7 +290,7 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 
 ## 4. 已完成的功能与验收索引
 
-`docs/ACCEPTANCE.md` 是**唯一可信的进度表**（§0–§60 共 60 节，每节都有「验法 + 判据 + 设计理由 + 坑」）：
+`docs/ACCEPTANCE.md` 是**唯一可信的进度表**（§0–§61 共 61 节，每节都有「验法 + 判据 + 设计理由 + 坑」）：
 
 | 节 | 内容 |
 |---|---|

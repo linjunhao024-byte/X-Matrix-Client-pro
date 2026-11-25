@@ -62,7 +62,7 @@ cd src-tauri && cargo test --lib
 
 - `npm run check:arch`：禁止 `src/services/` 之外出现 `invoke(` / `listen(` / `@tauri-apps/api` —— 组件不许直接碰 IPC。
 - `npm run check:contract`：`bindings.ts` 必须与 Rust 命令签名一致，过期就报错。
-- 前端单测只测纯函数（格式化）；业务逻辑的测试都在 Rust 侧（519 项），因为渲染配置是纯函数，不需要任何内核。
+- 前端单测只测纯函数（格式化）；业务逻辑的测试都在 Rust 侧（539 项），因为渲染配置是纯函数，不需要任何内核。
 
 ## 结构
 
@@ -78,7 +78,7 @@ src-tauri/src/
   engine/                引擎抽象 + 双内核渲染 + 进程运行时 + 统计
   net/                   最小 HTTP 客户端 + TCP 测速（唯一离开 loopback 的地方）
   sysproxy/              系统代理接管与还原（快照、Drop 兜底）
-  commands/              命令层（IPC 边界，97 个命令）
+  commands/              命令层（IPC 边界，98 个命令）
   store.rs               单文件 JSON 原子替换持久化
   autostart.rs           开机自启
 docs/ENGINE-SPEC.md      两个内核的行为规格（每条结论都带上游源码行号）

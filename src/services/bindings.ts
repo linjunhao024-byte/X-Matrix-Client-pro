@@ -370,6 +370,11 @@ export const commands = {
 	 *  is not in the profile the user picked.
 	 */
 	profileSwitch: (id: string) => typedError<SwitchReport_Serialize, AppError>(__TAURI_INVOKE("profile_switch", { id })),
+	/**
+	 *  Save the YAML overlay of one profile. Singular `profile_` prefix, like the
+	 *  other per-row commands.
+	 */
+	profileMergeSet: (id: string, text: string) => typedError<ProfileView, AppError>(__TAURI_INVOKE("profile_merge_set", { id, text })),
 };
 
 /* Types */
@@ -1074,6 +1079,12 @@ export type ProfileView = {
 	/**  Whether this is the profile the running state belongs to. */
 	active: boolean,
 	nodes: number | null,
+	/**
+	 *  The profile's YAML overlay, whole text. The list carries it so the
+	 *  editor opens with what is actually stored instead of a second round
+	 *  trip that could disagree with the row it belongs to.
+	 */
+	merge: string,
 };
 
 export type Protocol = Protocol_Serialize | Protocol_Deserialize;

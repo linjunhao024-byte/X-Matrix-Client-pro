@@ -274,12 +274,13 @@ pub enum StatsChannel {
 
 | 层 | 状态 | 证据 |
 |---|---|---|
-| 契约层 | 完成 | `tauri-specta` 生成 `src/services/bindings.ts`，97 个命令；`npm run check:contract` 校验不过期 |
-| 引擎层 | Xray + sing-box 配置渲染、启停、就绪探测、统计读取、日志尾部、启动前端口预检 | `cargo test --lib`（全库 519 项）；渲染是纯函数，测试不需要任何内核二进制 |
+| 契约层 | 完成 | `tauri-specta` 生成 `src/services/bindings.ts`，98 个命令；`npm run check:contract` 校验不过期 |
+| 引擎层 | Xray + sing-box 配置渲染、启停、就绪探测、统计读取、日志尾部、启动前端口预检 | `cargo test --lib`（全库 539 项）；渲染是纯函数，测试不需要任何内核二进制 |
 | 数据层 | 单文件 JSON 原子替换 + 坏文件留证 | `store.rs`，重启后节点/设置/规则都在 |
 | 导入 | vless / vmess / trojan / ss + 整包 base64 | `import.rs`，不支持的行进 `skipped` 而不是报错 |
 | 路由 | 7 种匹配器 × 4 种动作（代理/直连/拦截/策略组），双内核各自渲染 | `domain/routing.rs` + `render.rs`（唯一的内核差异点） |
 | 提权 | 先看清自己拿的是不是完整管理员令牌（任何一步读失败都当「不是」，宁可多提示一次）；只在这一步真的需要时让人点「以管理员身份重启」：新进程先起来、成功之后旧进程才退，UAC 被取消时旧进程一步没动并如实说明。提权后的新实例带 `--relaunch-wait=<父 pid>`，在装配 Builder 之前等父进程退出，否则会被单实例插件当成第二次启动转交后自杀、应用整个消失 | `src-tauri/src/elevate.rs`（6 项单测）、`commands/elevate.rs` 的 `app_elevated`/`restart_elevated`、`SettingsView.vue` 的「权限」节 |
+| 内核日志（服务模式） | 日志路径由运行时决定，不靠命令层补：内核由 `XMatrixKernel` 以 SYSTEM 身份启动时，`log_override` 指到 `%ProgramData%\X-Matrix\service`，日志页与「清空日志」读同一个 `log_path()`；卸载服务后清空覆盖、回到用户 profile。清空失败时如实说「服务日志是 SYSTEM 写的，普通权限改不了它」，而不是甩 `Access is denied` | `src-tauri/src/engine/runtime.rs` 的 `log_override`/`log_path`/`log_clear`（1 项单测） |
 | TUN | `Settings.tun_enabled` / `tun_stack`，渲染时把 tun 入站追加在最后、`route.rules[0] = sniff`（关掉时一条都不出现）；`start_engine` 渲染前三条拒绝（TUN+系统代理、TUN+Xray、TUN+界面自启内核+非管理员）；网卡由 sing-box 自己建，不下载 wintun | src-tauri/src/engine/singbox.rs（`singbox_tun_inbound`）、engine/mod.rs 的 `RenderInput`、commands/engine.rs、SettingsView.vue |
 | 内核服务 | 把内核交给一个 Windows 服务（`XMatrixKernel`）跑：服务以 SYSTEM 身份启动内核，界面不再是它的爹。作业走 `%ProgramData%\X-Matrix\jobs` 目录而不是命名管道——管道要自己写安全描述符，写错就是提权洞，目录把「谁能请求」交给 ACL（`BUILTIN\Users:(OI)(CI)(M)`，认领用同卷 `fs::rename` 保证只有一个实例拿住一个作业）。作业只写 `kind`，exe 由服务从 `HKLM\Software\X-Matrix\Service\EnginesDir` 读，而且每个作业重读一次，客户端塞不进自己的路径。起完内核每 100ms 探控制端口、8 秒不开就 kill 并回错误，不让 SCM 判 1053。卸载删服务与注册表键，保留 `jobs` 目录和它的 ACL（下次装回来不用重新授权） | `src-tauri/src/service.rs`（服务端：SCM dispatcher、作业协议、install/uninstall）、`service_client.rs`（界面侧作业往返，`ServiceProcess` 让停内核走作业而不是杀 SYSTEM 进程）、`commands/service.rs` 的 `service_state`/`service_install`/`service_uninstall`、`SettingsView.vue` 的「内核服务」节 |
 | 进程表 | 规则编辑器里的「选择进程」列出本机正在运行的可执行名（一个名字一行，pid 只做计数与 tooltip）：Windows Toolhelp32 快照，句柄 `Drop` 关闭，快照失败报错而不是返回空表；非 Windows 明确报「只有 Windows 实现」。归并是纯函数（大小写不敏感、保留首次拼写、pid 升序去重），界面三态 = loading / 后端原文错误 / 空 | `src-tauri/src/sysproc.rs`（3 项单测）、`commands/process.rs` 的 `list_processes`、`src/services/processlist.ts`、`RuleEditor.vue` |
@@ -300,6 +301,7 @@ pub enum StatsChannel {
 | 订阅 | 拉取（HTTP，UA 可配置）、整包解析（Clash YAML / sing-box / Xray / 分享链接）、只替换自己那批节点、**跨订阅按 `kind|server|port|credential` 去重**（手工节点不参与比较）、后台每 60 秒扫一次到期项、`subscription-userinfo` 头 → 已用/总量/到期 | `commands/subscription.rs`、`documents.rs`、`net/remote.rs`（`Fetched` 带响应头），含配额解析 3 项测试、去重 2 项测试 |
 | 策略组 | `select` / `url-test` / `fallback` / `load-balance`；sing-box 四个都渲染成原生 selector/urltest，其中 `fallback`/`load-balance` 由 `engine/groupwatch.rs` 每 20 秒探一次健康并 `PUT /proxies/group%3A<id>` 改 selector（只换「现在走谁」，不做按连接分摊）；Xray 渲染成选中成员的静态副本（Xray 没有 selector，UI 会说出来）；删组时指向它的规则自动回落到「代理」，删节点时从各组里摘掉 | `domain/group.rs`、`commands/group.rs`、`engine/{xray,singbox}.rs` |
 | 全局快捷键 | 四个动作可各自绑定组合键（启动/停止、显示/隐藏窗口、切换代理模式、测全部节点），都注册在同一根消息线程上，id 固定 1–4；保存时 `PostMessage(WM_APP_REREGISTER)` 让那根线程重注册而不是重建；触发时先打一行日志再执行动作，这样"按键到了但动作没跑"和"按键根本没到"能分开。模式动作先落盘再重启内核（与前端 `engine.apply` 同一条路径） | `src-tauri/src/hotkeys.rs`、`domain/settings.rs` 的 `next_mode()`、`lib.rs` 的 `cycle_mode()`/`test_all_nodes()`/`test_on_start()` |
+| 配置覆盖层 | 每份配置可以带一段 YAML 覆盖，渲染完成之后、写盘之前深合并进内核配置：两边都是映射就按关键字递归、数组**整段替换**（不拼接、不按下标）、标量覆盖、`null` 覆盖成 `null`（不是删键）；空覆盖逐字节原样返回，连重新序列化都不做。合并只有一处（`Engine::render_config` 的默认实现，渲染器本身看不到覆盖），所以运行、预览、探测三条路径不会漏。保存时用同一个函数校验，坏 YAML 与「顶层不是映射」都在保存那一刻被拒。只做 merge，不做 JS script | `src-tauri/src/engine/merge.rs`（8 项单测）、`engine/mod.rs` 的 `RenderInput.merge_yaml`、`commands/profile.rs` 的 `profile_merge_set`、`ProfilesView.vue` 的行内编辑区 |
 | 多配置 | 一套节点、订阅、规则与策略组叫一个配置；切换后内核按新配置重启 | `store.json` 升到 v2：激活那份内联在 `nodes`/`rules` 里，非激活的每份一个 `profiles/<id>.json`；v1 打开时原地补 `active`/`profiles` 并只写一次盘；备份把非激活配置一起带上 | `src-tauri/src/store.rs` 的 `normalize()`/`ProfileParts`、`state.rs`、`commands/profile.rs`（5 条命令）、`src/views/ProfilesView.vue` |
 | 界面多语言 | 中文 / English 全量；`scripts/i18n-pairs.json` 是唯一真相源，`scripts/gen_i18n.py` 生成两份字典，测试断言键集一致（半翻译会 fail 而不是上线）；语言存 `localStorage['xm.ui.locale']` | `src/i18n/`、`src/i18n/i18n.test.ts` |
 | 节点页 | Clash 式卡片 + 延迟排序（未测速的排在最后，避免列表跳动）+ 一键全部测速（串行，避免测到队列而不是节点）+ 搜索 / 多选 / 批量测速 / 批量删除 / 复制分享链接 | `views/NodesView.vue` |

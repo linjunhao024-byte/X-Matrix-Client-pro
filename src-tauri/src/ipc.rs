@@ -107,5 +107,6 @@ pub fn builder() -> Builder<tauri::Wry> {
         commands::profile::profile_rename,
         commands::profile::profile_delete,
         commands::profile::profile_switch,
+        commands::profile::profile_merge_set,
     ])
 }

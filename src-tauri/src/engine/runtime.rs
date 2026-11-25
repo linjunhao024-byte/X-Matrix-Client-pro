@@ -371,6 +371,11 @@ pub struct EngineRuntime {
     engines_dir: PathBuf,
     config_dir: PathBuf,
     log_dir: PathBuf,
+    /// Where the running kernel's log actually is. Same as `log_dir` while the
+    /// GUI spawns the kernel itself; when it runs under the service, the service
+    /// writes the log under `%ProgramData%` (SYSTEM owns that file), so the log
+    /// page has to read it there instead of from this user's profile.
+    log_override: RwLock<Option<PathBuf>>,
     /// Per-kernel executables the user pointed us at (see
     /// [`EngineRuntime::binary_path`]). Empty for a kernel means "the engines
     /// directory", which keeps the default path out of a map that exists for
@@ -420,6 +425,7 @@ impl EngineRuntime {
             engines_dir,
             config_dir,
             log_dir,
+            log_override: RwLock::new(None),
             overrides: RwLock::new(HashMap::new()),
             running: Mutex::new(None),
             last_exit_code: Mutex::new(None),
@@ -435,6 +441,12 @@ impl EngineRuntime {
     /// this is also how a TUN inbound gets an administrator token without the
     /// GUI holding one.
     pub fn set_service(&self, client: Option<Arc<Mutex<crate::service_client::ServiceClient>>>) {
+        // No service means the next start spawns locally again, and the log is
+        // back in this user's profile; do not keep pointing the log page at the
+        // service directory after the service is gone.
+        if client.is_none() {
+            *self.log_override.write() = None;
+        }
         *self.service.write() = client;
     }
 
@@ -550,9 +562,19 @@ impl EngineRuntime {
 
         let exe = self.binary_path(kind);
         let args = engine.args(&config_path.to_string_lossy());
-        let log_path = self.log_dir.join(format!("{}.log", kind.as_str()));
 
         let service = self.service.read().clone();
+        // The service runs as SYSTEM and writes the kernel log into its own
+        // directory, so `log_path` has to follow the kernel: reading this user's
+        // profile after a service start would show an empty file and look like a
+        // kernel that says nothing.
+        *self.log_override.write() = if service.is_some() {
+            Some(crate::service::service_dir())
+        } else {
+            None
+        };
+        let log_path = self.log_path(kind);
+
         let via_service = service.is_some();
         let mut handle: Box<dyn ProcessHandle> = match service {
             Some(client) => {
@@ -818,8 +840,16 @@ impl EngineRuntime {
     }
 
     /// The log file a kernel writes to, whether or not it exists yet.
+    ///
+    /// Follows the kernel: this user's profile when the GUI spawns it, the
+    /// service directory when the service does (see [`Self::set_service`]).
     pub fn log_path(&self, kind: EngineKind) -> PathBuf {
-        self.log_dir.join(format!("{}.log", kind.as_str()))
+        let dir = self
+            .log_override
+            .read()
+            .clone()
+            .unwrap_or_else(|| self.log_dir.clone());
+        dir.join(format!("{}.log", kind.as_str()))
     }
 
     /// How many bytes a kernel's log holds; 0 when it has never run.
@@ -871,7 +901,13 @@ impl EngineRuntime {
     pub fn log_clear(&self, kind: EngineKind) -> AppResult<()> {
         let path = self.log_path(kind);
         if path.exists() {
-            std::fs::File::create(&path)?;
+            std::fs::File::create(&path).map_err(|error| {
+                AppError::Io(format!(
+                    "清空日志失败（{}）：{error}。服务模式下的内核日志是 SYSTEM 写的，普通权限改不了它；\
+                     卸载内核服务、让界面自己拉起内核之后就能清。",
+                    path.display()
+                ))
+            })?;
         }
         Ok(())
     }
@@ -1287,6 +1323,34 @@ four"
         // A kernel that never ran has no log: empty, not an error.
         assert_eq!(runtime.log_tail(EngineKind::SingBox, 10).unwrap(), "");
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn the_log_page_follows_the_kernel_into_the_service_directory() {
+        let h = harness(true, false);
+        assert_eq!(
+            h.runtime.log_path(EngineKind::Xray),
+            h.dir.join("logs").join("xray.log")
+        );
+
+        // Under the service the kernel is SYSTEM and writes into
+        // %ProgramData%: the log page has to read that file, not an empty one
+        // in this user's profile that would look like a silent kernel.
+        *h.runtime.log_override.write() = Some(h.dir.join("service"));
+        assert_eq!(
+            h.runtime.log_path(EngineKind::Xray),
+            h.dir.join("service").join("xray.log")
+        );
+
+        // Uninstalling the service puts the log page back on this profile, so a
+        // stale service path cannot outlive the service.
+        h.runtime.set_service(None);
+        assert_eq!(
+            h.runtime.log_path(EngineKind::Xray),
+            h.dir.join("logs").join("xray.log")
+        );
+
+        std::fs::remove_dir_all(&h.dir).ok();
     }
 
     #[test]

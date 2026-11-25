@@ -234,6 +234,11 @@ pub struct StartRequest {
     pub nodes: Vec<Node>,
     pub groups: Vec<crate::domain::ProxyGroup>,
     pub rule_sets: Vec<crate::engine::LoadedRuleSet>,
+    /// The active profile's YAML overlay. Read here rather than inside
+    /// `start_engine` so every entry point (the window, the tray, reconnect on
+    /// launch) starts from the same document, and an overlay that fails to
+    /// merge stops the launch before anything is spawned.
+    pub merge: String,
 }
 
 /// Read the shared state into a [`StartRequest`]. Cheap: read locks only.
@@ -251,6 +256,7 @@ pub fn prepare_start(
         nodes: state.nodes.read().clone(),
         groups: state.groups.read().clone(),
         rule_sets: crate::commands::ruleset::loaded_sets(state),
+        merge: state.merge.read().clone(),
     })
 }
 
@@ -325,7 +331,8 @@ pub fn start_engine(
     }
     let options = RunOptions::from_settings(&request.settings, &request.rules)
         .with_catalog(&request.nodes, &request.groups)
-        .with_rule_sets(&request.rule_sets);
+        .with_rule_sets(&request.rule_sets)
+        .with_merge(request.merge);
     let status = runtime.start(request.kind, &request.node, request.endpoints, options)?;
     if request.settings.system_proxy {
         let bypass = request.settings.proxy_bypass.as_str();
@@ -583,7 +590,10 @@ fn render_preview(
     let rule_sets = crate::commands::ruleset::loaded_sets(state);
     let options = RunOptions::from_settings(&settings, &rules)
         .with_catalog(&nodes, &groups)
-        .with_rule_sets(&rule_sets);
+        .with_rule_sets(&rule_sets)
+        // The preview claims to show what the kernel would get, so it must
+        // carry the overlay the start path carries.
+        .with_merge(state.merge.read().clone());
 
     let mut input = RenderInput::new(&node, endpoints).with_options(options);
     // Show the same document the kernel would get, including the rule-set paths
@@ -939,6 +949,7 @@ pub(crate) mod tests {
             nodes: vec![node()],
             groups: vec![],
             rule_sets: vec![],
+            merge: String::new(),
         }
     }
 
@@ -1038,6 +1049,7 @@ pub(crate) mod tests {
             nodes: vec![node()],
             groups: vec![],
             rule_sets: vec![],
+            merge: String::new(),
         }
     }
 

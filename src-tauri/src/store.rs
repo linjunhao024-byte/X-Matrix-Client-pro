@@ -56,6 +56,13 @@ pub struct ProfileParts {
     pub groups: Vec<ProxyGroup>,
     #[serde(default)]
     pub rule_sets: Vec<RuleSet>,
+    /// YAML, deep-merged into the rendered kernel config. Empty = no merge.
+    ///
+    /// It belongs to the profile because it is a decision about *this* set of
+    /// nodes and rules: an overlay that adds a DNS block for a company profile
+    /// must not follow the user into their home profile.
+    #[serde(default)]
+    pub merge: String,
 }
 
 /// One profile file: metadata plus contents.
@@ -105,6 +112,13 @@ pub struct Document {
     /// say "未测", never change how traffic flows.
     #[serde(default)]
     pub probes: HashMap<NodeId, NodeProbe>,
+    /// Overlay for the active profile's rendered config. YAML, deep-merged into
+    /// the kernel config after rendering; empty = leave the config alone.
+    ///
+    /// Stored inline here for the same reason the profile's contents are: the
+    /// active profile has no file of its own while it is active.
+    #[serde(default)]
+    pub merge: String,
 }
 
 impl Default for Document {
@@ -120,6 +134,7 @@ impl Default for Document {
             groups: Vec::new(),
             rule_sets: Vec::new(),
             probes: HashMap::new(),
+            merge: String::new(),
         }
     }
 }
@@ -591,6 +606,50 @@ mod tests {
 
         store.remove_profile(&stored.id).unwrap();
         assert!(store.read_profile(&stored.id).unwrap().is_none());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn an_overlay_survives_a_round_trip_and_an_older_file_loads_without_one() {
+        let dir = scratch();
+        let store = Store::new(dir.join("store.json"));
+
+        // A document written before overlays existed: the key is simply absent.
+        // It has to load with "no merge", not fail — the file is the user's.
+        let mut document = Document::default();
+        document.nodes.push(node("东京"));
+        let mut raw = serde_json::to_value(&document).unwrap();
+        raw.as_object_mut().unwrap().remove("merge");
+        std::fs::write(store.path(), raw.to_string()).unwrap();
+        let loaded = store.load().unwrap();
+        assert_eq!(loaded.merge, "");
+        assert_eq!(loaded.nodes.len(), 1, "the rest of the file still counts");
+
+        // Writing it back keeps what the user typed, overlay and all.
+        let mut document = loaded;
+        document.merge = "dns:\n  servers:\n    - https://1.1.1.1/dns-query\n".into();
+        store.save(&document).unwrap();
+        assert_eq!(store.load().unwrap().merge, document.merge);
+
+        // The same for a profile file, whose contents are flattened.
+        let path = store.profile_path("p-old").unwrap();
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "{\"id\":\"p-old\",\"name\":\"旧\",\"nodes\":[]}").unwrap();
+        let old = store.read_profile("p-old").unwrap().unwrap();
+        assert_eq!(old.parts.merge, "", "a profile file without the key has no overlay");
+
+        let with_overlay = StoredProfile {
+            parts: ProfileParts {
+                merge: "log:\n  loglevel: debug\n".into(),
+                ..ProfileParts::default()
+            },
+            ..old
+        };
+        store.write_profile(&with_overlay).unwrap();
+        assert_eq!(
+            store.read_profile("p-old").unwrap().unwrap().parts.merge,
+            "log:\n  loglevel: debug\n"
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 

@@ -34,6 +34,11 @@ pub struct AppState {
     /// files, which keeps the hot path (start the kernel, list nodes) reading
     /// one document instead of fanning out per profile.
     pub active: RwLock<String>,
+    /// YAML overlay of the active profile, applied to the rendered kernel
+    /// config. It lives here rather than in an engine module because it belongs
+    /// to the profile: a switch moves it with the nodes and rules, and a
+    /// non-active profile keeps its own copy in its file.
+    pub merge: RwLock<String>,
     /// Last latency measurement per node, keyed by node id. It is a note to
     /// the user, not an input to routing: nothing here can change how traffic
     /// flows, which is why a stale entry is harmless.
@@ -77,6 +82,7 @@ impl AppState {
             rule_sets: RwLock::new(document.rule_sets),
             profiles: RwLock::new(document.profiles),
             active: RwLock::new(document.active),
+            merge: RwLock::new(document.merge),
             probes: RwLock::new(document.probes),
             rule_set_files: RuleSetCache::new(rule_sets_dir(&store)),
             store,
@@ -101,6 +107,7 @@ impl AppState {
             groups: self.groups.read().clone(),
             rule_sets: self.rule_sets.read().clone(),
             probes: self.probes.read().clone(),
+            merge: self.merge.read().clone(),
         }
     }
 
@@ -159,6 +166,7 @@ impl AppState {
         *self.rule_sets.write() = document.rule_sets;
         *self.profiles.write() = document.profiles;
         *self.active.write() = document.active;
+        *self.merge.write() = document.merge;
         *self.probes.write() = document.probes;
         self.persist()
     }
@@ -171,6 +179,7 @@ impl AppState {
             subscriptions: self.subscriptions.read().clone(),
             groups: self.groups.read().clone(),
             rule_sets: self.rule_sets.read().clone(),
+            merge: self.merge.read().clone(),
         }
     }
 
@@ -185,6 +194,7 @@ impl AppState {
         *self.subscriptions.write() = parts.subscriptions;
         *self.groups.write() = parts.groups;
         *self.rule_sets.write() = parts.rule_sets;
+        *self.merge.write() = parts.merge;
     }
 
     /// Contents of one profile: inline for the active one, its file otherwise.

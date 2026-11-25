@@ -120,6 +120,14 @@ sing-box `tun` 入站（`auto_route`、`strict_route`、`stack: system`），需
 - **判据收窄三处**：① 「新配置里没有节点 → 内核保持停止」这条分支没验（种子两个配置都有节点）；② 托盘菜单是否跟着刷新没验（只读了首页徽章）；③ 计划里的 merge / script 覆盖脚本**没有做**——本轮做到 profile 层，订阅级覆盖脚本与「`render.rs` 按 profile 分支渲染」留作后续。
 - **计数**：Rust 496 → **514**、IPC 92 → **97**、vitest 116（未变）、i18n 835 → **856**。
 
+### S13 · 结果（2026-11-26，真机未验）
+
+**做了什么**：见 §61 与 `docs/HANDOVER.md` §0.17——`engine/merge.rs` 的深合并 + `Engine::render_config` 单一合并点 + `profile_merge_set`，以及服务模式下日志路径跟着内核走。
+
+**真机**：没跑成。测试机 02:25 整机掉线，`61-merge-accept.sh m1` 断在 merge 阶段的 ssh 上。判据表里需要真机的行在 §61 里标 ⏸。
+
+**计数**：IPC 97 → **98**、Rust 519 → **539**、vitest 116、i18n 860 → **865**。
+
 ## 进度
 
 | 项 | 状态 | 提交 | 验收 |
@@ -136,3 +144,5 @@ sing-box `tun` 入站（`auto_route`、`strict_route`、`stack: system`），需
 | S4b 内核服务 | **已完成**（判据全过，见 §57） | 与 `src-tauri/src/service.rs` 同一次提交（`git log --oneline -- src-tauri/src/service.rs` 最新一条） | `docs/ACCEPTANCE.md` §57；真机脚本 `D:/tmp/shots/57-service-accept.sh`、`mk_57_service.py` |
 | S1 TUN | **已完成**（2026-11-25） | 与 `src-tauri/src/engine/singbox.rs` 同一次提交（`git log --oneline -- src-tauri/src/engine/singbox.rs` 最新一条） | `docs/ACCEPTANCE.md` §58；真机脚本 `D:\tmp\shots\58-tun-accept.sh`、`mk_58_head.py`/`mk_58_body.py` |
 | S7 多配置 | **已完成**（2026-11-25，profile 层与三条判据；merge / script 覆盖脚本未做，见 §59） | 与 `src-tauri/src/store.rs` 同一次提交（`git log --oneline -- src-tauri/src/store.rs` 最新一条） | `docs/ACCEPTANCE.md` §59；真机脚本 `D:\tmp\shots\59-profiles-accept.sh`、`seed59.py`、`mk_59_body.py` |
+| S12 热键与启动测速 | **已完成**（2026-11-25，见 §60；真实按键未验） | 与 `src-tauri/src/hotkeys.rs` 同一次提交 | `docs/ACCEPTANCE.md` §60；真机脚本 `60-hotkeys-accept.sh` |
+| S13 覆盖层 merge + 服务日志 | **代码完成**（2026-11-26；真机未验，测试机掉线） | 与 `src-tauri/src/engine/merge.rs` 同一次提交 | `docs/ACCEPTANCE.md` §61；真机脚本 `61-merge-accept.sh` |

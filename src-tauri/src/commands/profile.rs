@@ -36,6 +36,10 @@ pub struct ProfileView {
     // UI shows this as a plain count.
     #[specta(type = f64)]
     pub nodes: u32,
+    /// The profile's YAML overlay, whole text. The list carries it so the
+    /// editor opens with what is actually stored instead of a second round
+    /// trip that could disagree with the row it belongs to.
+    pub merge: String,
 }
 
 /// What a switch did to the kernel, so the UI does not have to guess.
@@ -52,23 +56,34 @@ pub struct SwitchReport {
 }
 
 impl ProfileView {
-    /// One row. A profile whose file cannot be read shows zero nodes: the list
-    /// has to stay usable, and inventing a count would be worse than a zero the
-    /// switch later refuses to honour.
+    /// One row. A profile whose file cannot be read shows zero nodes and an
+    /// empty overlay: the list has to stay usable, and inventing a count or
+    /// contents would be worse than a blank the switch later refuses to honour.
     fn of(state: &AppState, meta: &ProfileMeta, active: &str) -> Self {
-        let nodes = if meta.id == active {
+        let is_active = meta.id == active;
+        let stored = if is_active {
+            None
+        } else {
+            // Read once: nodes and merge live in the same file, and reading it
+            // twice could describe two different revisions.
+            state.profile_parts(&meta.id).ok().flatten()
+        };
+        let nodes = if is_active {
             state.nodes.read().len() as u32
         } else {
-            match state.profile_parts(&meta.id) {
-                Ok(Some(parts)) => parts.nodes.len() as u32,
-                _ => 0,
-            }
+            stored.as_ref().map(|parts| parts.nodes.len() as u32).unwrap_or(0)
+        };
+        let merge = if is_active {
+            state.merge.read().clone()
+        } else {
+            stored.map(|parts| parts.merge).unwrap_or_default()
         };
         Self {
             id: meta.id.clone(),
             name: meta.name.clone(),
-            active: meta.id == active,
+            active: is_active,
             nodes,
+            merge,
         }
     }
 }
@@ -89,7 +104,7 @@ fn find_meta(state: &AppState, id: &str) -> AppResult<ProfileMeta> {
         .iter()
         .find(|meta| meta.id == id)
         .cloned()
-        .ok_or_else(|| AppError::NotFound(format!("找不到这个配置：{id}")))
+        .ok_or_else(|| AppError::NotFound(format!("配置 {id} 不存在")))
 }
 
 /// Every profile, active one included, in the order the user arranged them.
@@ -226,6 +241,49 @@ pub(crate) fn delete_profile(state: &AppState, id: &str) -> AppResult<()> {
     Ok(())
 }
 
+/// Replace one profile's YAML overlay.
+///
+/// The text is validated here with the same function the renderer uses, so a
+/// bad overlay is refused when it is saved instead of when the kernel next
+/// starts. An empty string is a valid overlay: it means "no merge at all",
+/// which is also what a profile that never had one carries.
+pub(crate) fn set_merge(state: &AppState, id: &str, text: String) -> AppResult<ProfileView> {
+    let meta = find_meta(state, id)?;
+    // Same rules as `Engine::render_config` will apply: parse, then insist on
+    // a mapping at the top. `{}` as the base is enough because nothing is kept
+    // from it — only the overlay's own validity is being judged.
+    crate::engine::merge::merge_text(&serde_json::json!({}), &text)?;
+
+    let active = state.active.read().clone();
+    if meta.id == active {
+        // The running state is the document, so the overlay is swapped in
+        // memory first and written immediately: a profile the user has to
+        // press "save" twice for is worse than a write that reports its error.
+        let previous = {
+            let mut merge = state.merge.write();
+            std::mem::replace(&mut *merge, text)
+        };
+        if let Err(error) = state.persist() {
+            // Keep memory and disk saying the same thing: the document still
+            // holds the old overlay, so the old overlay goes back.
+            *state.merge.write() = previous;
+            return Err(error);
+        }
+    } else {
+        // A non-active profile keeps its overlay in its own file, beside the
+        // nodes it applies to. `save_profile_parts` writes that file atomically
+        // and touches no in-memory field, so a failure needs no rollback.
+        let mut parts = state
+            .profile_parts(id)?
+            .ok_or_else(|| AppError::NotFound(format!("配置文件读不出来：{id}")))?;
+        parts.merge = text;
+        state.save_profile_parts(id, &meta.name, &parts)?;
+    }
+
+    let meta = find_meta(state, id)?;
+    Ok(ProfileView::of(state, &meta, &active))
+}
+
 /// What a switch has to do, decided before anything is written.
 ///
 /// `Away` carries the contents already in memory: reading the target file is
@@ -334,6 +392,18 @@ pub fn profile_rename(
 #[specta::specta]
 pub fn profile_delete(state: State<'_, AppState>, id: String) -> AppResult<()> {
     delete_profile(&state, &id)
+}
+
+/// Save the YAML overlay of one profile. Singular `profile_` prefix, like the
+/// other per-row commands.
+#[tauri::command]
+#[specta::specta]
+pub fn profile_merge_set(
+    state: State<'_, AppState>,
+    id: String,
+    text: String,
+) -> AppResult<ProfileView> {
+    set_merge(&state, &id, text)
 }
 
 /// Switch profiles, restarting the kernel on the new one when it was running.
@@ -659,6 +729,136 @@ mod tests {
         );
         // And the failure left the active profile exactly as it was.
         assert_eq!(state.active.read().as_str(), "default");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn the_active_profiles_overlay_lives_in_the_document() {
+        let dir = scratch();
+        let state = state_at(&dir);
+        let text = "dns:\n  servers:\n    - https://1.1.1.1/dns-query\n".to_string();
+
+        let view = set_merge(&state, "default", text.clone()).unwrap();
+        assert_eq!(view.merge, text);
+        assert!(view.active);
+        assert_eq!(state.merge.read().as_str(), text.as_str());
+
+        // The document is where the active profile lives, so that is where the
+        // overlay must be — otherwise a switch would lose it.
+        let document = Store::new(dir.join("store.json")).load().unwrap();
+        assert_eq!(document.merge, text);
+
+        // And it survives a restart: a new process reads it back from the file.
+        let again = state_at(&dir);
+        assert_eq!(again.merge.read().as_str(), text.as_str());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_non_active_profiles_overlay_lives_in_its_own_file() {
+        let dir = scratch();
+        let state = state_at(&dir);
+        let created = create_profile(&state, "公司", None).unwrap();
+        let text = "log:\n  loglevel: debug\n".to_string();
+
+        let view = set_merge(&state, &created.id, text.clone()).unwrap();
+        assert_eq!(view.merge, text);
+        assert!(!view.active);
+        // The running profile is untouched: an overlay belongs to one profile.
+        assert_eq!(state.merge.read().as_str(), "");
+        let stored = Store::new(dir.join("store.json"))
+            .read_profile(&created.id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.parts.merge, text);
+        // The list already carries it, so opening the editor needs no second call.
+        let row = list_profiles(&state)
+            .into_iter()
+            .find(|row| row.id == created.id)
+            .unwrap();
+        assert_eq!(row.merge, text);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn an_overlay_that_cannot_be_a_mapping_is_refused_without_changing_anything() {
+        let dir = scratch();
+        let state = state_at(&dir);
+        set_merge(&state, "default", "log:\n  loglevel: debug\n".to_string()).unwrap();
+        let before = std::fs::read(dir.join("store.json")).unwrap();
+
+        for (text, prefix) in [
+            ("- a\n- b\n", "覆盖内容的顶层必须是一个映射（key: value），现在是 数组"),
+            ("dns: [unclosed\n", "覆盖内容不是合法 YAML："),
+        ] {
+            let error = set_merge(&state, "default", text.to_string()).unwrap_err();
+            assert!(
+                matches!(&error, AppError::InvalidInput(message) if message.starts_with(prefix)),
+                "{error:?}"
+            );
+        }
+        // The bad text is the renderer's error verbatim, and nothing moved:
+        // still the old overlay, still the same bytes on disk.
+        assert_eq!(state.merge.read().as_str(), "log:\n  loglevel: debug\n");
+        assert_eq!(std::fs::read(dir.join("store.json")).unwrap(), before);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn an_empty_overlay_is_how_you_clear_one() {
+        let dir = scratch();
+        let state = state_at(&dir);
+        set_merge(&state, "default", "log:\n  loglevel: debug\n".into()).unwrap();
+        let cleared = set_merge(&state, "default", "  \n".into()).unwrap();
+        assert_eq!(cleared.merge, "  \n");
+        // Stored as the user left it; `merge_text` treats blank as "no merge",
+        // so the rendering outcome is the same as an empty string.
+        assert_eq!(state.merge.read().as_str(), "  \n");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn an_unknown_profile_cannot_have_an_overlay_set() {
+        let dir = scratch();
+        let state = state_at(&dir);
+        let error = set_merge(&state, "nope", "log:\n  loglevel: debug\n".into()).unwrap_err();
+        assert!(
+            matches!(&error, AppError::NotFound(message) if message == "配置 nope 不存在"),
+            "{error:?}"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn switching_carries_the_overlay_with_the_profile_it_belongs_to() {
+        let dir = scratch();
+        let state = state_at(&dir);
+        state.nodes.write().push(node("东京"));
+        state.persist().unwrap();
+        set_merge(&state, "default", "a: 1\n".into()).unwrap();
+
+        let created = create_profile(&state, "公司", None).unwrap();
+        let target_text = "b: 2\n".to_string();
+        set_merge(&state, &created.id, target_text.clone()).unwrap();
+
+        let SwitchPrep::Away { target } = prepare_switch(&state, &created.id).unwrap() else {
+            panic!("a different profile must not report itself as already active");
+        };
+        commit_switch(&state, &created.id, target, "default").unwrap();
+
+        // The new active profile brought its own overlay...
+        assert_eq!(state.merge.read().as_str(), target_text.as_str());
+        // ...and the one it left keeps its overlay in its file, ready for the
+        // switch back.
+        let left = Store::new(dir.join("store.json"))
+            .read_profile("default")
+            .unwrap()
+            .unwrap();
+        assert_eq!(left.parts.merge, "a: 1\n");
+        assert_eq!(
+            Store::new(dir.join("store.json")).load().unwrap().merge,
+            target_text
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 }

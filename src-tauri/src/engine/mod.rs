@@ -14,6 +14,9 @@
 pub mod geo;
 pub mod groupwatch;
 mod job;
+// The profile's YAML overlay. Public so the command layer can validate text
+// with the same rules the renderer will apply.
+pub mod merge;
 mod render;
 // What the official release feed says, and how a new binary replaces the old
 // one without ever destroying it.
@@ -295,6 +298,11 @@ pub struct RenderInput<'a> {
     pub tun_enabled: bool,
     /// Network stack for the TUN inbound: `system`, `gvisor` or `mixed`.
     pub tun_stack: String,
+    /// The profile's YAML overlay, merged into the rendered config by
+    /// [`Engine::render_config`]. Owned rather than borrowed because
+    /// [`RunOptions`] owns its copy and [`RenderInput::with_options`] consumes
+    /// it — the same reason `probe_url` and `tun_stack` are owned here.
+    pub merge_yaml: String,
 }
 
 impl<'a> RenderInput<'a> {
@@ -319,6 +327,7 @@ impl<'a> RenderInput<'a> {
             fragment_interval: "10-20".to_string(),
             tun_enabled: false,
             tun_stack: "mixed".to_string(),
+            merge_yaml: String::new(),
         }
     }
 
@@ -340,6 +349,7 @@ impl<'a> RenderInput<'a> {
         self.fragment_interval = options.fragment_interval;
         self.tun_enabled = options.tun_enabled;
         self.tun_stack = options.tun_stack;
+        self.merge_yaml = options.merge_yaml;
         self
     }
 
@@ -435,6 +445,11 @@ pub struct RunOptions<'a> {
     /// Whether the TUN inbound is wanted, and with which network stack.
     pub tun_enabled: bool,
     pub tun_stack: String,
+    /// The active profile's YAML overlay. Empty means "render exactly what the
+    /// kernel would get anyway", so a profile with no override and a profile
+    /// that never existed render the same bytes. Set from the profile by the
+    /// command layer — settings have no opinion about it.
+    pub merge_yaml: String,
 }
 
 impl<'a> RunOptions<'a> {
@@ -457,6 +472,7 @@ impl<'a> RunOptions<'a> {
             fragment_interval: "10-20".to_string(),
             tun_enabled: false,
             tun_stack: "mixed".to_string(),
+            merge_yaml: String::new(),
         }
     }
 
@@ -480,6 +496,9 @@ impl<'a> RunOptions<'a> {
             fragment_interval: settings.fragment_interval.clone(),
             tun_enabled: settings.tun_enabled,
             tun_stack: settings.tun_stack.clone(),
+            // Not a setting: the overlay belongs to the profile, so the caller
+            // hands it over separately. A profile without one keeps this empty.
+            merge_yaml: String::new(),
         }
     }
 
@@ -493,6 +512,12 @@ impl<'a> RunOptions<'a> {
     /// Hand the parsed rule sets over so `RuleSet` matchers can expand.
     pub fn with_rule_sets(mut self, rule_sets: &'a [LoadedRuleSet]) -> Self {
         self.rule_sets = rule_sets;
+        self
+    }
+
+    /// The profile's YAML overlay, applied after rendering.
+    pub fn with_merge(mut self, merge_yaml: String) -> Self {
+        self.merge_yaml = merge_yaml;
         self
     }
 }
@@ -516,8 +541,18 @@ pub trait Engine: Send + Sync {
     /// Arguments that run `config_path` in the foreground.
     fn args(&self, config_path: &str) -> Vec<String>;
 
-    /// Build the full config document. Pure: no disk writes, no side effects.
-    fn render_config(&self, input: &RenderInput<'_>) -> AppResult<serde_json::Value>;
+    /// Build the full config document, then lay the profile's YAML overlay on
+    /// top. Kept as the single place an overlay is merged so the runtime, the
+    /// preview command and the throwaway probe all apply the same rules; the
+    /// renderers themselves never see the overlay.
+    fn render_config(&self, input: &RenderInput<'_>) -> AppResult<serde_json::Value> {
+        let config = self.render_config_raw(input)?;
+        merge::merge_text(&config, &input.merge_yaml)
+    }
+
+    /// The kernel's own config, before any overlay. Pure: no disk writes, no
+    /// side effects. Implementors write this; callers use `render_config`.
+    fn render_config_raw(&self, input: &RenderInput<'_>) -> AppResult<serde_json::Value>;
 
     fn stats_channel(&self, endpoints: Endpoints) -> StatsChannel;
 
@@ -620,5 +655,77 @@ mod tests {
             assert_eq!(engine.kind(), *kind);
             assert!(!engine.binary_name().is_empty());
         }
+    }
+
+    fn merge_test_node() -> Node {
+        use crate::domain::node::{Protocol, Security, Transport};
+        Node {
+            id: "n1".into(),
+            name: "东京".into(),
+            server: "example.com".into(),
+            port: 443,
+            protocol: Protocol::Trojan {
+                password: "pw".into(),
+            },
+            transport: Transport::Tcp,
+            security: Security::None,
+            tags: vec![],
+        }
+    }
+
+    fn merge_test_input<'a>(node: &'a Node, merge: &str) -> RenderInput<'a> {
+        RenderInput::new(node, Endpoints::new(7890, 0, 0, 9090).unwrap())
+            .with_options(RunOptions::new().with_merge(merge.to_string()))
+    }
+
+    #[test]
+    fn an_empty_overlay_leaves_every_kernel_config_untouched() {
+        // The profile without an override must take the exact path it took
+        // before overlays existed — same bytes, for both kernels.
+        let node = merge_test_node();
+        for kind in EngineKind::all() {
+            let engine = kind.engine();
+            let plain = engine
+                .render_config_raw(&RenderInput::new(&node, Endpoints::new(7890, 0, 0, 9090).unwrap()))
+                .unwrap();
+            let through_merge = engine.render_config(&merge_test_input(&node, "")).unwrap();
+            assert_eq!(
+                serde_json::to_string(&plain).unwrap(),
+                serde_json::to_string(&through_merge).unwrap(),
+                "{kind:?} re-serialised a config it should have passed through"
+            );
+        }
+    }
+
+    #[test]
+    fn the_overlay_is_merged_after_rendering_for_every_kernel() {
+        // Both kernels have a `log` block with a level in it, so one overlay
+        // proves the merge reaches either renderer — and a key the renderer
+        // never writes proves the overlay can add one.
+        let node = merge_test_node();
+        let overlay = "log:\n  loglevel: debug\nx-matrix-test:\n  hello: 1\n";
+        for kind in EngineKind::all() {
+            let rendered = kind.engine().render_config(&merge_test_input(&node, overlay)).unwrap();
+            assert_eq!(rendered["log"]["loglevel"], serde_json::json!("debug"), "{kind:?}");
+            assert_eq!(rendered["x-matrix-test"]["hello"], serde_json::json!(1), "{kind:?}");
+            // Everything the renderer wrote is still there: an overlay amends,
+            // it does not replace the document.
+            assert!(
+                rendered["outbounds"].as_array().is_some_and(|list| !list.is_empty()),
+                "{kind:?} lost its outbounds"
+            );
+        }
+    }
+
+    #[test]
+    fn a_broken_overlay_fails_the_render_instead_of_starting_a_kernel_with_half_a_config() {
+        let node = merge_test_node();
+        let error = XrayEngine
+            .render_config(&merge_test_input(&node, "dns: [unclosed\n"))
+            .unwrap_err();
+        assert!(
+            matches!(&error, AppError::InvalidInput(message) if message.starts_with("覆盖内容不是合法 YAML：")),
+            "{error:?}"
+        );
     }
 }

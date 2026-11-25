@@ -25,6 +25,16 @@ const actionError = ref<string | null>(null)
 /// whether the kernel was restarted, left stopped, or why the restart failed.
 const result = ref<string | null>(null)
 
+/// The overlay editor is inline, under its own row, and only one row is open
+/// at a time: a second textarea would push the table around for no reason.
+const mergeOpenId = ref<string | null>(null)
+const mergeText = ref('')
+const mergeError = ref<string | null>(null)
+/// Shown only after the backend accepted the text; the overlay takes effect on
+/// the next kernel start, so there is nothing else to report here.
+const mergeSaved = ref<string | null>(null)
+const mergeBusy = ref(false)
+
 onMounted(async () => {
   await store.load()
 })
@@ -100,10 +110,46 @@ async function use(profile: ProfileView) {
   result.value = null
   try {
     result.value = describeSwitch(await store.activate(profile.id))
+    // The overlay follows the profile that owns it, so an editor left open on
+    // the row that just became inactive would show the wrong text.
+    mergeOpenId.value = null
   } catch (cause) {
     actionError.value = describeError(cause)
   } finally {
     busyId.value = null
+  }
+}
+
+function toggleMerge(profile: ProfileView) {
+  actionError.value = null
+  result.value = null
+  mergeError.value = null
+  mergeSaved.value = null
+  if (mergeOpenId.value === profile.id) {
+    mergeOpenId.value = null
+    return
+  }
+  mergeOpenId.value = profile.id
+  // The list carries the whole text, so the editor opens with what is stored.
+  mergeText.value = profile.merge
+}
+
+async function submitMerge() {
+  const id = mergeOpenId.value
+  if (!id) return
+  mergeBusy.value = true
+  mergeError.value = null
+  mergeSaved.value = null
+  try {
+    const updated = await store.setMerge(id, mergeText.value)
+    mergeText.value = updated.merge
+    mergeSaved.value = t('profiles.mergeSaved')
+  } catch (cause) {
+    // The backend names what it refused (not YAML, or not a mapping) in its own
+    // words; replacing that with a generic sentence would lose the reason.
+    mergeError.value = describeError(cause)
+  } finally {
+    mergeBusy.value = false
   }
 }
 
@@ -174,41 +220,81 @@ async function confirmDelete() {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="profile in store.items" :key="profile.id">
-              <td>
-                <div class="name-cell">
-                  <span>{{ profile.name }}</span>
-                  <span v-if="profile.active" class="badge badge-success">
-                    {{ t('profiles.active') }}
-                  </span>
-                </div>
-              </td>
-              <td class="mono">{{ profile.nodes ?? 0 }}</td>
-              <td class="actions">
-                <button
-                  class="btn btn-sm btn-primary"
-                  type="button"
-                  :disabled="profile.active || busyId !== null"
-                  @click="use(profile)"
-                >
-                  <AppIcon name="check" :size="14" />
-                  {{ t('profiles.use') }}
-                </button>
-                <button class="btn btn-sm btn-ghost" type="button" @click="openRename(profile)">
-                  <AppIcon name="edit" :size="14" />
-                  {{ t('profiles.rename') }}
-                </button>
-                <button
-                  class="btn btn-sm btn-ghost"
-                  type="button"
-                  :disabled="profile.active"
-                  @click="pendingDelete = profile"
-                >
-                  <AppIcon name="trash" :size="14" />
-                  {{ t('profiles.delete') }}
-                </button>
-              </td>
-            </tr>
+            <template v-for="profile in store.items" :key="profile.id">
+              <tr>
+                <td>
+                  <div class="name-cell">
+                    <span>{{ profile.name }}</span>
+                    <span v-if="profile.active" class="badge badge-success">
+                      {{ t('profiles.active') }}
+                    </span>
+                  </div>
+                </td>
+                <td class="mono">{{ profile.nodes ?? 0 }}</td>
+                <td class="actions">
+                  <button
+                    class="btn btn-sm btn-primary"
+                    type="button"
+                    :disabled="profile.active || busyId !== null"
+                    @click="use(profile)"
+                  >
+                    <AppIcon name="check" :size="14" />
+                    {{ t('profiles.use') }}
+                  </button>
+                  <button class="btn btn-sm btn-ghost" type="button" @click="openRename(profile)">
+                    <AppIcon name="edit" :size="14" />
+                    {{ t('profiles.rename') }}
+                  </button>
+                  <button
+                    class="btn btn-sm btn-ghost"
+                    type="button"
+                    :aria-expanded="mergeOpenId === profile.id"
+                    @click="toggleMerge(profile)"
+                  >
+                    <AppIcon name="layers" :size="14" />
+                    {{ t('profiles.merge') }}
+                  </button>
+                  <button
+                    class="btn btn-sm btn-ghost"
+                    type="button"
+                    :disabled="profile.active"
+                    @click="pendingDelete = profile"
+                  >
+                    <AppIcon name="trash" :size="14" />
+                    {{ t('profiles.delete') }}
+                  </button>
+                </td>
+              </tr>
+              <tr v-if="mergeOpenId === profile.id" class="merge-row">
+                <td colspan="3">
+                  <div class="merge-editor">
+                    <label class="field">
+                      <span class="field-label">{{ t('profiles.merge') }}</span>
+                      <textarea
+                        v-model="mergeText"
+                        class="input input-mono merge-input"
+                        rows="6"
+                        spellcheck="false"
+                        :placeholder="t('profiles.mergePlaceholder')"
+                      ></textarea>
+                    </label>
+                    <p class="field-hint">{{ t('profiles.mergeHint') }}</p>
+                    <div class="row merge-actions">
+                      <button
+                        class="btn btn-sm btn-primary"
+                        type="button"
+                        :disabled="mergeBusy"
+                        @click="submitMerge"
+                      >
+                        {{ mergeBusy ? t('common.saving') : t('profiles.mergeSave') }}
+                      </button>
+                      <span v-if="mergeSaved" class="merge-saved">{{ mergeSaved }}</span>
+                    </div>
+                    <p v-if="mergeError" class="field-error">{{ mergeError }}</p>
+                  </div>
+                </td>
+              </tr>
+            </template>
           </tbody>
         </table>
       </div>
@@ -312,5 +398,37 @@ async function confirmDelete() {
 
 .option input {
   accent-color: var(--accent);
+}
+
+/* The overlay editor sits under the row it belongs to: a dialog would cover the
+   row, and the overlay is a page of YAML, not a one-line answer. */
+.merge-row > td {
+  background: var(--surface-sunken);
+}
+
+.merge-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 0 6px;
+}
+
+/* `.input` is a 34px control; a YAML box has to grow with its content and the
+   user drags it taller when the overlay gets long. */
+.merge-input {
+  height: auto;
+  min-height: 120px;
+  resize: vertical;
+  line-height: 1.55;
+}
+
+.merge-actions {
+  align-items: center;
+  gap: 10px;
+}
+
+.merge-saved {
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 </style>
