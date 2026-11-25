@@ -1522,6 +1522,11 @@ export type Settings_Deserialize = {
 	 */
 	close_to_tray?: boolean,
 	/**
+	 *  窗口收进托盘时把内存目标降到低、让界面暂停刷新。默认关：
+	 *  这是「省一点」的开关，不是所有人都想要界面在同一秒里失去响应。
+	 */
+	lite_mode?: boolean,
+	/**
 	 *  Chord that starts or stops the tunnel from anywhere on the desktop,
 	 *  spelled the way the app spells it back (`Ctrl+Shift+X`). Empty switches
 	 *  the shortcut off: a chord nobody can press still looks registered in the
@@ -1725,6 +1730,11 @@ export type Settings_Serialize = {
 	 *  is what someone who thinks of X as "close the program" expects.
 	 */
 	close_to_tray: boolean,
+	/**
+	 *  窗口收进托盘时把内存目标降到低、让界面暂停刷新。默认关：
+	 *  这是「省一点」的开关，不是所有人都想要界面在同一秒里失去响应。
+	 */
+	lite_mode: boolean,
 	/**
 	 *  Chord that starts or stops the tunnel from anywhere on the desktop,
 	 *  spelled the way the app spells it back (`Ctrl+Shift+X`). Empty switches

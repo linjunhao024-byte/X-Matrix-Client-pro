@@ -9,6 +9,7 @@ mod hotkeys;
 pub mod ipc;
 mod import;
 mod net;
+mod power;
 mod rulesets;
 mod state;
 mod autostart;
@@ -167,6 +168,9 @@ pub fn run() {
                 ensure_window_reachable(&window);
                 if start_hidden {
                     let _ = window.hide();
+                    // 启动就藏起来也要走同一段：否则轻量模式在「开机自启从
+                    // 托盘起」这条最常见的路径上永远不会生效。
+                    set_quiet(app.handle(), true);
                 }
             }
             Ok(())
@@ -182,6 +186,7 @@ pub fn run() {
                 api.prevent_close();
                 if hide {
                     let _ = window.hide();
+                    set_quiet(app, true);
                 } else {
                     quit_cleanly(app);
                 }
@@ -637,7 +642,57 @@ fn reveal(app: &AppHandle) {
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
+        // 先让窗口真的在屏幕上，再恢复刷新：界面回来时第一眼看到的必须是
+        // 刚拉过的数字，而不是几十分钟前那一份。
+        set_quiet(app, false);
     }
+}
+
+/// 窗口从屏幕上消失/回来时统一走这里：轻量模式开着就把内存目标压下去，
+/// 并通知界面暂停或恢复刷新。失败只打日志，不能挡住隐藏窗口。
+fn set_quiet(app: &AppHandle, quiet: bool) {
+    // 单实例插件可能在 setup 之前就把 `reveal` 叫到这里，那时 AppState 还
+    // 没挂上：按「没开轻量模式」处理，只发事件，不碰系统调用。
+    let lite = app
+        .try_state::<AppState>()
+        .map(|state| state.settings.read().lite_mode)
+        .unwrap_or(false);
+    if lite {
+        // 两半分开记日志：工作集回收和界面内存目标是两条不同的系统路径，
+        // 一条成一条败时必须看得出是哪一条，不能合并成「轻量模式失败」。
+        let mut notes: Vec<String> = Vec::new();
+        if let Err(error) = crate::power::set_background(quiet) {
+            notes.push(format!("回收工作集没成：{error}"));
+        }
+        match app.get_webview_window("main") {
+            Some(window) => {
+                if let Err(error) = crate::power::set_webview_memory(&window, quiet) {
+                    notes.push(format!("界面内存目标没设成：{error}"));
+                }
+            }
+            None => notes.push("找不到主窗口".to_string()),
+        }
+        if notes.is_empty() {
+            eprintln!(
+                "x-matrix: 轻量模式{}：{}",
+                if quiet { "开" } else { "关" },
+                if quiet {
+                    "界面内存目标已降到低，刷新暂停"
+                } else {
+                    "界面内存目标已恢复，刷新恢复"
+                }
+            );
+        } else {
+            // 失败只记录：窗口该隐藏照隐藏，界面照常收到下面那条事件。
+            eprintln!(
+                "x-matrix: 轻量模式{}，但{}",
+                if quiet { "开" } else { "关" },
+                notes.join("；")
+            );
+        }
+    }
+    // 这条事件无论开关都发：界面靠它决定停不停表，而不是自己猜窗口状态。
+    let _ = app.emit("xm:quiet", quiet);
 }
 
 /// Hide the window without touching the tunnel — the whole reason this runs
@@ -657,6 +712,7 @@ fn toggle_window(app: &AppHandle) {
         reveal(app);
     } else {
         let _ = window.hide();
+        set_quiet(app, true);
     }
 }
 

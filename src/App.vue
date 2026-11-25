@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted } from 'vue'
 import AppIcon from './components/AppIcon.vue'
 import AppSidebar from './components/AppSidebar.vue'
 import { t } from './i18n'
+import { initQuiet, disposeQuiet } from './stores/lite'
 import { useEngineStore } from './stores/engine'
 import { useUiStore } from './stores/ui'
 
@@ -14,12 +15,16 @@ const engine = useEngineStore()
 const ui = useUiStore()
 
 onMounted(() => {
-  engine.startPolling()
+  // Lite mode first: `initQuiet` also probes whether the window came up hidden,
+  // so the poller is armed only after that answer is known. `startPolling`
+  // refuses while `quiet`, and the store's own watch arms it on a reveal.
+  void initQuiet().then(() => engine.startPolling())
   void engine.watchExits()
 })
 onBeforeUnmount(() => {
   engine.unwatchExits()
   engine.stopPolling()
+  disposeQuiet()
 })
 </script>
 

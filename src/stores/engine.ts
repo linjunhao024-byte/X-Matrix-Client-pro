@@ -7,7 +7,7 @@
  */
 
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import {
   api,
@@ -19,6 +19,7 @@ import {
 } from '../services/contract'
 import { onEngineExit, type Unlisten } from '../services/events'
 import { bytes } from '../services/format'
+import { useQuiet } from './lite'
 import { useSettingsStore } from './settings'
 import { useSystemProxyStore } from './sysproxy'
 
@@ -68,6 +69,13 @@ export const useEngineStore = defineStore('engine', () => {
    * before the user presses start, instead of surfacing a file-not-found.
    */
   const binaryMissing = computed(() => currentBinary.value !== null && !currentBinary.value.present)
+
+  /**
+   * Lite mode. `true` while the window sits in the tray: nothing that would be
+   * drawn can change, so the ticker below parks itself instead of polling a
+   * kernel behind a hidden webview.
+   */
+  const quiet = useQuiet()
 
   let timer: ReturnType<typeof setInterval> | undefined
   let previous: { at: number; up: number; down: number } | null = null
@@ -191,7 +199,10 @@ export const useEngineStore = defineStore('engine', () => {
   }
 
   function startPolling() {
-    if (timer) return
+    // A hidden window stays parked: a view that mounts while the app is in the
+    // tray must not leave a timer behind, and `startPolling` is the one place
+    // that can promise it.
+    if (timer || quiet.value) return
     void tick()
     timer = setInterval(() => void tick(), POLL_INTERVAL_MS)
   }
@@ -201,6 +212,35 @@ export const useEngineStore = defineStore('engine', () => {
     clearInterval(timer)
     timer = undefined
   }
+
+  /**
+   * Park the ticker while the window is hidden in the tray.
+   *
+   * On its own `stopPolling` would be enough to stop the requests; keeping the
+   * two named steps makes the intent legible at the call sites and in tests.
+   */
+  function pausePolling() {
+    stopPolling()
+  }
+
+  /**
+   * Come back from the tray: read once, then resume the cadence.
+   *
+   * `startPolling` ticks before it arms the interval, so the first thing the
+   * window draws after a reveal is a fresh reading — not the numbers from the
+   * moment it was hidden.
+   */
+  function resumePolling() {
+    startPolling()
+  }
+
+  // The subscription lives for the store's lifetime; the backend emits on every
+  // hide and reveal (tray icon, tray menu, close button, second instance), so
+  // the UI never has to guess where the window is.
+  watch(quiet, (idle) => {
+    if (idle) pausePolling()
+    else resumePolling()
+  })
 
   /**
    * React the moment a kernel dies on its own.
@@ -332,6 +372,8 @@ export const useEngineStore = defineStore('engine', () => {
     openEnginesDir,
     startPolling,
     stopPolling,
+    pausePolling,
+    resumePolling,
     watchExits,
     unwatchExits,
     refreshStatus,

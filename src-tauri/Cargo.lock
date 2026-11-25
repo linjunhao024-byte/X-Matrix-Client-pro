@@ -5887,6 +5887,8 @@ dependencies = [
  "tauri-plugin-window-state",
  "tauri-specta",
  "thiserror 2.0.21",
+ "webview2-com",
+ "windows-core",
  "windows-sys 0.60.2",
  "winreg 0.55.0",
  "zip",

@@ -3,6 +3,10 @@ import { computed, onMounted, ref } from 'vue'
 import StaleConfig from '../components/StaleConfig.vue'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
 import { availableLocales, locale, setLocale, t } from '../i18n'
+// The webview cache is not ours to clear through `store.json`: it is WebView2's,
+// so this one call goes to the Tauri webview object instead of `api.*`. It is
+// gated by `core:webview:allow-clear-all-browsing-data` in capabilities.
+import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { comboFromKeyPress } from '../services/hotkey'
 import { ACCENTS, type AccentPreset } from '../services/accent'
 import {
@@ -69,6 +73,9 @@ const draft = ref<Settings_Serialize | null>(null)
 const error = ref<string | null>(null)
 const saved = ref(false)
 const autostart = ref<boolean | null>(null)
+/** Result line for "clear UI cache": what happened, in one sentence. */
+const cacheBusy = ref(false)
+const cacheNote = ref<string | null>(null)
 /** Result line for backup/restore: what happened, in one sentence. */
 const backupNote = ref<string | null>(null)
 const backupBusy = ref(false)
@@ -304,6 +311,29 @@ async function restoreConfig(): Promise<void> {
     backupNote.value = describeError(error)
   } finally {
     backupBusy.value = false
+  }
+}
+
+/**
+ * Clear the webview's cache and cookies.
+ *
+ * Nothing in `store.json` changes — this is WebView2's own storage — so the
+ * call cannot go through `api.*`. The same storage holds the theme/accent
+ * preferences, which is why the hint next to the button says they fall back to
+ * their defaults rather than pretending the action is invisible.
+ */
+async function clearCache(): Promise<void> {
+  cacheBusy.value = true
+  cacheNote.value = null
+  try {
+    await getCurrentWebview().clearAllBrowsingData()
+    cacheNote.value = t('settings.cacheCleared')
+  } catch (error) {
+    // Reported as-is: printing "cleared" after a rejected capability would tell
+    // the user their cache is gone when nothing happened.
+    cacheNote.value = describeError(error)
+  } finally {
+    cacheBusy.value = false
   }
 }
 
@@ -771,6 +801,17 @@ async function save() {
           :label="t('settings.closeToTray')"
           :description="t('settings.closeToTrayHint')"
         />
+        <div class="divider" />
+        <ToggleSwitch v-model="draft.lite_mode" :label="t('settings.liteMode')" />
+        <p class="field-hint">{{ t('settings.liteHint') }}</p>
+        <div class="divider" />
+        <div class="row">
+          <button class="btn btn-ghost btn-sm" type="button" :disabled="cacheBusy" @click="clearCache()">
+            {{ t('settings.clearCache') }}
+          </button>
+        </div>
+        <p class="field-hint">{{ t('settings.clearCacheHint') }}</p>
+        <p v-if="cacheNote" class="field-hint">{{ cacheNote }}</p>
       </section>
 
       <section class="surface-plain panel">

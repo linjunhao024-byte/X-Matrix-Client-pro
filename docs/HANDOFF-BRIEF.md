@@ -1,6 +1,6 @@
 # 新窗口开工简报（X-Matrix Client Pro）
 
-> 写于 2026-11-25 10:5x（§54 收口这一版）。给**下一个窗口**的你自己看：先读这一页，够用就别翻长文档；需要细节时按文末索引跳。
+> 写于 2026-11-25 12:5x（§55 收口这一版）。给**下一个窗口**的你自己看：先读这一页，够用就别翻长文档；需要细节时按文末索引跳。
 > 长文档：`docs/HANDOVER.md`（地图、候选表、云电脑手册）、`docs/ACCEPTANCE.md`（每条功能的判据与踩坑）、`docs/PARITY-PLAN.md`（S1–S11 的解禁计划与进度表——**下一个任务从这里取**）。
 
 ## 1. 三十秒现状
@@ -8,12 +8,12 @@
 | 项 | 值 |
 |---|---|
 | 仓库 / 工作区 | `D:\GitHub-Warehouse\X-Matrix-Client-Pro`（Tauri 2 + Vue 3 + TS） |
-| HEAD | 本简报这条 docs 提交；功能提交查 `git log --oneline -- src-tauri/src/net/webdav.rs` 的第一条（含 §54），再往前 §53（`src-tauri/src/engine/release.rs`）、§52（`groupwatch.rs`）、§51（`sysproc.rs`）、§50（`src/services/accent.ts`）、§49（S8）、`a794438`（§48）、`6fd790f`（§47） |
+| HEAD | 本简报这条 docs 提交；功能提交查 `git log --oneline -- src-tauri/src/power.rs` 的第一条（含 §55），再往前 §54（`src-tauri/src/net/webdav.rs`）、§53（`engine/release.rs`）、§52（`engine/groupwatch.rs`）、§51（`sysproc.rs`）、§50（`src/services/accent.ts`）、§49（S8）、`a794438`（§48）、`6fd790f`（§47） |
 | 工作区 | **干净**，没有未提交改动 |
-| 规模 | 87 个 IPC 命令 / Rust 单测 **455** / vitest **116**（12 文件）/ i18n **813 键 × 3 语言** |
-| 验收 | `docs/ACCEPTANCE.md` 写到 **§54**，全部是云电脑真机点出来的 |
+| 规模 | 87 个 IPC 命令 / Rust 单测 **457** / vitest **116**（12 文件）/ i18n **818 键 × 3 语言** |
+| 验收 | `docs/ACCEPTANCE.md` 写到 **§55**，全部是云电脑真机点出来的 |
 | 云电脑 | 干净：`ProxyEnable=0x0`、无 `xm*` 任务、无内核进程、`X-Matrix/WebDAV` 凭据已删 |
-| 构建产物 | `src-tauri/target/release/x-matrix.exe`（10,762,752 B，md5 `d8101cd923e3a8c40d722fe69abe5b50`，含 §21–§54） |
+| 构建产物 | `src-tauri/target/release/x-matrix.exe`（10,775,040 B，md5 `84f661d589293b89479f556886c530c4`，含 §21–§55） |
 | 目标 | 功能追平 V2RayN / Clash、二者互补，并把各功能之间**说得清、配合得上**（用户原话，长期有效） |
 
 ## 2. 常用的四条命令
@@ -36,7 +36,7 @@ https_proxy=http://127.0.0.1:10808 git push origin main
 
 改 Rust 的 `#[tauri::command]` 签名后必须 `npm run gen:contract`；新增 i18n 键必须走 `scripts/i18n-pairs.json` + `python scripts/gen_i18n.py`（三份字典会一起生成）。
 
-## 3. 下一个任务：`docs/PARITY-PLAN.md` 进度表的下一行（现在是 **S5 轻量模式**）
+## 3. 下一个任务：`docs/PARITY-PLAN.md` 进度表的下一行（现在是 **S4 提权 / 服务模式**）
 
 用户的指示（2026-11-25）是「S1–S11 全部解禁，一个一个写明确的任务书派子代理去做」，所以**别再自作主张跳过**。每项固定流程：
 
@@ -48,7 +48,7 @@ https_proxy=http://127.0.0.1:10808 git push origin main
 6. 写 `docs/ACCEPTANCE.md` 新章（要证的事 / 验法 / 判据表 / 设计理由 / 坑 / 一句实话），同步 `docs/PARITY-PLAN.md`（结果段 + 进度表行）、`docs/HANDOVER.md`（§0.1 硬数字 + 一条 §0.x）、`ARCHITECTURE.md:277-278`、`README.md:65,81`；
 7. `git add -A && git commit`，push，最后 `bash /d/tmp/shots/cleanup.sh`。
 
-已完成的：S2 PAC（§48）、S8 分离端口（§49）、S10 强调色（§50）、S11 进程选择器（§51）、S9 回退/负载组（§52）、S3 内核更新（§53）、S6 WebDAV 备份（§54）。剩：**S5 → S4 → S1 → S7**。
+已完成的：S2 PAC（§48）、S8 分离端口（§49）、S10 强调色（§50）、S11 进程选择器（§51）、S9 回退/负载组（§52）、S3 内核更新（§53）、S6 WebDAV 备份（§54）、S5 轻量模式（§55）。剩：**S4 → S1 → S7**（S1 TUN 依赖 S4 的提权；S7 多配置最后做，会重写 `render.rs` 与 store）。
 
 ## 4. 云电脑（真机验收的唯一场所）
 
@@ -57,7 +57,7 @@ SSH="C:/Windows/System32/OpenSSH/ssh.exe"
 "$SSH" -i C:/Users/83611/.ssh/id_ed25519_cpc -o StrictHostKeyChecking=no Administrator@100.106.121.0 "命令"
 ```
 
-- 现成脚本都在 `D:\tmp\shots\`：每个功能一对 `mk_xxx.py`（生成 ps1 驱动）+ `xxx-accept.sh`（部署、跑、回拉日志、收尾）。**照抄最近的 `54-webdav-accept.sh`（多阶段 + 本地假服务器 + 每段独立 store 钉值）或 `53-kernel-accept.sh`（本地镜像 + 按行定位按钮）最快。**
+- 现成脚本都在 `D:\tmp\shots\`：每个功能一对 `mk_xxx.py`（生成 ps1 驱动）+ `xxx-accept.sh`（部署、跑、回拉日志、收尾）。**照抄最近的 `55-lite-accept.sh`（两阶段对照 + 进程内存采样 + 回拉 stderr 数日志行）或 `54-webdav-accept.sh`（多阶段 + 本地假服务器 + 每段独立 store 钉值）最快。**
 - 单实例应用必须用 `schtasks /sc once /st 23:59 /it` 在会话 1 启动，直接 ssh 起会死（`WebView2 … 0x800700AA`）。
 - 收尾一律 `bash /d/tmp/shots/cleanup.sh`（会 `--quit`、删 `xm*` 任务、验 `ProxyEnable=0`）。**别在开发机上起内核、别动系统代理注册表。**
 
@@ -83,15 +83,18 @@ SSH="C:/Windows/System32/OpenSSH/ssh.exe"
 18. 用 python 改文档/脚本时，普通字符串里的 `\t`/`\s`/`\U` 会被当转义（会把 `D:\tmp` 变成制表符、或直接 SyntaxError）。**打补丁脚本用 `write` 工具写成 .py 再执行**，别用 `ops_bash` 的 heredoc 内联；写完 `grep -c $'\t'` 验一遍。
 19. **明文密码不许进 `store.json`。** 那份文件会整份写盘、还会随导出/备份离开本机；密码走 Windows 凭据管理器（`syscreds.rs`，target `X-Matrix/WebDAV`），界面只知道「有没有存过」。
 20. `reqwest`/`hyper` 发出的 header 名是小写，断言原始 HTTP 文本前先 `to_lowercase()`；specta 给新结构体只生成原名（`WebdavState`），别照 `Settings_Serialize` 的规律加后缀。
+21. PowerShell 会把 `"$tag: …"` 里的 `$tag:` 当**驱动器限定变量**（`TAG` 盘），整份脚本解析期就死；`[Parser]::ParseFile` 不抛异常**不代表没有解析错误**，必须把 `$errors.Count` 印出来。
+22. WebView2 的内存大头在 6 个 `msedgewebview2.exe` 子进程（约 330 MB），宿主 `X-Matrix.exe` 只有 34 MB；`SetMemoryUsageTargetLevel(Low)` 在这套简单界面上几乎不产生效果——**别把宿主工作集回收当成「界面省了 25 MB」**。
+23. 首页「启动」按钮与节点页行内按钮同名，按名字点会歧义；让 `auto_connect`（启动 1.2 秒后自动连 `last_node_id`）起内核最稳。
+24. 隐藏窗口这类「看不见的状态」别用 CPU 增量当证据（本地轮询几乎不耗 CPU）；要证「回到窗口拿到的是新状态」，就在隐藏期间把内核杀掉、回窗看徽章是否立刻变「未运行」。
 
 ## 6. S1–S11 全部解禁（2026-11-25 用户指示）
 
-旧口径「TUN/PAC/内核更新/服务模式/轻量模式/WebDAV/多配置/分离端口/回退组/主题/按应用分流 明确不做」**已作废**。现在按 `docs/PARITY-PLAN.md` 的顺序做，进度表里有每项状态；已完成的七项见 §3 末。**别再拿旧口径当理由跳过。**
+旧口径「TUN/PAC/内核更新/服务模式/轻量模式/WebDAV/多配置/分离端口/回退组/主题/按应用分流 明确不做」**已作废**。现在按 `docs/PARITY-PLAN.md` 的顺序做，进度表里有每项状态；已完成的八项见 §3 末。**别再拿旧口径当理由跳过。**
 
 ## 7. 索引
 
-- 进度唯一真相源：`docs/ACCEPTANCE.md`（§0–§54，§7 历史空缺）
+- 进度唯一真相源：`docs/ACCEPTANCE.md`（§0–§55，§7 历史空缺）
 - 全文地图与云电脑手册：`docs/HANDOVER.md`
 - 计划与逐项判据：`docs/PARITY-PLAN.md`
 - 架构与「唯一的内核差异点」：`ARCHITECTURE.md`
-- 各章题目速查：`docs/ACCEPTANCE.md` 每节二级标题即一句结论

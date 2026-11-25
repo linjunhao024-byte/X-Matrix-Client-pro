@@ -1619,3 +1619,58 @@ bash /d/tmp/shots/54-webdav-accept.sh "" dav1
 - **密码交给 Windows 凭据管理器，不等于「别人读不到」。** 同一个登录用户下的其它程序，按 Windows 的权限模型是可以读出来的；本项目没有额外加密，也没做「每次使用前重新输入」。
 - **上传是整份覆盖，没有版本、没有冲突检测。** 两个设备交替上传，后一次会安静地盖掉前一次；`store.json` 的 `.old`/`.corrupt` 那套兜底只保护本地文件，不保护云端。
 - **恢复是整体替换。** 云端那份是旧配置的话，本地新增的节点会被抹掉——界面上写了这句话（「整体替换而不是合并」），但没有二次确认框。
+
+## 55. 轻量模式：窗口藏起来以后，别再白烧内存（2026-11-25，云电脑 cloudpc-test）
+
+### 要证的事
+
+1. 打开「轻量模式」后，把窗口收进托盘（不是最小化），进程的工作集明显回收、CPU 增量接近 0；关掉这个开关时同样隐藏，内存基本不动——两边要能对比出来。
+2. 隐藏期间把内核杀掉，点回窗口后首页必须在几秒内显示「未运行」，而不是继续报「运行中」——恢复时必须重新拉状态，不能沿用隐藏前的旧数。
+3. 两个切换点都要留下日志：`x-matrix: 轻量模式开：界面内存目标已降到低，刷新暂停` / `轻量模式关：界面内存目标已恢复，刷新恢复`；哪一半没成也要点名（「回收工作集没成」「界面内存目标没设成」），不许把失败咽下去。
+4. 界面上的「清理界面缓存」按钮走 WebView2 自己的 `ClearBrowsingData`，提示必须写明它会连主题、强调色这些本地偏好一起清掉。
+
+### 验法
+
+```bash
+cd /d/tmp/shots
+./55-lite-accept.sh "" lite5      # PHASES 默认 "off on"，off 是对照组
+```
+
+脚本做的事：部署 exe → 每个阶段把 store 钉成 `lite_mode = 阶段`、`close_to_tray = true`、`start_minimized = false`、`auto_connect = true`（让内核自己起来，不点行按钮）→ 起应用 → 驱动先等首页「运行中」→ 记宿主与 6 个 `msedgewebview2.exe` 的工作集合计 → 给窗口发 `WM_CLOSE`（走 `CloseRequested` 的进托盘分支）→ 隐藏瞬间、隐藏 40 秒各记一次 → 趁隐藏 `taskkill /f /im xray.exe` → 用第二次启动触发 single-instance 的 `reveal` → 记回窗后的首页徽章与内存 → 回拉 `app.err.txt` 数「轻量模式」行。
+
+驱动：`D:\tmp\shots\mk_55_lite.py` → `55-lite.ps1`（`param` 必须写在 head 之前，UTF-8 BOM + CRLF）。内存取 `PrivateMemorySize64`、`WorkingSet64`、`TotalProcessorTime`，界面侧 `Get-Process -Name 'msedgewebview2'` 求和。
+
+### 判据与实测（`label=lite5`，2026-11-25 12:36–12:39）
+
+| # | 判据 | lite 关（对照） | lite 开 | 结论 |
+|---|---|---|---|---|
+| 1 | 隐藏前宿主工作集 | 34.4 MB | 34.4 MB | 同一起点 |
+| 2 | 隐藏瞬间 | 28.8 MB | **2.6 MB** | 只有开着的这边被 `EmptyWorkingSet` 回收 |
+| 3 | 隐藏 40 秒 | 28.8 MB | **3.8 MB** | 回收得住，不反弹到原点 |
+| 4 | 隐藏 40 秒总占用（宿主 + 界面子进程） | 364.7 → 363.9 MB（−0.8） | 364.9 → **339.5 MB**（−25.4，−7.0%） | 对照组不动，实验组降 |
+| 5 | 界面子进程工作集合计 | 330.3 → 335.1 MB | 330.5 → 335.7 MB | 两边都没降：目标级别对这套界面没效果 |
+| 6 | 隐藏期间 CPU 增量 | 0.33 → 0.33 s | 0.48 → 0.50 s | 两边都几乎为 0，看不出停表 |
+| 7 | `app.err.txt` 里的「轻量模式」行 | 0 行 | **2 行**（开、关各一） | 只有开着才走这条路，且两半都成功 |
+| 8 | 隐藏中杀内核后回窗首页 | `未运行` + 「还没有启动内核」 | `未运行` + 「还没有启动内核」 | 恢复时确实重新拉了一次，没有沿用旧状态 |
+
+### 设计理由
+
+- **轻量是两件事，日志必须分开记账。** 宿主侧的「回收工作集」（`EmptyWorkingSet`）和界面侧的「界面子进程进低内存档」（`ICoreWebView2_19::SetMemoryUsageTargetLevel`）互相独立，一个成、一个不成很常见。`set_quiet` 里用 `notes: Vec<String>` 分别记失败原因，全成才打「已降到低」，否则打「轻量模式开，但回收工作集没成：…」——这样下次出问题不用猜是哪一半。
+- **停表由前端单点驱动。** `src/stores/lite.ts` 只维护一个 `quiet`，`initQuiet()` 只接一次事件；`engine.ts`、`HomeView.vue`、`LogsView.vue` 各自 `watch(quiet)` 停自己的表，恢复时**先拉一次再开表**（`resumePolling` 先 `tick()`）。这是判据 2 能成立的原因：回窗第一帧就已经是新数据。
+- **只在「窗口不可见」时生效。** 三条隐藏路径（启动即藏托盘、关窗进托盘、快捷键隐藏）都走 `set_quiet(app, true)`，唯一显示入口 `reveal()` 走 `set_quiet(app, false)`；最小化不算——最小化的窗口还在任务栏里，随时会被点回来，按隐藏处理会让用户觉得数字「卡住」。
+- **关掉时显式设回 Normal。** `set_webview_memory(window, false)` 调 `SetMemoryUsageTargetLevel(NORMAL)`，不是「什么都不做」；否则一次轻量之后界面会一直停在低内存档，重活时表现变怪。
+- **「清理界面缓存」如实告知副作用。** Tauri 只暴露 `clearAllBrowsingData()`，它清的不只是缓存，还有 cookie 与 localStorage；本项目把主题、强调色存在 localStorage，所以按钮底下写明「会连同主题与强调色一起回到默认」。
+
+### 坑
+
+1. `windows-sys 0.60.2` 虽然导出 `SetProcessInformation`，但**没有** `ProcessMemoryUsageTargetLevel`（本机 SDK 10.0.26100 的 `processthreadsapi.h` 也没有），所以宿主侧只能 `EmptyWorkingSet`——别以为能设「目标级别」。
+2. `SetMemoryUsageTargetLevel` 挂在 **`ICoreWebView2_19`** 上，不在 `_13`；按 `_13` 写会报 `E0599 method not found`。`webview2-com = "0.39"` + `windows-core = "0.62"` 的版本必须和 `Cargo.lock` 对齐（0.38/0.61 会撞出两份 `windows-core`，`cast` 直接编译不过）。
+3. WebView2 的内存大头在 6 个 `msedgewebview2.exe` 子进程（约 330 MB），宿主 `X-Matrix.exe` 只有 34 MB；只报宿主工作集等于拿零头当成果。
+4. 停表在 CPU 上看不出来（2 秒一次的本地 HTTP 轮询几乎不耗 CPU），别拿 CPU 增量当「表停了」的证据；证据是判据 2（回窗后立刻是新状态）与代码路径。
+5. PowerShell 会把 `W "proc $tag: …"` 里的 `$tag:` 解析成驱动器限定变量（`TAG` 盘），整份脚本在解析期就死；`[Parser]::ParseFile` 不抛异常**不代表**没有解析错误，必须把 errors 集合取出来数。
+6. 首页的「启动」按钮在节点页的行里也有同名控件，按名字点有歧义；这一步改用 `auto_connect`（启动 1.2 秒后自动连 `last_node_id`）最稳，点行只作为兜底。
+7. `cleanup.sh` 末尾会删掉 `C:\Users\Administrator` 下的 `*.txt / *.ps1 / *.bat / *.png`，所以验收结束后再去翻 `app.err.txt` 必然是「文件不存在」——要在驱动里就把日志抓走。
+
+### 一句实话
+
+这次改的是「窗口藏起来以后别白烧内存」。实测能拿到的收益有两个：宿主工作集 34.4 → 3.8 MB、总占用 −25.4 MB（−7.0%），以及隐藏期间不再轮询。界面子进程那 330 MB 基本没动——WebView2 的低内存目标在这么简单的界面上几乎不产生效果，强行把它算成「省下 20%」是不诚实的；它留着是因为重界面时才有用、且关掉会显式恢复。「清理界面缓存」按钮只做过代码路径与构建验证，没在真机上点过（它会清掉主题/强调色，验收脚本没有覆盖）。

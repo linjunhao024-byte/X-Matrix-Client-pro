@@ -154,6 +154,10 @@ pub struct Settings {
     /// keeps the tunnel up; `false` quits and restores the system proxy, which
     /// is what someone who thinks of X as "close the program" expects.
     pub close_to_tray: bool,
+    /// 窗口收进托盘时把内存目标降到低、让界面暂停刷新。默认关：
+    /// 这是「省一点」的开关，不是所有人都想要界面在同一秒里失去响应。
+    #[serde(default)]
+    pub lite_mode: bool,
     /// Chord that starts or stops the tunnel from anywhere on the desktop,
     /// spelled the way the app spells it back (`Ctrl+Shift+X`). Empty switches
     /// the shortcut off: a chord nobody can press still looks registered in the
@@ -377,6 +381,7 @@ impl Default for Settings {
             fragment_interval: default_fragment_interval(),
             start_minimized: false,
             close_to_tray: true,
+            lite_mode: false,
             hotkey_toggle: default_hotkey_toggle(),
             hotkey_window: default_hotkey_window(),
         }
@@ -511,6 +516,9 @@ mod tests {
         let defaults = Settings::default();
         assert!(defaults.close_to_tray);
         assert!(!defaults.start_minimized);
+        // Lite mode is opt-in: it costs a visible refresh pause, so it must not
+        // arrive turned on for people who never asked for it.
+        assert!(!defaults.lite_mode);
     }
 
     #[test]

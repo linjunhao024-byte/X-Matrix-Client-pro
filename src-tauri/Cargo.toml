@@ -66,11 +66,20 @@ windows-sys = { version = "0.60", features = [
     "Win32_System_LibraryLoader",
     # The process picker walks a Toolhelp32 snapshot.
     "Win32_System_Diagnostics_ToolHelp",
+    # Lite mode hands the working set back when the window goes to the tray.
+    "Win32_System_ProcessStatus",
     "Win32_Graphics_Gdi",
     "Win32_System_Threading",
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_WindowsAndMessaging",
 ] }
+# Lite mode asks WebView2 itself to shrink: `SetMemoryUsageTargetLevel` lives on
+# `ICoreWebView2_13`, and the controller Tauri hands out is a webview2-com object,
+# so the interface can only be named through that crate. Both already arrive
+# transitively (wry uses webview2-com 0.38, which pins windows-core 0.61); listing
+# them here keeps the call sites honest about which versions they talk to.
+webview2-com = "0.39"
+windows-core = "0.62"
 
 [profile.release]
 codegen-units = 1

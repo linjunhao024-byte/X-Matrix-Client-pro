@@ -15,6 +15,7 @@ import EmptyState from '../components/EmptyState.vue'
 import { t } from '../i18n'
 import { api, describeError, type EngineKind } from '../services/contract'
 import { useEngineStore } from '../stores/engine'
+import { initQuiet, useQuiet } from '../stores/lite'
 
 const engine = useEngineStore()
 
@@ -36,6 +37,25 @@ const cleared = ref(false)
 
 let timer: ReturnType<typeof setInterval> | null = null
 let disposed = false
+
+/**
+ * Lite mode: a log page in the tray is a log page nobody reads, so the ticker
+ * stops. The cursor survives (it is a byte count, not a timer), which is what
+ * lets the reveal poll pick up the bytes written while the window was hidden
+ * instead of starting over.
+ */
+const quiet = useQuiet()
+
+function startTimer(): void {
+  if (timer) return
+  timer = setInterval(() => void poll(), POLL_MS)
+}
+
+function stopTimer(): void {
+  if (!timer) return
+  clearInterval(timer)
+  timer = null
+}
 
 const visible = computed(() => {
   const needle = filter.value.trim().toLowerCase()
@@ -118,15 +138,31 @@ watch(follow, (on) => {
   if (on) scrollToEnd()
 })
 
+watch(quiet, (idle) => {
+  if (idle) {
+    stopTimer()
+    return
+  }
+  // Read once *now*: the first screen after a reveal must show the lines the
+  // kernel wrote while the window was in the tray, not an empty delta.
+  void poll()
+  startTimer()
+})
+
 onMounted(() => {
   kind.value = engine.kind
-  void poll()
-  timer = setInterval(() => void poll(), POLL_MS)
+  // The visibility probe decides whether the first poll is worth sending: from
+  // the tray there is no one to read the lines, so it waits for the reveal.
+  void initQuiet().then(() => {
+    if (disposed || quiet.value) return
+    void poll()
+    startTimer()
+  })
 })
 
 onBeforeUnmount(() => {
   disposed = true
-  if (timer !== null) clearInterval(timer)
+  stopTimer()
 })
 </script>
 

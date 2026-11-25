@@ -19,6 +19,7 @@ import { api, describeError, type AppInfo, type EngineKind, type ExitIp, type Pr
 import { formatBytes, formatRate, formatWhen } from '../services/format'
 import { quotaAlerts } from '../services/quota'
 import { useEngineStore } from '../stores/engine'
+import { initQuiet, useQuiet } from '../stores/lite'
 import { useNodesStore } from '../stores/nodes'
 import { useSettingsStore } from '../stores/settings'
 import { useSubscriptionsStore } from '../stores/subscriptions'
@@ -46,6 +47,35 @@ const history = ref<HistoryPoint[]>([])
 /** 60 or 1440: the panel only offers the two windows people actually ask for. */
 const historyWindow = ref<number>(60)
 let historyTimer: ReturnType<typeof setInterval> | null = null
+/**
+ * Lite mode: while the window is in the tray the minute-by-minute record goes
+ * unread — nobody can see it — so its timer parks. On the way back the record
+ * is read once *before* the timer re-arms, so the panel never shows the minute
+ * the window was hidden as the current one.
+ */
+const quiet = useQuiet()
+/** Cleared on unmount: a pending `initQuiet` must not arm a timer for nothing. */
+let live = true
+
+function startHistoryTimer(): void {
+  if (historyTimer) return
+  historyTimer = setInterval(() => void loadHistory(), 60_000)
+}
+
+function stopHistoryTimer(): void {
+  if (!historyTimer) return
+  clearInterval(historyTimer)
+  historyTimer = null
+}
+
+watch(quiet, (idle) => {
+  if (idle) {
+    stopHistoryTimer()
+    return
+  }
+  void loadHistory()
+  startHistoryTimer()
+})
 
 async function loadHistory(): Promise<void> {
   try {
@@ -275,14 +305,20 @@ async function setMode(mode: ProxyMode): Promise<void> {
 }
 
 onMounted(() => {
-  void loadHistory()
-  // Once a minute is enough: the record itself is per-minute.
-  historyTimer = setInterval(() => void loadHistory(), 60_000)
+  // Wait for the visibility probe before the first read: a window started into
+  // the tray must not spend a request that nobody can see the result of. The
+  // probe is one IPC round-trip, and it is the earliest honest answer available.
+  void initQuiet().then(() => {
+    if (!live || quiet.value) return
+    void loadHistory()
+    // Once a minute is enough: the record itself is per-minute.
+    startHistoryTimer()
+  })
 })
 
 onUnmounted(() => {
-  if (historyTimer) clearInterval(historyTimer)
-  historyTimer = null
+  live = false
+  stopHistoryTimer()
 })
 
 onMounted(async () => {

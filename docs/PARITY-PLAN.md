@@ -82,6 +82,10 @@ PAC 只表达**能表达的**：绕过列表 + 规则里「直连」的域名类
 隐藏到托盘后：暂停图表与轮询定时器、`SetMemoryUsageTargetLevel(Low)`、按需清理 WebView2 缓存；恢复窗口时还原。
 判据：内存占用可见下降；恢复窗口后数据立刻刷新、无空白。
 
+- **结果（2026-11-25）**：`Settings.lite_mode` + `src-tauri/src/power.rs`（宿主 `EmptyWorkingSet`、界面 `ICoreWebView2_19::SetMemoryUsageTargetLevel`，失败分条记日志）+ `src-tauri/src/lib.rs` 的 `set_quiet()`（三条隐藏路径 + `reveal()`）+ `src/stores/lite.ts`（`quiet` 单一值，`engine`/`HomeView`/`LogsView` 停表、恢复先拉再开表）+ 设置页「轻量模式」与「清理界面缓存」。
+- 判据收窄（要如实说的）：① 实测收益是宿主工作集 34.4 → 3.8 MB、总占用 −25.4 MB（−7.0%）；界面 330 MB 的 `msedgewebview2.exe` 那部分**没有降**——WebView2 低内存目标在这套简单界面上几乎无效，留着是因为重界面时才有用；② 「暂停定时器」在 CPU 上量不出来（轮询本身几乎不耗 CPU），证据是「隐藏期间杀内核，回窗首页立刻显示未运行」；③ 「清理界面缓存」按钮只做了代码路径与构建验证，没在真机上点过（它会连主题/强调色一起清掉，脚本没覆盖）；④ `NodesView` 的自动测速（用户自己开的）在隐藏时仍会按设定发请求，属范围外。
+- 真机脚本：`D:/tmp/shots/55-lite-accept.sh`、`mk_55_lite.py`。
+
 ### S4 · 提权 / 服务模式
 先做提权：`is_elevated()` + 以管理员重启（`ShellExecuteEx` runas），设置里可选「需要时提示」。
 再做服务：`x-matrix.exe --service` 注册为 Windows 服务（SYSTEM），命名管道 IPC 转发内核启停，非管理员也能带 TUN 跑。
@@ -106,7 +110,7 @@ sing-box `tun` 入站（`auto_route`、`strict_route`、`stack: system`），需
 | S9 回退/负载组 | **已完成**（2026-11-25） | 与 `src-tauri/src/engine/groupwatch.rs` 同一次提交（`git log --oneline -- src-tauri/src/engine/groupwatch.rs` 最新一条） | `docs/ACCEPTANCE.md` §52；真机脚本 `D:/tmp/shots/52-group-run.sh` |
 | S3 内核更新 | **已完成**（2026-11-25） | 与 `src-tauri/src/engine/release.rs` 同一次提交（`git log --oneline -- src-tauri/src/engine/release.rs` 最新一条） | `docs/ACCEPTANCE.md` §53；真机脚本 `D:/tmp/shots/53-kernel-accept.sh`、`mk_53_kernel.py`、`mirror.ps1` |
 | S6 WebDAV | 已完成（2026-11-25） | 与 `src-tauri/src/net/webdav.rs` 同一次提交 | §54；真机脚本 `54-webdav-accept.sh`、`mk_54_webdav.py`、`dav.ps1` |
-| S5 轻量模式 | 未开始 | — | — |
+| S5 轻量模式 | **已完成**（2026-11-25） | 与 `src-tauri/src/power.rs` 同一次提交（`git log --oneline -- src-tauri/src/power.rs` 最新一条） | `docs/ACCEPTANCE.md` §55；真机脚本 `D:/tmp/shots/55-lite-accept.sh`、`mk_55_lite.py` |
 | S4 提权/服务 | 未开始 | — | — |
 | S1 TUN | 未开始 | — | — |
 | S7 多配置 | 未开始 | — | — |

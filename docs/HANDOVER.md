@@ -10,7 +10,7 @@
 ## 0. 三句话现状
 
 1. 主体功能已追平 V2RayN / Clash 的日常面：双内核（Xray / sing-box）渲染与启停、系统代理接管与还原、订阅/整包导入、Clash 配置连同 **策略组与规则** 一起导入、运行中热切换节点与代理模式、托盘子菜单、日志页、hysteria2 / tuic、真实延迟（分组与节点）、流量历史落盘、一键断开全部 + 进程归属、测速预算与「选最快」、域名正则 / 域名分类匹配器、诊断包导出、全局快捷键。
-2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§54）。
+2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§55）。
 3. 交接时那处未提交的工作（N12 应用内更新检查）已经构建、真机验收并提交；此后又合入四件事：`--quit` 正常退出并删除托盘图标（§21）、GEO 数据文件卡片与镜像回退下载（§23）、测速记录落盘（§24）。工作区现在是干净的。
 
 ### 0.1 进度快照（交接这一刻的硬数字）
@@ -18,15 +18,15 @@
 | 项 | 值 |
 |---|---|
 | 代码 HEAD | 「feat(backup): put the same backup file on a WebDAV server, and keep the password out of it」，含 §54（S6 WebDAV 云备份）；前一条是「feat(kernel): download an official release, check it against the upstream digest when there is one」（§53）——就是 `git log --oneline -- src-tauri/src/engine/release.rs` 的第一条；再往前：§52（S9，查 `src-tauri/src/engine/groupwatch.rs`）、§51（S11，查 `src-tauri/src/sysproc.rs`）、§50（S10）、§49（S8）、`a794438`（§48）、`6fd790f`（§47） |
-| 未提交 | 无。§54（S6 WebDAV 云备份）的代码、构建、真机验收、`docs/ACCEPTANCE.md` §54 与 `docs/PARITY-PLAN.md` 都在同一次提交里（见 §0.10） |
+| 未提交 | 无。§55（S5 轻量模式）的代码、构建、真机验收、`docs/ACCEPTANCE.md` §55 与 `docs/PARITY-PLAN.md` 都在同一次提交里（见 §0.11） |
 | 上一版未提交清单（留档） | `src-tauri/src/domain/settings.rs`、`src-tauri/src/engine/{mod,render,runtime,xray}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§39 分片）；再上一版：`src-tauri/src/engine/{mod,runtime}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§37 统一提示）；再上一版：`src-tauri/src/commands/settings.rs`、`src-tauri/src/commands/sysproxy.rs`、`src/stores/sysproxy.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`、`docs/ACCEPTANCE.md`（§36 系统代理即时生效） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库；之后每次收尾都跟着更新 |
 | IPC 命令 | **87**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
-| Rust 单测 | **455 passed**（`ARCHITECTURE.md:278` 已同步） |
-| 前端检查 | `npm run check` 全绿：vue-tsc / architecture（65 文件）/ contract / vitest **116**（12 文件） |
-| i18n | **813** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
-| 桌面产物 | 桌面上的旧副本**已不存在**；唯一产物是 `src-tauri/target/release/x-matrix.exe`（10,762,752 B @2026-11-25 10:41，md5 `d8101cd923e3a8c40d722fe69abe5b50`，含 §21–§54 全部改动） |
-| 验收文档 | `docs/ACCEPTANCE.md` §0–§54（§7 历史空缺，编号不连续但内容完整） |
+| Rust 单测 | **457 passed**（`ARCHITECTURE.md:278` 已同步） |
+| 前端检查 | `npm run check` 全绿：vue-tsc / architecture（66 文件）/ contract / vitest **116**（12 文件） |
+| i18n | **818** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
+| 桌面产物 | 桌面上的旧副本**已不存在**；唯一产物是 `src-tauri/target/release/x-matrix.exe`（10,775,040 B @2026-11-25 12:20，md5 `84f661d589293b89479f556886c530c4`，含 §21–§55 全部改动） |
+| 验收文档 | `docs/ACCEPTANCE.md` §0–§55（§7 历史空缺，编号不连续但内容完整） |
 | 云电脑 | 干净：`ProxyEnable=0x0`、无 X-Matrix/sing-box/xray 进程、无 `xm*` 计划任务 |
 
 **下一步的确定顺序**（做完一条打一个勾，别跳）：
@@ -37,7 +37,7 @@
 - [x] 4. `docs/ACCEPTANCE.md` 写到 §26
 - [x] 5. 提交（`fix(tray)` / `feat(update)` / `feat(geo,nodes)` / `feat(engine)` 各一条）
 - [x] 6. `FEED_URL` 已指向真实仓库 `linjunhao024-byte/X-Matrix-Client-pro`，`v0.1.0` 已发布并带 `X-Matrix.exe` 资产
-- [x] 7. 计数已同步：87 命令 / 455 单测 / 116 vitest / 813 i18n 键 × 3
+- [x] 7. 计数已同步：87 命令 / 457 单测 / 116 vitest / 818 i18n 键 × 3
 - [x] 8. `bash /d/tmp/shots/cleanup.sh` 收尾云电脑（2026-11-24 23:55 再跑一次：`ProxyEnable 0x0`、无 `xm*` 任务）
 - [x] 9. §47 订阅刷新后前端握着死 ID：补丁 → 构建 → 云电脑两轮对比验收 → 写 §47 → 提交（2026-11-25 02:36）
 - [x] 10. §48（S2）PAC 自动配置：生成脚本 + 注册表互斥 + 回环/私网兜底 → 构建 → 云电脑验收 → 写 §48 → 提交（2026-11-25 04:20）；后续 S10/S11/S9/S3/S6/S5/S4/S1/S7 见 `docs/PARITY-PLAN.md`
@@ -46,6 +46,7 @@
 - [x] 13. §51（S11）进程选择器：`sysproc.rs` 归并 + 一条 `list_processes` + 规则编辑器第二个弹窗 → 构建 → 云电脑 57 行真实进程/收窄/回读/空态验收 → 写 §51 → 提交（2026-11-25 07:3x）
 - [x] 14. §52（S9）回退组与负载均衡组：`groupwatch.rs` 每 20 秒探健康、只改 selector → 构建 → 云电脑两个会话（sing-box 三轮、xray 一轮）验收 → 写 §52 → 提交（2026-11-25 08:3x）
 - [x] 16. §54（S6）WebDAV 云备份：`net/webdav.rs` + `syscreds.rs` + `save_settings` 携密码 → 构建 → 云电脑五段验收（上传 4889 B、恢复把删掉的节点带回来、内核在跑时拒绝且不联网、密码错落成 401 一句话、走代理但内核没跑先拒）→ 写 §54 → 提交（2026-11-25 10:5x）
+- [x] 17. §55（S5）轻量模式：`power.rs` 两半记账 + `set_quiet()` 接三藏一显 + 前端 `quiet` 停表 → 构建 → 云电脑两阶段（对照/实验）验收 → 写 §55 → 提交（2026-11-25 12:4x）
 - [x] 15. §53（S3）内核下载/更新：`release.rs` 解析 + sha256 核对 + `stage/promote` → 构建 → 云电脑三阶段验收（xray 真换文件并用同节点重启、sing-box 无校验值照装但明说未核、自定义路径拒绝且不下载）→ 写 §53 → 提交（2026-11-25 10:10）
 
 ### 0.2 这个窗口（2026-11-24）新完成的六件事
@@ -128,6 +129,14 @@
 - **坑（真机脚本）**：① 计划里的第四条命令 `webdav_save` 被合并进 `save_settings`（设置页只有一个「保存」按钮），命令数 84 → 87 而非 88；② WebView2 把 `<label>` 文本挂成输入框自己的可访问名，按「标签找输入框」一律 `label missing`，要直接按 `Name` 匹配 `Edit`；③ `reqwest`/`hyper` 把 header 名写成小写，单测断言原始请求文本要先 `to_lowercase()`；④ specta 只给 `WebdavState`/`WebdavPush` 生成类型，没有 `_Serialize` 后缀；⑤ `cleanup.sh` 会删 home 下 `*.ps1`/`*.bat`/`*.txt`/`*.png`，驱动每轮重推。
 - **计数**：命令 **87**（+3）、Rust **455**（+21）、vitest **116**（+0）、i18n **813**（+15）。
 
+### 0.11 §55（S5）轻量模式（已完成，2026-11-25）
+
+- **为什么做**：`docs/PARITY-PLAN.md` 的第 8 项。窗口收进托盘后界面还在每 2 秒轮询内核、图表每 60 秒取样，用户看不到却一直在烧内存与请求。
+- **做了什么**：`Settings.lite_mode`；新 `src-tauri/src/power.rs`（宿主 `EmptyWorkingSet` + 界面 `ICoreWebView2_19::SetMemoryUsageTargetLevel`，两半各自回报）；`lib.rs` 的 `set_quiet()` 接到三条隐藏路径与唯一显示入口 `reveal()`，失败原因分条记日志；前端 `src/stores/lite.ts`（一个 `quiet` 值 + 只接一次事件），`engine.ts`/`HomeView.vue`/`LogsView.vue` 隐藏时停表、恢复时先拉一次再开表；设置页「轻量模式」开关 + 「清理界面缓存」按钮（`clearAllBrowsingData()`，提示会连主题/强调色一起回默认）；IPC 仍 **87**（不新增命令）。
+- **验收**：`bash /d/tmp/shots/55-lite-accept.sh "" lite5`（off 对照 + on 两阶段，同一 exe）。宿主工作集 34.4 → 2.6（隐藏瞬间）→ 3.8 MB（40 秒）；总占用 364.9 → 339.5 MB（−25.4，−7.0%），对照组同时长 364.7 → 363.9 MB（−0.8）；日志 `轻量模式开/关` 各一行；隐藏期间杀掉内核，回窗首页立刻显示「未运行」「还没有启动内核」。细节见 `docs/ACCEPTANCE.md` §55。
+- **坑**：① `windows-sys 0.60.2` 没有 `ProcessMemoryUsageTargetLevel`（宿主侧只能 `EmptyWorkingSet`）；② `SetMemoryUsageTargetLevel` 在 `ICoreWebView2_19` 上，`webview2-com 0.39` + `windows-core 0.62` 必须与 `Cargo.lock` 对齐；③ 界面 330 MB 全在 6 个 `msedgewebview2.exe` 里，低内存档对这套界面几乎没效果——**不许把工作集回收说成「省 25 MB 界面内存」**；④ 停表在 CPU 上看不出来，证据要用「回窗后立刻是新状态」；⑤ PowerShell 里 `"$tag: …"` 会被当驱动器变量、解析期整份脚本死，`ParseFile` 不抛异常也要数 errors；⑥ 首页「启动」与节点页行内按钮同名，改让 `auto_connect` 起内核最稳。
+- **计数**：命令 **87**（+0）、Rust **457**（+2）、vitest **116**（+0）、i18n **818**（+5）。
+
 ---
 
 ## 1. 项目坐标与命令
@@ -144,7 +153,7 @@
 | 桌面产物 | `/c/Users/83611/Desktop/X-Matrix.exe`、`/c/Users/83611/Desktop/X-Matrix_0.1.0_x64-setup.exe` |
 | 当前构建产物 | `src-tauri/target/release/x-matrix.exe` **10,762,752 B @2026-11-25 10:41，md5 `d8101cd923e3a8c40d722fe69abe5b50`**（含 §21–§54）；桌面副本已不在，需要时自己 `cp` 过去 |
 
-**计数基线（改动后记得同步文档）**：命令 **87**、`cargo test --lib` **455**、vitest **116**（12 个文件）、i18n **813** 键。
+**计数基线（改动后记得同步文档）**：命令 **87**、`cargo test --lib` **457**、vitest **116**（12 个文件）、i18n **818** 键。
 > `README.md:81` 与 `ARCHITECTURE.md:277-278` 已同步为 84 条命令 / 434 项测试。
 
 命令数核算法：
@@ -394,7 +403,7 @@ scp -i /c/Users/83611/.ssh/id_ed25519_cpc 本地文件 Administrator@100.106.121
 
 1. `cd /d/GitHub-Warehouse/X-Matrix-Client-Pro && git status` —— 工作区应当干净；有改动先弄清是谁的。
 2. 读本文件的 §5 与 `docs/ACCEPTANCE.md` 的最后两节，对齐上下文。
-3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 455 passed）。
+3. `export PATH="$HOME/.cargo/bin:$PATH"`；`cd src-tauri && cargo test --lib`（应为 457 passed）。
 4. `cd .. && npm run check`（应为全绿）。
 5. 从 §6 表里挑一项（按性价比排序），**一项一提交**，提交信息用英文 `feat(...)/fix(...)/docs: ...`。
 6. 真机验证前先跑 `bash /d/tmp/shots/deploy-tray.sh <exe>`；远端被 `cleanup.sh` 清过的话，先 `scp x-act.ps1 uia2.ps1 ocr.ps1` 上去。

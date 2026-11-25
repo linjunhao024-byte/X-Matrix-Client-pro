@@ -3612,6 +3612,36 @@
     "關掉後，點窗口的 × 會退出程序並還原系統代理"
   ],
   [
+    "settings.liteMode",
+    "轻量模式",
+    "Lite mode",
+    "輕量模式"
+  ],
+  [
+    "settings.liteHint",
+    "窗口收进托盘时把内存占用压下去、暂停界面刷新；点托盘图标回来会立刻重新读一遍数据。",
+    "While the window sits in the tray, lower the memory target and pause UI refresh; coming back re-reads everything at once.",
+    "視窗收進托盤時把記憶體佔用壓下去、暫停介面刷新；點托盤圖示回來會立刻重新讀一遍資料。"
+  ],
+  [
+    "settings.clearCache",
+    "清理界面缓存",
+    "Clear UI cache",
+    "清理介面快取"
+  ],
+  [
+    "settings.clearCacheHint",
+    "只清界面缓存和 Cookie；主题、强调色这些偏好也存在界面里，清完会回到默认。",
+    "Clears the webview cache and cookies only; the theme and accent preferences live there too, so they fall back to their defaults.",
+    "只清介面快取和 Cookie；主題、強調色這些偏好也存在介面裡，清完會回到預設。"
+  ],
+  [
+    "settings.cacheCleared",
+    "已清理界面缓存",
+    "UI cache cleared",
+    "已清理介面快取"
+  ],
+  [
     "settings.dns.hint",
     "逗号分隔。三种写法：1.1.1.1（UDP）、tls://1.1.1.1（DoT）、https://1.1.1.1/dns-query（DoH）。主机部分只接受 IP 字面量——写 dns.google 这种域名会让解析器先去解析它自己。",
     "Comma separated. Three forms: 1.1.1.1 (UDP), tls://1.1.1.1 (DoT), https://1.1.1.1/dns-query (DoH). The host must be an IP literal — a name like dns.google would have to be resolved by the resolver itself.",
