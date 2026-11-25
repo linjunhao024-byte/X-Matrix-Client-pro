@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import StaleConfig from '../components/StaleConfig.vue'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
 import { availableLocales, locale, setLocale, t } from '../i18n'
@@ -80,6 +80,22 @@ const cacheNote = ref<string | null>(null)
 /** Result line for backup/restore: what happened, in one sentence. */
 const backupNote = ref<string | null>(null)
 const backupBusy = ref(false)
+
+/**
+ * TUN and the system proxy both claim the machine's traffic, and the kernel
+ * refuses the pair at start. TUN is the stronger claim — it takes the traffic
+ * at the adapter, one layer below the registry — so switching it on drops the
+ * system proxy instead of leaving an illegal pair on screen. While TUN is on
+ * the proxy switch is disabled; turning TUN off hands the switch back. There
+ * is no state where both are locked: a store that somehow has both on can be
+ * repaired by turning TUN off, which re-enables the proxy switch.
+ */
+watch(
+  () => draft.value?.tun_enabled,
+  (on) => {
+    if (on === true && draft.value?.system_proxy === true) draft.value.system_proxy = false
+  },
+)
 
 /**
  * WebDAV password, kept out of `draft` on purpose: `draft` is the settings
@@ -841,7 +857,23 @@ async function save() {
           v-model="draft.system_proxy"
           :label="t('settings.systemProxy')"
           :description="t('settings.systemProxyHint')"
+          :disabled="draft.tun_enabled"
         />
+        <div class="divider" />
+        <ToggleSwitch v-model="draft.tun_enabled" :label="t('settings.tun.title')" />
+        <label class="field">
+          <span class="field-label">{{ t('settings.tun.stack') }}</span>
+          <select
+            v-model="draft.tun_stack"
+            class="select input-narrow"
+            :disabled="!draft.tun_enabled"
+          >
+            <option value="system">{{ t('settings.tun.stackSystem') }}</option>
+            <option value="gvisor">{{ t('settings.tun.stackGvisor') }}</option>
+            <option value="mixed">{{ t('settings.tun.stackMixed') }}</option>
+          </select>
+        </label>
+        <p class="field-hint">{{ t('settings.tun.hint') }}</p>
         <div class="divider" />
         <ToggleSwitch
           v-model="draft.pac_enabled"

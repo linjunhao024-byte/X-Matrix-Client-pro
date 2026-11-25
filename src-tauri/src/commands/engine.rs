@@ -254,6 +254,21 @@ pub fn prepare_start(
     })
 }
 
+/// Why a TUN start needs something this process does not have, if it does.
+///
+/// Pulled out of [`start_engine`] so the answer can be tested without a UAC
+/// token: the machine that runs the tests is usually already elevated, and a
+/// test that only ever sees `true` proves nothing about the refusal.
+fn tun_permission_note(elevated: bool, has_service: bool) -> Option<&'static str> {
+    if elevated || has_service {
+        None
+    } else {
+        Some(
+            "开 TUN 需要管理员权限：先在「权限」里点「以管理员身份重启」，或者装上内核服务让它以 SYSTEM 启动。",
+        )
+    }
+}
+
 /// Spawn the kernel, then point the system proxy at it.
 ///
 /// The proxy is taken over *after* the readiness probe passes — never before,
@@ -265,6 +280,32 @@ pub fn start_engine(
     proxy: &Arc<ProxyGuard>,
     request: StartRequest,
 ) -> AppResult<EngineStatus> {
+    // TUN has to be refused here, before a config is rendered or a process is
+    // spawned. The kernel cannot make any of these three true once it is up:
+    // a config with a TUN inbound and a system proxy set routes every request
+    // back through loopback, Xray has no TUN inbound at all, and an
+    // unelevated TUN start dies inside the kernel with only its own log to
+    // explain why. Every start path — commands, tray, auto-connect — comes
+    // through this function, so one gate covers all of them.
+    if request.settings.tun_enabled {
+        if request.settings.system_proxy {
+            return Err(AppError::InvalidInput(
+                "TUN 和系统代理不能同时开：TUN 已经在网卡层接管，系统代理只会把流量再绕回本机一遍。关掉其中一个再启动。"
+                    .into(),
+            ));
+        }
+        if request.kind != EngineKind::SingBox {
+            return Err(AppError::InvalidInput(
+                "Xray 内核没有 TUN 入站：TUN 只对 sing-box 做了支持。切到 sing-box，或者关掉 TUN。"
+                    .into(),
+            ));
+        }
+        if let Some(note) =
+            tun_permission_note(crate::elevate::is_elevated(), runtime.has_service())
+        {
+            return Err(AppError::InvalidInput(note.into()));
+        }
+    }
     // Only check when we are idle: while our own kernel runs, it *is* the
     // thing holding the port, and preflighting then would refuse every node
     // switch. Checking from idle is the case that matters anyway — the user
@@ -759,7 +800,7 @@ pub(crate) mod tests {
 
     use parking_lot::Mutex;
 
-    use super::{start_engine, stop_if_running_node, StartRequest};
+    use super::{start_engine, stop_if_running_node, tun_permission_note, StartRequest};
     use crate::engine::runtime::tests::{harness, node, Harness};
     use crate::engine::{Endpoints, EngineKind, RunOptions};
     use crate::error::AppResult;
@@ -962,5 +1003,76 @@ pub(crate) mod tests {
 
         std::fs::remove_dir_all(&h.dir).ok();
         let _ = std::fs::remove_file(&path);
+    }
+
+    /// A start request that asks for TUN, on the given kernel, with the system
+    /// proxy on or off. The ports never get bound: every refusal below happens
+    /// before the preflight, which is the point.
+    fn tun_request(kind: EngineKind, system_proxy: bool) -> StartRequest {
+        let mut settings = crate::domain::Settings::default();
+        settings.tun_enabled = true;
+        settings.system_proxy = system_proxy;
+        StartRequest {
+            kind,
+            node: node(),
+            endpoints: Endpoints::new(7890, 0, 0, 9090).unwrap(),
+            settings,
+            rules: vec![],
+            nodes: vec![node()],
+            groups: vec![],
+            rule_sets: vec![],
+        }
+    }
+
+    #[test]
+    fn tun_and_system_proxy_are_rejected_together() {
+        let h = harness(true, false);
+        let (guard, fake, path) = proxy();
+        let guard = Arc::new(guard);
+
+        let message = start_engine(&h.runtime, &guard, tun_request(EngineKind::SingBox, true))
+            .unwrap_err()
+            .to_string();
+
+        assert!(message.contains("不能同时开"), "message: {message}");
+        // Refused before the kernel ran and before the registry was touched:
+        // the whole point of checking here is that nothing half-starts.
+        assert!(!h.runtime.status().running);
+        assert!(fake.writes.lock().is_empty());
+
+        std::fs::remove_dir_all(&h.dir).ok();
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn tun_on_xray_is_rejected() {
+        let h = harness(true, false);
+        let (guard, fake, path) = proxy();
+        let guard = Arc::new(guard);
+
+        let message = start_engine(&h.runtime, &guard, tun_request(EngineKind::Xray, false))
+            .unwrap_err()
+            .to_string();
+
+        assert!(message.contains("只对 sing-box"), "message: {message}");
+        assert!(!h.runtime.status().running);
+        assert!(fake.writes.lock().is_empty());
+
+        std::fs::remove_dir_all(&h.dir).ok();
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn tun_needs_either_an_elevated_process_or_the_service() {
+        // Elevated, or the service (which runs as SYSTEM): both are enough.
+        assert!(tun_permission_note(true, false).is_none());
+        assert!(tun_permission_note(false, true).is_none());
+
+        // Neither: the refusal has to name both ways out, because the user
+        // cannot tell from the symptom (a kernel that exits) what to do.
+        let note = tun_permission_note(false, false).expect("unelevated, serviceless start must be refused");
+        assert!(note.contains("管理员权限"), "note: {note}");
+        assert!(note.contains("以管理员身份重启"), "note: {note}");
+        assert!(note.contains("SYSTEM"), "note: {note}");
     }
 }

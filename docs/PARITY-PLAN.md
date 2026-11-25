@@ -99,6 +99,16 @@ PAC 只表达**能表达的**：绕过列表 + 规则里「直连」的域名类
 sing-box `tun` 入站（`auto_route`、`strict_route`、`stack: system`），需要管理员权限与 Wintun；Xray 无 TUN，界面直接说明「TUN 需要 sing-box」。
 判据：真机开启 TUN 后，未设系统代理的流量也走代理（用出口 IP 页对比）；关闭后路由表还原；与系统代理同时开启不冲突。
 
+### S1 · 结果（2026-11-25）
+
+- 做的是什么：`Settings.tun_enabled` + `tun_stack`（system/gvisor/mixed）；sing-box 渲染时把 tun 入站追加在最后、`route.rules[0]` 插 `sniff`，关掉时一条都不出现（单测逐字节对拍）；`start_engine` 在渲染前三条拒绝；界面 TUN 开关 + 三档 stack，打开 TUN 时系统代理开关禁用并自动关掉。
+- 真机结论（§58）：tun0 出现、默认路由改到它（`192.168.0.1@10`）、`curl http://cp.cloudflare.com/` = 204、首页出口 IP 变「180.119.140.33 · 经代理」、DNS 经隧道可用；停止后网卡与路由复原、直连 204；TUN+Xray 与 TUN+系统代理两条拒绝都真的拦住且无内核。
+- 判据收窄（如实记）：
+  - 「非管理员拒绝 TUN」未在真机上触发——云电脑 `EnableLUA=0`，所有进程都是完整令牌（同 §56），只能靠单测。
+  - 环回测试节点打 Google 那一路在本机网络上超时（同机直连是 204），所以判据只看「至少一条 HTTP 经隧道成功 + 出口 IP 变经代理」，没有拿 gstatic 当必过项。
+  - 不下载 wintun.dll：真机改名 `engines\wintun.dll` 后 sing-box 1.14.4 照样起在 tun0，说明这版把 wintun 编进了二进制，于是这个功能根本没做。
+- 计数：Rust 489 → **496**（7 项新测试），IPC 仍 **92**，i18n 829 → **835**。
+
 ### S7 · 多配置
 引入 profile 层：每个 profile 保存节点来源（订阅/手工）、规则、策略组与覆盖脚本（merge / script），切换时重新生成配置。`render.rs` 从「一份全局配置」改为「按 profile 生成」。
 判据：两个 profile 各自的节点与规则互不污染；切换 profile 后运行中内核按新配置重启；导出备份含全部 profile。
@@ -117,5 +127,5 @@ sing-box `tun` 入站（`auto_route`、`strict_route`、`stack: system`），需
 | S5 轻量模式 | **已完成**（2026-11-25） | 与 `src-tauri/src/power.rs` 同一次提交（`git log --oneline -- src-tauri/src/power.rs` 最新一条） | `docs/ACCEPTANCE.md` §55；真机脚本 `D:/tmp/shots/55-lite-accept.sh`、`mk_55_lite.py` |
 | S4a 提权 | **已完成**（2026-11-25，判据 7、8 未验） | 与 `src-tauri/src/elevate.rs` 同一次提交（`git log --oneline -- src-tauri/src/elevate.rs` 最新一条） | `docs/ACCEPTANCE.md` §56；真机脚本 `D:/tmp/shots/56-elev-accept.sh`、`mk_56_elev.py` |
 | S4b 内核服务 | **已完成**（判据全过，见 §57） | 与 `src-tauri/src/service.rs` 同一次提交（`git log --oneline -- src-tauri/src/service.rs` 最新一条） | `docs/ACCEPTANCE.md` §57；真机脚本 `D:/tmp/shots/57-service-accept.sh`、`mk_57_service.py` |
-| S1 TUN | 未开始 | — | — |
+| S1 TUN | **已完成**（2026-11-25） | 与 `src-tauri/src/engine/singbox.rs` 同一次提交（`git log --oneline -- src-tauri/src/engine/singbox.rs` 最新一条） | `docs/ACCEPTANCE.md` §58；真机脚本 `D:\tmp\shots\58-tun-accept.sh`、`mk_58_head.py`/`mk_58_body.py` |
 | S7 多配置 | 未开始 | — | — |

@@ -73,7 +73,17 @@ impl Engine for SingBoxEngine {
         // declared once and pointed at by tag. Omitted entirely when unused:
         // an empty array is a needless thing for a kernel to validate.
         let mut route = serde_json::Map::new();
-        route.insert("rules".into(), json!(singbox_routing_rules(input)));
+        // With TUN on, the kernel sees IP packets instead of a socket API call,
+        // so the destination domain is gone unless something reads it back off
+        // the wire. The first rule asks sing-box to sniff it on every
+        // connection; every later rule then matches the domain it always
+        // matched. Nothing is added when TUN is off, so the table — and the
+        // behaviour it was validated against — stays byte for byte the same.
+        let mut rules = singbox_routing_rules(input);
+        if input.tun_enabled {
+            rules.insert(0, json!({ "action": "sniff" }));
+        }
+        route.insert("rules".into(), json!(rules));
         let rule_sets = singbox_rule_set_declarations(input);
         if !rule_sets.is_empty() {
             route.insert("rule_set".into(), json!(rule_sets));
@@ -154,29 +164,67 @@ impl Engine for SingBoxEngine {
 /// SOCKS5 client expects UDP ASSOCIATE to keep working) and `http` (no `udp`:
 /// sing-box has no UDP semantics for an HTTP inbound).
 fn singbox_inbounds(input: &RenderInput<'_>, endpoints: Endpoints) -> Vec<Value> {
-    if !endpoints.split() {
-        return vec![json!({
+    let mut inbounds = if !endpoints.split() {
+        vec![json!({
             "type": "mixed",
             "tag": "socks",
             "listen": input.listen_address(),
             "listen_port": endpoints.proxy_port(),
-        })];
+        })]
+    } else {
+        vec![
+            json!({
+                "type": "socks",
+                "tag": "socks",
+                "listen": input.listen_address(),
+                "listen_port": endpoints.socks_port,
+                "udp": true,
+            }),
+            json!({
+                "type": "http",
+                "tag": "http",
+                "listen": input.listen_address(),
+                "listen_port": endpoints.http_port,
+            }),
+        ]
+    };
+    // The TUN listener goes last and only ever appends. The proxy inbounds keep
+    // their tags, their order and their fields, so a config with TUN on is the
+    // config the app already ships with one extra listener at the end — nothing
+    // else moves, and turning TUN back off restores the old document exactly.
+    if input.tun_enabled {
+        inbounds.push(singbox_tun_inbound(input));
     }
-    vec![
-        json!({
-            "type": "socks",
-            "tag": "socks",
-            "listen": input.listen_address(),
-            "listen_port": endpoints.socks_port,
-            "udp": true,
-        }),
-        json!({
-            "type": "http",
-            "tag": "http",
-            "listen": input.listen_address(),
-            "listen_port": endpoints.http_port,
-        }),
-    ]
+    inbounds
+}
+
+/// The TUN inbound: take over the machine's traffic at the adapter level.
+///
+/// `172.19.0.1/30` is a two-host link-local-ish subnet that no home or office
+/// LAN uses, so `auto_route` cannot collide with a real gateway. The kernel
+/// creates the adapter itself; no WinTun DLL needs shipping alongside it.
+///
+/// `route_exclude_address` holds `100.64.0.0/10` out of the tunnel. That is the
+/// CGNAT block Tailscale (and therefore the remote session this machine is
+/// driven over) hands out; letting `auto_route` swallow it would cut the link
+/// the app is being driven through. sing-box's own documentation excludes the
+/// same range for the same reason.
+///
+/// `strict_route` stays off: it drops everything that does not go through the
+/// adapter, which on Windows also kills LAN discovery and sharing — a proxy
+/// client that breaks the local network is not what "take over my traffic"
+/// means.
+fn singbox_tun_inbound(input: &RenderInput<'_>) -> Value {
+    json!({
+        "type": "tun",
+        "tag": "tun",
+        "address": ["172.19.0.1/30"],
+        "mtu": 9000,
+        "auto_route": true,
+        "strict_route": false,
+        "stack": input.tun_stack,
+        "route_exclude_address": ["100.64.0.0/10"],
+    })
 }
 
 /// All outbounds for this run.
@@ -813,6 +861,91 @@ mod tests {
             Security::None,
         );
         assert!(render(&first)["dns"].is_null());
+    }
+
+    #[test]
+    fn tun_inbound_is_appended_and_nothing_else_changes() {
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
+        let n = node(
+            Protocol::Trojan {
+                password: "pw".into(),
+            },
+            Transport::Tcp,
+            Security::None,
+        );
+        let plain = SingBoxEngine
+            .render_config(&RenderInput::new(&n, endpoints))
+            .unwrap();
+        let mut wanting = RenderInput::new(&n, endpoints);
+        wanting.tun_enabled = true;
+        let tun = SingBoxEngine.render_config(&wanting).unwrap();
+
+        // Off is the old document, byte for byte: one listener, no sniff rule.
+        let plain_inbounds = plain["inbounds"].as_array().unwrap();
+        assert_eq!(plain_inbounds.len(), 1);
+        assert_eq!(plain_inbounds[0]["type"], json!("mixed"));
+        assert!(plain_inbounds[0].get("address").is_none());
+        let plain_rules = plain["route"]["rules"].as_array().unwrap();
+        assert!(!plain_rules.iter().any(|rule| rule == &json!({"action": "sniff"})));
+
+        // On adds exactly one listener, at the end, with the settings' stack.
+        let inbounds = tun["inbounds"].as_array().unwrap();
+        assert_eq!(inbounds.len(), 2);
+        assert_eq!(inbounds[0], plain_inbounds[0]);
+        let t = &inbounds[1];
+        assert_eq!(t["type"], json!("tun"));
+        assert_eq!(t["tag"], json!("tun"));
+        assert_eq!(t["address"], json!(["172.19.0.1/30"]));
+        assert_eq!(t["mtu"], json!(9000));
+        assert_eq!(t["auto_route"], json!(true));
+        assert_eq!(t["strict_route"], json!(false));
+        assert_eq!(t["stack"], json!("mixed"));
+        assert_eq!(t["route_exclude_address"], json!(["100.64.0.0/10"]));
+        assert!(t.get("listen_port").is_none());
+
+        // Sniffing is what gives the domain rules something to match once the
+        // traffic arrives as packets, so it goes first.
+        let rules = tun["route"]["rules"].as_array().unwrap();
+        assert_eq!(rules[0], json!({"action": "sniff"}));
+        assert_eq!(rules.len(), plain_rules.len() + 1);
+
+        // And nothing else moved: same outbounds, DNS, API.
+        assert_eq!(tun["outbounds"], plain["outbounds"]);
+        assert_eq!(tun["dns"], plain["dns"]);
+        assert_eq!(tun["log"], plain["log"]);
+        assert_eq!(tun["experimental"], plain["experimental"]);
+
+        // With a split the two proxy listeners stay in place and the tun is
+        // still last: "appended", not "first".
+        let split = Endpoints::new(7890, 7891, 7892, 9090).unwrap();
+        let mut wanting = RenderInput::new(&n, split);
+        wanting.tun_enabled = true;
+        let cfg = SingBoxEngine.render_config(&wanting).unwrap();
+        let inbounds = cfg["inbounds"].as_array().unwrap();
+        assert_eq!(inbounds.len(), 3);
+        assert_eq!(inbounds[0]["tag"], json!("socks"));
+        assert_eq!(inbounds[1]["tag"], json!("http"));
+        assert_eq!(inbounds[2]["tag"], json!("tun"));
+    }
+
+    #[test]
+    fn tun_stack_is_written_through() {
+        let endpoints = Endpoints::new(7890, 0, 0, 9090).unwrap();
+        let n = node(
+            Protocol::Trojan {
+                password: "pw".into(),
+            },
+            Transport::Tcp,
+            Security::None,
+        );
+        for stack in ["system", "gvisor", "mixed"] {
+            let mut input = RenderInput::new(&n, endpoints);
+            input.tun_enabled = true;
+            input.tun_stack = stack.to_string();
+            let cfg = SingBoxEngine.render_config(&input).unwrap();
+            let last = cfg["inbounds"].as_array().unwrap().last().unwrap();
+            assert_eq!(last["stack"], json!(stack));
+        }
     }
 
 }

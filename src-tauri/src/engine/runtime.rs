@@ -438,6 +438,14 @@ impl EngineRuntime {
         *self.service.write() = client;
     }
 
+    /// Whether an installed service is ready to start kernels for us.
+    ///
+    /// This is the other way to get an administrator token: the service runs as
+    /// SYSTEM, so a TUN start is legal without the GUI itself being elevated.
+    pub fn has_service(&self) -> bool {
+        self.service.read().is_some()
+    }
+
     /// Re-probe the service after an install or uninstall, so the next start
     /// uses it (or stops using it) without restarting the app.
     pub fn refresh_service(&self) {

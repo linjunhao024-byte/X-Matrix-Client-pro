@@ -162,6 +162,14 @@ pub struct Settings {
     /// 这是「省一点」的开关，不是所有人都想要界面在同一秒里失去响应。
     #[serde(default)]
     pub lite_mode: bool,
+    /// 让 sing-box 用 TUN 在网卡层接管本机流量。与系统代理互斥：TUN 打开时
+    /// 不再设置系统代理。只有 sing-box 有这个入站，Xray 会在启动前被拒。
+    #[serde(default)]
+    pub tun_enabled: bool,
+    /// TUN 的网络栈：system / gvisor / mixed。认不出就报 InvalidInput，免得
+    /// 内核拿到一个它自己也不认识的名字才失败。
+    #[serde(default = "default_tun_stack")]
+    pub tun_stack: String,
     /// Chord that starts or stops the tunnel from anywhere on the desktop,
     /// spelled the way the app spells it back (`Ctrl+Shift+X`). Empty switches
     /// the shortcut off: a chord nobody can press still looks registered in the
@@ -221,6 +229,14 @@ fn default_fragment_length() -> String {
 /// default. Parsed like [`default_fragment_length`].
 fn default_fragment_interval() -> String {
     "10-20".to_string()
+}
+
+/// `mixed` is sing-box's own default: the system stack hands packets to the
+/// Windows TCP/IP stack, gVisor keeps them in user space, and mixed picks per
+/// connection. Starting on the kernel's own default is one fewer name to
+/// explain, and it is the value its own tests use.
+fn default_tun_stack() -> String {
+    "mixed".to_string()
 }
 
 /// Parse one `a-b` fragment range: two positive integers separated by a single
@@ -393,6 +409,8 @@ impl Default for Settings {
             close_to_tray: true,
             prompt_elevation: true,
             lite_mode: false,
+            tun_enabled: false,
+            tun_stack: default_tun_stack(),
             hotkey_toggle: default_hotkey_toggle(),
             hotkey_window: default_hotkey_window(),
         }
@@ -457,6 +475,13 @@ impl Settings {
         // switched on, so it is refused instead of reinterpreted.
         if !(1..=128).contains(&self.mux_concurrency) {
             return Err("mux_concurrency must be between 1 and 128".into());
+        }
+        // Only the three stack names sing-box 1.14 accepts. Anything else is a
+        // typo or a hand-edited store.json, and refusing it here means the save
+        // is what fails instead of the next start, with only the kernel log to
+        // explain why the tunnel never came up.
+        if !matches!(self.tun_stack.as_str(), "system" | "gvisor" | "mixed") {
+            return Err("tun_stack must be system, gvisor or mixed".into());
         }
         // Xray refuses the entire config when a fragment range does not parse,
         // so a switched-on fragment with a typo has to block the save instead of
@@ -875,5 +900,49 @@ mod tests {
         assert!(text.contains("\"prompt_elevation\":false"));
         let back: Settings = serde_json::from_str(&text).expect("read back");
         assert!(!back.prompt_elevation);
+    }
+
+    #[test]
+    fn tun_is_off_with_the_mixed_stack_until_asked_for() {
+        // A store written before TUN existed has no keys at all. It must read
+        // as "off, mixed": a missing field must never switch takeover on, and
+        // it must not make the whole document unreadable either.
+        let legacy: Settings = serde_json::from_str("{}").expect("empty object is a valid store");
+        assert!(!legacy.tun_enabled);
+        assert_eq!(legacy.tun_stack, "mixed");
+        let defaults = Settings::default();
+        assert!(!defaults.tun_enabled);
+        assert_eq!(defaults.tun_stack, "mixed");
+
+        // What the user picked survives a round trip.
+        let asked = Settings {
+            tun_enabled: true,
+            tun_stack: "gvisor".into(),
+            ..Default::default()
+        };
+        let text = serde_json::to_string(&asked).expect("serialise");
+        let back: Settings = serde_json::from_str(&text).expect("read back");
+        assert!(back.tun_enabled);
+        assert_eq!(back.tun_stack, "gvisor");
+    }
+
+    #[test]
+    fn tun_stack_must_be_one_of_the_three_names() {
+        // sing-box refuses the whole config when the stack is a name it does
+        // not know, so the save is where the typo has to stop: otherwise the
+        // user only sees a kernel that exits, with the reason in its log.
+        for stack in ["system", "gvisor", "mixed"] {
+            let s = Settings {
+                tun_stack: stack.into(),
+                ..Default::default()
+            };
+            assert!(s.validate().is_ok(), "stack: {stack}");
+        }
+        let s = Settings {
+            tun_stack: "nonsense".into(),
+            ..Default::default()
+        };
+        let error = s.validate().unwrap_err();
+        assert!(error.contains("tun_stack"), "error: {error}");
     }
 }

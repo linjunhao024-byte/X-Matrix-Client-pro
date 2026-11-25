@@ -1783,3 +1783,62 @@ cd /d/tmp/shots && ./57-service-accept.sh "" svc6
 ### 一句实话
 
 这次真机验到了：装服务、服务 RUNNING、注册表登记、作业目录 ACL、内核以 SYSTEM 起在服务下、卸载后服务与键消失、内核回到界面的普通子进程、按钮 enabled 跟随状态。**没验到的**：服务启动慢到 SCM 判 1053 的那种时序（8 秒就绪探测只在「快」的一侧验过）、`icacls` 失败分支、以及服务模式下内核日志写在 `%ProgramData%\X-Matrix\service\<kind>.log` 而界面「日志」面板仍读 app-data 的 `logs\<kind>.log`——服务分支没有回填 `log_path`，界面上看不到服务内核的日志，这一处是已知缺口，不当成「已经对齐」。
+
+## 58. TUN：让 sing-box 在网卡层接管，且只在它能做的时候接管（2026-11-25，云电脑 cloudpc-test）
+
+这一节回答的是：把「TUN 模式」从一句话变成能用、且不会骗人的东西。
+
+**要证的事**
+
+1. 打开 TUN 后启动内核，机器上真的多出一块 sing-box 的虚拟网卡，默认路由真的改到它上面。
+2. 经过这块网卡发出去 HTTP 能通，且出口是节点而不是直连。
+3. 关掉内核后，网卡和路由都复原，直连照常。
+4. 三条「不该启动」的路径都拒绝，且拒绝发生在渲染之前——TUN + 系统代理、TUN + Xray、TUN + 非管理员（这条见「一句实话」）。
+5. 不打开 TUN 时，渲染出来的配置与改动前逐字节一致。
+
+**验法**
+
+```bash
+cd /d/tmp/shots
+# 拒绝两段（TUN+Xray、TUN+系统代理），每段都点一次「启动」再读页面文字
+./58-tun-accept.sh tun6
+
+# 接管与复原：驱动自己先确保环回节点服务器在跑，再等内核起来
+PHASES="tun" ./58-tun-accept.sh tun15
+```
+
+驱动本身在会话 1 里跑（`schtasks /it`），这样才能操作真实窗口。判定全部落在可复查的现场：`Get-NetAdapter -IncludeHidden` 的网卡、`Get-NetRoute 0.0.0.0/0` 的 NextHop、`curl` 的状态码、首页那行「出口 IP + 直连/经代理」、以及内核自己的 `logs\sing-box.log`。
+
+**判据（tun6 的拒绝段 + tun15 的接管段）**
+
+| # | 看什么 | 实测 | 结论 |
+|---|---|---|---|
+| 1 | TUN + Xray 点启动 | 节点页横幅「Xray 内核没有 TUN 入站：TUN 只对 sing-box 做了支持。切到 sing-box，或者关掉 TUN。」；`kernels after refusal` 为空；无 tun0 | 通过 |
+| 2 | TUN + 系统代理点启动 | 首页「TUN 和系统代理不能同时开：TUN 已经在网卡层接管，系统代理只会把流量再绕回本机一遍。关掉其中一个再启动。」；无内核、无 tun0 | 通过 |
+| 3 | TUN 开、sing-box 起 | `adapter after start: tun0\|sing-tun Tunnel\|Up` | 通过 |
+| 4 | 默认路由 | `Get-NetRoute 0.0.0.0/0` 的 NextHop@ifIndex = `192.168.0.1@10`（10 就是 tun0 的索引） | 通过 |
+| 5 | 经隧道发 HTTP | `curl http://cp.cloudflare.com/` = **204** | 通过 |
+| 6 | 出口是代理 | 首页「出口 IP 180.119.140.33 · 经代理」 | 通过 |
+| 7 | 隧道里的 DNS | `Resolve-DnsName example.com -Type A` 拿到 `172.66.147.243,104.20.23.154` | 通过 |
+| 8 | 停止后复原 | `adapter after stop: <none>`；`curl after stop: 204`（直连）；首页徽章变「未运行」 | 通过 |
+
+**设计理由**
+
+1. **TUN 入站追加在最后、`sniff` 插在最前。** 入站数组的顺序就是 sing-box 的监听顺序，把 tun 放在 mixed 之后意味着「先有本地入站，再有网卡接管」；而 `route.rules[0] = {"action":"sniff"}` 必须在所有规则之前，否则域名规则看到的是 IP。关掉 TUN 时这两样一条都不出现（有单测逐字节对拍），这样「默认路径没变」是可以证明的。
+2. **三条拒绝放在渲染之前。** `start_engine` 里先看 `tun_enabled`，命中就返回错误、根本不写配置文件。真机上 invalid 那次（§49 的端口冲突）已经证明过这个次序的价值：拒绝时旧的 `xray.json` 一字未动。
+3. **TUN 与系统代理互斥，而不是「叠着也行」。** TUN 已经在网卡层接管，再让 WinINet 指到 127.0.0.1 就是自己绕自己；真机上那条提示文案直说了这层原因。界面上打开 TUN 时系统代理开关直接禁用、并自动关掉，避免用户先存下一个两边都开的状态。
+4. **内核只管内核，权限判断放在应用里。** 服务模式在跑时内核是 SYSTEM，不需要额外提权；界面自己拉起内核时才检查令牌。为此 `EngineRuntime` 多了一个 `has_service()`，让「要不要拒绝」有据可依，而不是猜。
+5. **不下载 wintun.dll。** 真机实测（把 `engines\wintun.dll` 改名后 sing-box 1.14.4 照样起在 tun0）证明这个版本把 wintun 编进了二进制。所以 S1 里没有「下载 wintun」这个功能，也就没有多一个会失败的网络步骤。
+
+**坑**
+
+1. **计划任务的 action 不能直接指向 `.ps1`。** `schtasks /tr "C:\...\run-app.ps1"` 会创建成功、执行时什么都不发生（`Last Result` 是空的），看起来像「应用起不来」。必须 `schtasks /tr "powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File C:/.../run-app.ps1"`。
+2. **切 prelude 别按 `$w = Get-Win` 这种短串切。** 同一份脚本里这个串出现 12 次（都在 helper 里），按它切会切出半截函数，整份脚本在解析期就报 `MissingEndCurlyBrace`，而 `[Parser]::ParseFile` 的「无异常」并不等于没有错误——要把 errors 集合取出来数。最终用行首正则 `(?m)^\$w = Get-Win$` 定位，并断言 `{}`/`()` 配平。
+3. **每个阶段的日志要分开写。** 共用一份日志时，`findstr /C:DONE` 会在第二阶段立刻命中第一阶段的 DONE，脚本删任务、驱动被腰斩——现象是「日志停在半截」，很容易被读成「产品没做完」。
+4. **`cleanup.sh` 会删掉 home 下所有 `*.bat/*.ps1`。** 环回测试服务器如果靠这些文件启动，每一轮都要重新推；驱动的最好做法是自己在会话里 `Start-Process` 起它（tun15 就是这么做的），而不是依赖上一轮留下的计划任务。
+5. **测试节点在环回上时，别把某个 URL 探不通当成隧道坏。** tun15 里 `cp.cloudflare.com` 经隧道拿到 204，而 `www.gstatic.com` 三次都超时、`curl -4` 拿到 000——同一台机器直连 gstatic 是 204，所以失败点在环回节点的出网路径（测试服务器被 `bind_interface` 绑到物理网卡后，打 Google 那一路在本机网络上就是超时的），不在隧道接线。判据只看「至少一条真实的 HTTP 经隧道成功 + 出口 IP 变成经代理」。
+6. **这台机器上验不了「非管理员拒绝 TUN」。** 云电脑 `EnableLUA=0`，会话里所有进程都是完整令牌（同 §56）。所以第三条拒绝只在单测里（`tun_permission_note`），真机是「不会被触发」，不是「被触发后正确」。
+
+**一句实话**
+
+TUN 的接线与网卡接管是真机验过的：网卡出现、默认路由改过去、`curl` 经隧道 204、首页出口 IP 变「经代理」、停止后网卡与路由复原且直连 204。但「非管理员时拒绝」这条只在代码和单测里——机器造不出非管理员令牌；另外环回测试节点打 Google 那一路在本机网络上不稳定，我把它记成测试环境的限制，没有拿它当判据，也没有为了好看去挑一条必然成功的 URL。

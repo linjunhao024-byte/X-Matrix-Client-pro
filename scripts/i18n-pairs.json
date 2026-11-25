@@ -4182,6 +4182,42 @@
     "啟動內核時把 Windows 系統代理指向本機混合埠，停止時還原原設定"
   ],
   [
+    "settings.tun.title",
+    "用 TUN 接管本机流量",
+    "Take over this machine with TUN",
+    "用 TUN 接管本機流量"
+  ],
+  [
+    "settings.tun.stack",
+    "网络栈",
+    "Network stack",
+    "網路堆疊"
+  ],
+  [
+    "settings.tun.hint",
+    "TUN 在网卡层接管，只有 sing-box 支持；与系统代理互斥（TUN 开着时系统代理会关掉）。它需要管理员权限，或者装上内核服务让内核以 SYSTEM 启动。",
+    "TUN takes over at the adapter level and only sing-box supports it. It excludes the system proxy, and needs either an elevated app or the kernel service.",
+    "TUN 在網卡層接管，只有 sing-box 支援；與系統代理互斥（TUN 開著時系統代理會關掉）。它需要管理員權限，或裝上核心服務讓核心以 SYSTEM 啟動。"
+  ],
+  [
+    "settings.tun.stackSystem",
+    "系统（最省事）",
+    "System (simplest)",
+    "系統（最省事）"
+  ],
+  [
+    "settings.tun.stackGvisor",
+    "gVisor（用户态）",
+    "gVisor (user space)",
+    "gVisor（使用者態）"
+  ],
+  [
+    "settings.tun.stackMixed",
+    "混合（默认）",
+    "Mixed (default)",
+    "混合（預設）"
+  ],
+  [
     "settings.testUrl",
     "测速地址",
     "Probe URL",

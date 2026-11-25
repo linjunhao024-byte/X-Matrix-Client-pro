@@ -289,6 +289,12 @@ pub struct RenderInput<'a> {
     pub fragment_length: String,
     /// Delay range (`a-b` milliseconds) for [`RenderInput::fragment`].
     pub fragment_interval: String,
+    /// Take over this machine's traffic at the adapter level with a sing-box
+    /// TUN inbound. Xray-style kernels have no such inbound; the command layer
+    /// refuses that combination before a config is ever rendered.
+    pub tun_enabled: bool,
+    /// Network stack for the TUN inbound: `system`, `gvisor` or `mixed`.
+    pub tun_stack: String,
 }
 
 impl<'a> RenderInput<'a> {
@@ -311,6 +317,8 @@ impl<'a> RenderInput<'a> {
             fragment_enabled: false,
             fragment_length: "100-200".to_string(),
             fragment_interval: "10-20".to_string(),
+            tun_enabled: false,
+            tun_stack: "mixed".to_string(),
         }
     }
 
@@ -330,6 +338,8 @@ impl<'a> RenderInput<'a> {
         self.fragment_enabled = options.fragment_enabled;
         self.fragment_length = options.fragment_length;
         self.fragment_interval = options.fragment_interval;
+        self.tun_enabled = options.tun_enabled;
+        self.tun_stack = options.tun_stack;
         self
     }
 
@@ -422,6 +432,9 @@ pub struct RunOptions<'a> {
     pub fragment_length: String,
     /// Delay range (`a-b` milliseconds) for [`RenderInput::fragment`].
     pub fragment_interval: String,
+    /// Whether the TUN inbound is wanted, and with which network stack.
+    pub tun_enabled: bool,
+    pub tun_stack: String,
 }
 
 impl<'a> RunOptions<'a> {
@@ -442,6 +455,8 @@ impl<'a> RunOptions<'a> {
             fragment_enabled: false,
             fragment_length: "100-200".to_string(),
             fragment_interval: "10-20".to_string(),
+            tun_enabled: false,
+            tun_stack: "mixed".to_string(),
         }
     }
 
@@ -463,6 +478,8 @@ impl<'a> RunOptions<'a> {
             fragment_enabled: settings.fragment_enabled,
             fragment_length: settings.fragment_length.clone(),
             fragment_interval: settings.fragment_interval.clone(),
+            tun_enabled: settings.tun_enabled,
+            tun_stack: settings.tun_stack.clone(),
         }
     }
 

@@ -1581,6 +1581,16 @@ export type Settings_Deserialize = {
 	 */
 	lite_mode?: boolean,
 	/**
+	 *  让 sing-box 用 TUN 在网卡层接管本机流量。与系统代理互斥：TUN 打开时
+	 *  不再设置系统代理。只有 sing-box 有这个入站，Xray 会在启动前被拒。
+	 */
+	tun_enabled?: boolean,
+	/**
+	 *  TUN 的网络栈：system / gvisor / mixed。认不出就报 InvalidInput，免得
+	 *  内核拿到一个它自己也不认识的名字才失败。
+	 */
+	tun_stack?: string,
+	/**
 	 *  Chord that starts or stops the tunnel from anywhere on the desktop,
 	 *  spelled the way the app spells it back (`Ctrl+Shift+X`). Empty switches
 	 *  the shortcut off: a chord nobody can press still looks registered in the
@@ -1794,6 +1804,16 @@ export type Settings_Serialize = {
 	 *  这是「省一点」的开关，不是所有人都想要界面在同一秒里失去响应。
 	 */
 	lite_mode: boolean,
+	/**
+	 *  让 sing-box 用 TUN 在网卡层接管本机流量。与系统代理互斥：TUN 打开时
+	 *  不再设置系统代理。只有 sing-box 有这个入站，Xray 会在启动前被拒。
+	 */
+	tun_enabled: boolean,
+	/**
+	 *  TUN 的网络栈：system / gvisor / mixed。认不出就报 InvalidInput，免得
+	 *  内核拿到一个它自己也不认识的名字才失败。
+	 */
+	tun_stack: string,
 	/**
 	 *  Chord that starts or stops the tunnel from anywhere on the desktop,
 	 *  spelled the way the app spells it back (`Ctrl+Shift+X`). Empty switches
