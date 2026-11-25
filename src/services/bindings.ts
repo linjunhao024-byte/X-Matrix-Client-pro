@@ -338,6 +338,21 @@ export const commands = {
 	 *  blocking the thread that would otherwise deliver the next command.
 	 */
 	listProcesses: () => typedError<ProcessInfo[], AppError>(__TAURI_INVOKE("list_processes")),
+	/**
+	 *  Whether this process runs with an administrator token.
+	 * 
+	 *  The settings page calls this once on mount: `true` / `false` are answers, so
+	 *  the status line and the restart button can be decided from them.
+	 */
+	appElevated: () => __TAURI_INVOKE<boolean>("app_elevated"),
+	/**
+	 *  Restart the app with administrator rights.
+	 * 
+	 *  Returns only on failure. On success the new process has already started and
+	 *  this one is on its way out through the normal clean-exit path, so the caller
+	 *  should treat a resolved promise as "gone".
+	 */
+	restartElevated: () => typedError<null, AppError>(__TAURI_INVOKE("restart_elevated")),
 };
 
 /* Types */
@@ -1522,6 +1537,11 @@ export type Settings_Deserialize = {
 	 */
 	close_to_tray?: boolean,
 	/**
+	 *  需要管理员权限的功能（TUN、安装服务）要不要先提示一次。默认开：
+	 *  提权必须由用户点「是」，应用不能悄悄换个令牌重来。
+	 */
+	prompt_elevation?: boolean,
+	/**
 	 *  窗口收进托盘时把内存目标降到低、让界面暂停刷新。默认关：
 	 *  这是「省一点」的开关，不是所有人都想要界面在同一秒里失去响应。
 	 */
@@ -1730,6 +1750,11 @@ export type Settings_Serialize = {
 	 *  is what someone who thinks of X as "close the program" expects.
 	 */
 	close_to_tray: boolean,
+	/**
+	 *  需要管理员权限的功能（TUN、安装服务）要不要先提示一次。默认开：
+	 *  提权必须由用户点「是」，应用不能悄悄换个令牌重来。
+	 */
+	prompt_elevation: boolean,
 	/**
 	 *  窗口收进托盘时把内存目标降到低、让界面暂停刷新。默认关：
 	 *  这是「省一点」的开关，不是所有人都想要界面在同一秒里失去响应。

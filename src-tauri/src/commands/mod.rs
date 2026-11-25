@@ -1,4 +1,5 @@
 pub mod backup;
+pub mod elevate;
 pub mod engine;
 pub mod group;
 pub mod import;

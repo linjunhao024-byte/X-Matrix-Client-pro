@@ -173,6 +173,28 @@ export const api = {
     (await unwrap(commands.setLanguage(language))) as Language,
   autostartStatus: (): Promise<boolean> => unwrap(commands.autostartStatus()),
 
+  /**
+   * Whether this process holds an administrator token.
+   *
+   * Read once on mount: `true` / `false` are answers, and the page must not
+   * treat "still unknown" as "not elevated".
+   */
+  // The one command whose answer is a plain boolean: "cannot tell" is already
+  // folded into `false` in Rust, so there is no error channel to unwrap.
+  appElevated: (): Promise<boolean> => commands.appElevated(),
+
+  /**
+   * Start an elevated copy and quit this one.
+   *
+   * The promise resolves only after a *failed* restart — on success the backend
+   * is already gone, so a rejection here is the window losing its backend. The
+   * one real failure worth showing is a cancelled UAC prompt, and its wording
+   * comes from Rust verbatim.
+   */
+  restartElevated: async (): Promise<void> => {
+    await unwrap(commands.restartElevated())
+  },
+
   importPreview: (text: string): Promise<ImportPreview_Serialize> => commands.importPreview(text),
   importNodes: (text: string): Promise<ImportOutcome_Serialize> => unwrap(commands.importNodes(text)),
 

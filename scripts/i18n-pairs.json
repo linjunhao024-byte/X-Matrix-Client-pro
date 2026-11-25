@@ -3624,6 +3624,42 @@
     "視窗收進托盤時把記憶體佔用壓下去、暫停介面刷新；點托盤圖示回來會立刻重新讀一遍資料。"
   ],
   [
+    "settings.elevate.title",
+    "权限",
+    "Privileges",
+    "權限"
+  ],
+  [
+    "settings.elevate.isAdmin",
+    "当前以管理员身份运行：内核可以用 TUN",
+    "Running as administrator: the kernel can use TUN",
+    "目前以系統管理員身分執行：核心可以使用 TUN"
+  ],
+  [
+    "settings.elevate.notAdmin",
+    "当前不是管理员：TUN 与安装服务需要先提权",
+    "Not an administrator: TUN and service install need elevation first",
+    "目前不是系統管理員：TUN 與安裝服務需要先提權"
+  ],
+  [
+    "settings.elevate.restart",
+    "以管理员身份重启",
+    "Restart as administrator",
+    "以系統管理員身分重新啟動"
+  ],
+  [
+    "settings.elevate.prompt",
+    "需要提权时提示我",
+    "Tell me when elevation is needed",
+    "需要提權時提示我"
+  ],
+  [
+    "settings.elevate.promptHint",
+    "只在 TUN 或安装服务这类真的需要管理员的功能上提示；不会在你不知情的时候提升权限。",
+    "Only on features that genuinely need administrator rights, such as TUN or installing the service. Nothing elevates behind your back.",
+    "只在 TUN 或安裝服務這類真的需要系統管理員的功能上提示；不會在你不知情的時候提升權限。"
+  ],
+  [
     "settings.clearCache",
     "清理界面缓存",
     "Clear UI cache",

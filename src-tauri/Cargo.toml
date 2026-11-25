@@ -72,6 +72,11 @@ windows-sys = { version = "0.60", features = [
     "Win32_System_Threading",
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_WindowsAndMessaging",
+    # "以管理员身份重启" 走 ShellExecuteExW 的 runas 动词。SHELLEXECUTEINFOW 的
+    # hkeyClass 字段由 Win32_System_Registry 门控，整个 struct 跟着它才存在，
+    # 所以两个 feature 都要开。
+    "Win32_UI_Shell",
+    "Win32_System_Registry",
 ] }
 # Lite mode asks WebView2 itself to shrink: `SetMemoryUsageTargetLevel` lives on
 # `ICoreWebView2_13`, and the controller Tauri hands out is a webview2-com object,

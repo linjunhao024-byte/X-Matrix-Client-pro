@@ -3,6 +3,7 @@ mod diagnostics;
 mod documents;
 mod export;
 mod domain;
+mod elevate;
 mod engine;
 mod error;
 mod hotkeys;
@@ -42,6 +43,14 @@ pub fn export_contract(path: impl AsRef<std::path::Path>) -> Result<(), Box<dyn 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let specta_builder = ipc::builder();
+
+    // An elevated relaunch starts before the old process has finished exiting
+    // (that order is what keeps a cancelled UAC prompt harmless), so the new
+    // process waits here for the predecessor to disappear. Without this pause
+    // it would reach the single-instance plugin while the old mutex is still
+    // held and exit as a "second launch" — the app would vanish instead of
+    // restarting. A normal launch has no such argument and returns at once.
+    elevate::wait_for_predecessor();
 
     tauri::Builder::default()
         // First plugin on purpose: a second launch must hand its arguments to the

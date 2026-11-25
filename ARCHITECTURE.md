@@ -274,11 +274,12 @@ pub enum StatsChannel {
 
 | 层 | 状态 | 证据 |
 |---|---|---|
-| 契约层 | 完成 | `tauri-specta` 生成 `src/services/bindings.ts`，87 个命令；`npm run check:contract` 校验不过期 |
-| 引擎层 | Xray + sing-box 配置渲染、启停、就绪探测、统计读取、日志尾部、启动前端口预检 | `cargo test --lib`（全库 457 项）；渲染是纯函数，测试不需要任何内核二进制 |
+| 契约层 | 完成 | `tauri-specta` 生成 `src/services/bindings.ts`，89 个命令；`npm run check:contract` 校验不过期 |
+| 引擎层 | Xray + sing-box 配置渲染、启停、就绪探测、统计读取、日志尾部、启动前端口预检 | `cargo test --lib`（全库 464 项）；渲染是纯函数，测试不需要任何内核二进制 |
 | 数据层 | 单文件 JSON 原子替换 + 坏文件留证 | `store.rs`，重启后节点/设置/规则都在 |
 | 导入 | vless / vmess / trojan / ss + 整包 base64 | `import.rs`，不支持的行进 `skipped` 而不是报错 |
 | 路由 | 7 种匹配器 × 4 种动作（代理/直连/拦截/策略组），双内核各自渲染 | `domain/routing.rs` + `render.rs`（唯一的内核差异点） |
+| 提权 | 先看清自己拿的是不是完整管理员令牌（任何一步读失败都当「不是」，宁可多提示一次）；只在这一步真的需要时让人点「以管理员身份重启」：新进程先起来、成功之后旧进程才退，UAC 被取消时旧进程一步没动并如实说明。提权后的新实例带 `--relaunch-wait=<父 pid>`，在装配 Builder 之前等父进程退出，否则会被单实例插件当成第二次启动转交后自杀、应用整个消失 | `src-tauri/src/elevate.rs`（6 项单测）、`commands/elevate.rs` 的 `app_elevated`/`restart_elevated`、`SettingsView.vue` 的「权限」节 |
 | 进程表 | 规则编辑器里的「选择进程」列出本机正在运行的可执行名（一个名字一行，pid 只做计数与 tooltip）：Windows Toolhelp32 快照，句柄 `Drop` 关闭，快照失败报错而不是返回空表；非 Windows 明确报「只有 Windows 实现」。归并是纯函数（大小写不敏感、保留首次拼写、pid 升序去重），界面三态 = loading / 后端原文错误 / 空 | `src-tauri/src/sysproc.rs`（3 项单测）、`commands/process.rs` 的 `list_processes`、`src/services/processlist.ts`、`RuleEditor.vue` |
 | DNS | 设置页填自定义解析器（逗号分隔），三种写法：`1.1.1.1` / `tls://1.1.1.1`（DoT）/ `https://1.1.1.1/dns-query`（DoH）。`DnsEntry::parse` 解析成带标签的枚举，两个渲染器各说各的方言：Xray 拼回 `tls://`/`https://` 字符串，sing-box 用 `{type:"udp"|"tls"|"https", tag:"dns-N"}` + `final`。留空完全不生成 `dns` 键。主机部分只接受 IP 字面量（域名要先被解析，那正是解析器的活） | `domain/settings.rs` 的 `DnsEntry`、`engine/xray.rs`、`engine/singbox.rs`，含 4 项解析校验 + 3 项渲染测试；`xray -test` 与 `sing-box check` 真二进制验过 |
 | 系统代理 | 快照 → 接管 → 还原，异常退出可恢复。接管有两种写法：固定 `ProxyServer`，或生成 `x-matrix.pac` 并写 `AutoConfigURL`（`settings.pac_enabled`，两者不并用），关闭时按同一份快照还原 | `sysproxy/mod.rs`、`sysproxy/pac.rs`，全部测试跑在假后端上 |

@@ -97,5 +97,7 @@ pub fn builder() -> Builder<tauri::Wry> {
         commands::subscription::refresh_subscription,
         commands::subscription::refresh_due,
         commands::process::list_processes,
+        commands::elevate::app_elevated,
+        commands::elevate::restart_elevated,
     ])
 }

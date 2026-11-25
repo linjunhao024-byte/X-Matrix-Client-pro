@@ -154,6 +154,10 @@ pub struct Settings {
     /// keeps the tunnel up; `false` quits and restores the system proxy, which
     /// is what someone who thinks of X as "close the program" expects.
     pub close_to_tray: bool,
+    /// 需要管理员权限的功能（TUN、安装服务）要不要先提示一次。默认开：
+    /// 提权必须由用户点「是」，应用不能悄悄换个令牌重来。
+    #[serde(default = "default_prompt_elevation")]
+    pub prompt_elevation: bool,
     /// 窗口收进托盘时把内存目标降到低、让界面暂停刷新。默认关：
     /// 这是「省一点」的开关，不是所有人都想要界面在同一秒里失去响应。
     #[serde(default)]
@@ -167,6 +171,12 @@ pub struct Settings {
     /// Chord that shows or hides the window, same spelling and same rule.
     #[serde(default = "default_hotkey_window")]
     pub hotkey_window: String,
+}
+
+/// Prompting before elevation is the default: a silent `runas` would replace a
+/// running session with a UAC dialog nobody asked for.
+fn default_prompt_elevation() -> bool {
+    true
 }
 
 /// The chords a fresh install starts with — the ones the app shipped since the
@@ -381,6 +391,7 @@ impl Default for Settings {
             fragment_interval: default_fragment_interval(),
             start_minimized: false,
             close_to_tray: true,
+            prompt_elevation: true,
             lite_mode: false,
             hotkey_toggle: default_hotkey_toggle(),
             hotkey_window: default_hotkey_window(),
@@ -849,5 +860,20 @@ mod tests {
         // Landing on the mixed port is the same as not splitting, not a clash.
         let http_is_mixed = Settings { http_port: 7890, ..Default::default() };
         assert!(http_is_mixed.validate().is_ok());
+    }
+
+    #[test]
+    fn prompt_elevation_is_on_by_default() {
+        // A store written before this field existed has no key at all, and the
+        // answer for it has to be "prompt me", not "elevate silently".
+        let legacy: Settings = serde_json::from_str("{}").expect("empty object is a valid store");
+        assert!(legacy.prompt_elevation);
+
+        // An explicit `false` is honoured, and it survives a round trip.
+        let quiet = Settings { prompt_elevation: false, ..Default::default() };
+        let text = serde_json::to_string(&quiet).expect("serialise");
+        assert!(text.contains("\"prompt_elevation\":false"));
+        let back: Settings = serde_json::from_str(&text).expect("read back");
+        assert!(!back.prompt_elevation);
     }
 }

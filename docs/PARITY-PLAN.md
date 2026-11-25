@@ -87,7 +87,9 @@ PAC 只表达**能表达的**：绕过列表 + 规则里「直连」的域名类
 - 真机脚本：`D:/tmp/shots/55-lite-accept.sh`、`mk_55_lite.py`。
 
 ### S4 · 提权 / 服务模式
-先做提权：`is_elevated()` + 以管理员重启（`ShellExecuteEx` runas），设置里可选「需要时提示」。
+**结果（2026-11-25，只做完前半 S4a）**：`src-tauri/src/elevate.rs` 判断令牌、`ShellExecuteExW` 的 `runas` 起新进程；`--relaunch-wait=<父 pid>` 让新实例等旧实例退出，绕开 `tauri-plugin-single-instance` 的「第二次启动就自杀」；设置页「权限」节 = 状态行 + 只有非管理员时才可点的按钮 + 「需要提权时提示我」开关（默认开、存进 `store.json`）。命令 87 → 89。真机只验到「识别 + 门禁 + 偏好持久化」：这台测试机造不出「非管理员但可提权」的进程（原始 `EnableLUA=0`；打开 UAC 后 `runas /trustlevel` 起不来、任务计划仍是 High、ssh 在会话 0 够不到会话 1），所以「点一下真的换成管理员令牌」这条**未验**，见 `docs/ACCEPTANCE.md` §56 的判据 7、8 与坑 1。服务模式（S4b）没动。
+
+服务模式（未做）：
 再做服务：`x-matrix.exe --service` 注册为 Windows 服务（SYSTEM），命名管道 IPC 转发内核启停，非管理员也能带 TUN 跑。
 判据：未提权时 TUN 开关给出可执行的提示；服务已装时内核以 SYSTEM 身份运行且 UI 可启停。
 
@@ -111,6 +113,7 @@ sing-box `tun` 入站（`auto_route`、`strict_route`、`stack: system`），需
 | S3 内核更新 | **已完成**（2026-11-25） | 与 `src-tauri/src/engine/release.rs` 同一次提交（`git log --oneline -- src-tauri/src/engine/release.rs` 最新一条） | `docs/ACCEPTANCE.md` §53；真机脚本 `D:/tmp/shots/53-kernel-accept.sh`、`mk_53_kernel.py`、`mirror.ps1` |
 | S6 WebDAV | 已完成（2026-11-25） | 与 `src-tauri/src/net/webdav.rs` 同一次提交 | §54；真机脚本 `54-webdav-accept.sh`、`mk_54_webdav.py`、`dav.ps1` |
 | S5 轻量模式 | **已完成**（2026-11-25） | 与 `src-tauri/src/power.rs` 同一次提交（`git log --oneline -- src-tauri/src/power.rs` 最新一条） | `docs/ACCEPTANCE.md` §55；真机脚本 `D:/tmp/shots/55-lite-accept.sh`、`mk_55_lite.py` |
-| S4 提权/服务 | 未开始 | — | — |
+| S4a 提权 | **已完成**（2026-11-25，判据 7、8 未验） | 与 `src-tauri/src/elevate.rs` 同一次提交（`git log --oneline -- src-tauri/src/elevate.rs` 最新一条） | `docs/ACCEPTANCE.md` §56；真机脚本 `D:/tmp/shots/56-elev-accept.sh`、`mk_56_elev.py` |
+| S4b 服务模式 | 未开始 | — | — |
 | S1 TUN | 未开始 | — | — |
 | S7 多配置 | 未开始 | — | — |

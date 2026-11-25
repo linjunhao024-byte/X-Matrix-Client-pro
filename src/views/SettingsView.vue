@@ -406,6 +406,60 @@ async function refreshAutostart() {
 }
 
 /**
+ * Whether the process is running with an administrator token.
+ *
+ * `null` means the question has not been answered yet — not `false`. The status
+ * line and the restart button both wait for a real answer instead of guessing.
+ */
+const elevated = ref<boolean | null>(null)
+/** Backend wording from a restart that did not happen, shown in that same line. */
+const elevateError = ref<string | null>(null)
+const elevateBusy = ref(false)
+
+async function refreshElevated() {
+  try {
+    elevated.value = await api.appElevated()
+  } catch {
+    // No answer is not 「已提权」: leave it unread so neither status prints.
+    elevated.value = null
+  }
+}
+
+/**
+ * Restart through the UAC consent dialog, then let the backend quit this one.
+ *
+ * On success nothing here runs afterwards (the window is on its way out), so
+ * only a refused or failed relaunch reaches the status line — using the
+ * backend's own sentence rather than a rewritten one.
+ */
+async function restartElevated(): Promise<void> {
+  if (elevateBusy.value || elevated.value !== false) return
+  elevateBusy.value = true
+  elevateError.value = null
+  try {
+    await api.restartElevated()
+  } catch (cause) {
+    elevateError.value = describeError(cause)
+  } finally {
+    elevateBusy.value = false
+  }
+}
+
+/**
+ * The single line under the 权限 heading.
+ *
+ * A failed restart replaces the status instead of stacking a second sentence:
+ * the backend explains why nothing restarted, and the elevation state itself
+ * has not changed.
+ */
+const elevateLine = computed(() => {
+  if (elevateError.value) return elevateError.value
+  if (elevated.value === true) return t('settings.elevate.isAdmin')
+  if (elevated.value === false) return t('settings.elevate.notAdmin')
+  return null
+})
+
+/**
  * The two kernels, in the order a user meets them.
  *
  * `Xray` and `sing-box` are product names, so they are not translated — the
@@ -593,6 +647,7 @@ onMounted(async () => {
   if (store.settings) draft.value = { ...store.settings }
   await proxy.refresh()
   await refreshAutostart()
+  await refreshElevated()
   await refreshKernelBinaries()
   await refreshWebdav()
 })
@@ -812,6 +867,26 @@ async function save() {
         </div>
         <p class="field-hint">{{ t('settings.clearCacheHint') }}</p>
         <p v-if="cacheNote" class="field-hint">{{ cacheNote }}</p>
+      </section>
+
+      <section class="surface-plain panel">
+        <h2 class="section-title">{{ t('settings.elevate.title') }}</h2>
+        <p v-if="elevateLine" class="field-hint" :class="{ 'elevate-failed': elevateError }">
+          {{ elevateLine }}
+        </p>
+        <div class="row">
+          <button
+            class="btn btn-sm"
+            type="button"
+            :disabled="elevated !== false || elevateBusy"
+            @click="restartElevated()"
+          >
+            {{ t('settings.elevate.restart') }}
+          </button>
+        </div>
+        <div class="divider" />
+        <ToggleSwitch v-model="draft.prompt_elevation" :label="t('settings.elevate.prompt')" />
+        <p class="field-hint">{{ t('settings.elevate.promptHint') }}</p>
       </section>
 
       <section class="surface-plain panel">
@@ -1353,6 +1428,15 @@ kbd {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+/*
+ * A restart that did not happen is a fault, not a status: the line keeps its
+ * place under 权限 but takes the danger colour so it cannot be mistaken for
+ * 「当前以管理员身份运行」.
+ */
+.elevate-failed {
+  color: var(--danger);
 }
 
 .kernel-path {
