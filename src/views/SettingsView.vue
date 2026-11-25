@@ -121,13 +121,42 @@ const webdavBusy = ref(false)
 }
 
 /**
+ * The four actions a global chord can be bound to. Mirrors `hotkeys::Chord` in
+ * `src-tauri/src/hotkeys.rs`: one field per action, in the order the panel
+ * lists them.
+ */
+type HotkeyField = 'hotkey_toggle' | 'hotkey_window' | 'hotkey_mode' | 'hotkey_test_all'
+
+/**
+ * What "恢复默认" writes back for each row.
+ *
+ * The authority is `default_chord` in `src-tauri/src/hotkeys.rs`: the backend
+ * fills a fresh store from that table, so a change there has to be mirrored
+ * here or the button would restore a chord the shipped defaults do not use.
+ */
+const chordDefaults: Record<HotkeyField, string> = {
+  hotkey_toggle: 'Ctrl+Shift+X',
+  hotkey_window: 'Ctrl+Shift+W',
+  hotkey_mode: 'Ctrl+Shift+M',
+  hotkey_test_all: 'Ctrl+Shift+T',
+}
+
+/** One row of the hotkey panel: the field it edits and the hint under it. */
+const hotkeyRows: { field: HotkeyField; hint: string }[] = [
+  { field: 'hotkey_toggle', hint: 'settings.hotkeyToggleHint' },
+  { field: 'hotkey_window', hint: 'settings.hotkeyWindowHint' },
+  { field: 'hotkey_mode', hint: 'settings.hotkeyModeHint' },
+  { field: 'hotkey_test_all', hint: 'settings.hotkeyTestAllHint' },
+]
+
+/**
  * Which chord row is waiting for a key press, if any.
  *
  * The row turns into a recorder on click: the next real key press becomes the
  * chord. That is how every shortcut editor behaves, and it removes the need to
  * spell "Ctrl+Shift+X" by hand (or to guess whether it is case sensitive).
  */
-const recording = ref<'hotkey_toggle' | 'hotkey_window' | null>(null)
+const recording = ref<HotkeyField | null>(null)
 
 /**
  * Take the next press as a chord.
@@ -136,7 +165,7 @@ const recording = ref<'hotkey_toggle' | 'hotkey_window' | null>(null)
  * Ctrl+W would close the window and Space would scroll. A press that is only a
  * modifier keeps waiting, so typing "Ctrl+…" does not end the recording early.
  */
-function captureKey(field: 'hotkey_toggle' | 'hotkey_window', event: KeyboardEvent): void {
+function captureKey(field: HotkeyField, event: KeyboardEvent): void {
   event.preventDefault()
   const combo = comboFromKeyPress(event)
   if (combo === null || !draft.value) return
@@ -146,16 +175,15 @@ function captureKey(field: 'hotkey_toggle' | 'hotkey_window', event: KeyboardEve
 }
 
 /** Put one row back to the chord the app ships with. */
-function resetChord(field: 'hotkey_toggle' | 'hotkey_window'): void {
+function resetChord(field: HotkeyField): void {
   if (!draft.value) return
-  const fallback = field === 'hotkey_toggle' ? 'Ctrl+Shift+X' : 'Ctrl+Shift+W'
-  draft.value = { ...draft.value, [field]: fallback }
+  draft.value = { ...draft.value, [field]: chordDefaults[field] }
   recording.value = null
   saved.value = false
 }
 
 /** Release one chord without giving it another: the action stays reachable from the UI. */
-function clearChord(field: 'hotkey_toggle' | 'hotkey_window'): void {
+function clearChord(field: HotkeyField): void {
   if (!draft.value) return
   draft.value = { ...draft.value, [field]: '' }
   recording.value = null
@@ -1180,6 +1208,12 @@ async function save() {
           </label>
         </div>
         <p class="field-hint">{{ t('settings.testBudgetHint') }}</p>
+        <div class="divider" />
+        <ToggleSwitch
+          v-model="draft.test_on_start"
+          :label="t('settings.testOnStart')"
+          :description="t('settings.testOnStartHint')"
+        />
       </section>
 
       <section class="surface-plain panel">
@@ -1289,50 +1323,30 @@ async function save() {
       <section class="surface-plain panel">
         <h2 class="section-title">{{ t('settings.hotkeysTitle') }}</h2>
         <p class="field-hint">{{ t('settings.hotkeysHint') }}</p>
-        <div class="hotkey-row" v-if="draft">
-          <button
-            type="button"
-            class="hotkey-chip"
-            :class="{ 'hotkey-recording': recording === 'hotkey_toggle' }"
-            :title="t('settings.hotkeyCapture')"
-            @click="recording = 'hotkey_toggle'"
-            @blur="recording = null"
-            @keydown="captureKey('hotkey_toggle', $event)"
-          >
-            {{ draft.hotkey_toggle || t('settings.hotkeyEmpty') }}
-          </button>
-          <span>{{ t('settings.hotkeyToggleHint') }}</span>
-          <span class="hotkey-actions">
-            <button class="btn btn-sm" type="button" @click="resetChord('hotkey_toggle')">
-              {{ t('settings.hotkeyReset') }}
+        <template v-if="draft">
+          <div v-for="row in hotkeyRows" :key="row.field" class="hotkey-row">
+            <button
+              type="button"
+              class="hotkey-chip"
+              :class="{ 'hotkey-recording': recording === row.field }"
+              :title="t('settings.hotkeyCapture')"
+              @click="recording = row.field"
+              @blur="recording = null"
+              @keydown="captureKey(row.field, $event)"
+            >
+              {{ draft[row.field] || t('settings.hotkeyEmpty') }}
             </button>
-            <button class="btn btn-sm" type="button" @click="clearChord('hotkey_toggle')">
-              {{ t('settings.hotkeyClear') }}
-            </button>
-          </span>
-        </div>
-        <div class="hotkey-row" v-if="draft">
-          <button
-            type="button"
-            class="hotkey-chip"
-            :class="{ 'hotkey-recording': recording === 'hotkey_window' }"
-            :title="t('settings.hotkeyCapture')"
-            @click="recording = 'hotkey_window'"
-            @blur="recording = null"
-            @keydown="captureKey('hotkey_window', $event)"
-          >
-            {{ draft.hotkey_window || t('settings.hotkeyEmpty') }}
-          </button>
-          <span>{{ t('settings.hotkeyWindowHint') }}</span>
-          <span class="hotkey-actions">
-            <button class="btn btn-sm" type="button" @click="resetChord('hotkey_window')">
-              {{ t('settings.hotkeyReset') }}
-            </button>
-            <button class="btn btn-sm" type="button" @click="clearChord('hotkey_window')">
-              {{ t('settings.hotkeyClear') }}
-            </button>
-          </span>
-        </div>
+            <span>{{ t(row.hint) }}</span>
+            <span class="hotkey-actions">
+              <button class="btn btn-sm" type="button" @click="resetChord(row.field)">
+                {{ t('settings.hotkeyReset') }}
+              </button>
+              <button class="btn btn-sm" type="button" @click="clearChord(row.field)">
+                {{ t('settings.hotkeyClear') }}
+              </button>
+            </span>
+          </div>
+        </template>
         <p class="field-hint">{{ t('settings.hotkeySaveHint') }}</p>
       </section>
 

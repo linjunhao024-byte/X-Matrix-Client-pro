@@ -776,6 +776,10 @@ export const tw: Record<string, string> = {
   "settings.kernel.updated": "已更新到 {version}",
   "settings.kernel.checksumOk": "sha256 {hash} · 已核對",
   "settings.kernel.checksumLocal": "sha256 {hash} · 上游未提供校驗值，未核對",
+  "settings.hotkeyModeHint": "按一下切換代理模式：規則 → 全域 → 直連 → 規則",
+  "settings.hotkeyTestAllHint": "按一下測所有節點的延遲（結果寫進節點頁）",
+  "settings.testOnStart": "啟動時測一輪延遲",
+  "settings.testOnStartHint": "打開後，應用起來會自己測一遍全部節點的 TCP 延遲；不啟動內核也能測",
   // sidebar
   "sidebar.collapse": "收起側欄",
   "sidebar.collapseShort": "收起",

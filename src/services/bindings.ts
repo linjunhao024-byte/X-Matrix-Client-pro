@@ -1498,6 +1498,13 @@ export type Settings_Deserialize = {
 	 */
 	test_concurrency?: number,
 	/**
+	 *  Run one latency round as soon as the app starts, so the nodes page has
+	 *  numbers without anybody pressing "test". Off by default: probing every
+	 *  node in a row is noticeable on a metered link, and a start that touches
+	 *  thirty endpoints should be a choice, not a surprise.
+	 */
+	test_on_start?: boolean,
+	/**
 	 *  WebDAV collection the cloud backup writes into. Empty switches the
 	 *  feature off entirely: there is no default server to point at, and a
 	 *  guessed one would be someone else's disk.
@@ -1623,6 +1630,16 @@ export type Settings_Deserialize = {
 	hotkey_toggle?: string,
 	/**  Chord that shows or hides the window, same spelling and same rule. */
 	hotkey_window?: string,
+	/**
+	 *  Chord that walks the proxy mode one step. Same spelling and same rule as
+	 *  the two above: empty switches it off.
+	 */
+	hotkey_mode?: string,
+	/**
+	 *  Chord that measures every node and writes the numbers into the nodes
+	 *  page. Same spelling and same rule as the three above.
+	 */
+	hotkey_test_all?: string,
 };
 
 /**
@@ -1721,6 +1738,13 @@ export type Settings_Serialize = {
 	 *  make that tediously slow, so the knob exists with a low default.
 	 */
 	test_concurrency: number,
+	/**
+	 *  Run one latency round as soon as the app starts, so the nodes page has
+	 *  numbers without anybody pressing "test". Off by default: probing every
+	 *  node in a row is noticeable on a metered link, and a start that touches
+	 *  thirty endpoints should be a choice, not a surprise.
+	 */
+	test_on_start: boolean,
 	/**
 	 *  WebDAV collection the cloud backup writes into. Empty switches the
 	 *  feature off entirely: there is no default server to point at, and a
@@ -1847,6 +1871,16 @@ export type Settings_Serialize = {
 	hotkey_toggle: string,
 	/**  Chord that shows or hides the window, same spelling and same rule. */
 	hotkey_window: string,
+	/**
+	 *  Chord that walks the proxy mode one step. Same spelling and same rule as
+	 *  the two above: empty switches it off.
+	 */
+	hotkey_mode: string,
+	/**
+	 *  Chord that measures every node and writes the numbers into the nodes
+	 *  page. Same spelling and same rule as the three above.
+	 */
+	hotkey_test_all: string,
 };
 
 export type Subscription = Subscription_Serialize | Subscription_Deserialize;

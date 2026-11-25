@@ -776,6 +776,10 @@ export const zh: Record<string, string> = {
   "settings.kernel.updated": "已更新到 {version}",
   "settings.kernel.checksumOk": "sha256 {hash} · 已核对",
   "settings.kernel.checksumLocal": "sha256 {hash} · 上游未提供校验值，未核对",
+  "settings.hotkeyModeHint": "按一下切换代理模式：规则 → 全局 → 直连 → 规则",
+  "settings.hotkeyTestAllHint": "按一下测所有节点的延迟（结果写进节点页）",
+  "settings.testOnStart": "启动时测一轮延迟",
+  "settings.testOnStartHint": "打开后，应用起来会自己测一遍全部节点的 TCP 延迟；不启动内核也能测",
   // sidebar
   "sidebar.collapse": "收起侧栏",
   "sidebar.collapseShort": "收起",

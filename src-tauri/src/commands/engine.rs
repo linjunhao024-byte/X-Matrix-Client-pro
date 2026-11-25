@@ -385,6 +385,34 @@ pub async fn engine_start(
     Ok(status)
 }
 
+/// The swap [`engine_apply`] performs, callable outside a command.
+///
+/// `State` wrappers only exist inside a command; the hotkey path starts from an
+/// `AppHandle` and the managed `Arc`s, so the body lives here once instead of
+/// being copied. Behaviour is unchanged: same prepare, same stop-then-start
+/// when something is already running, same session remember and tray refresh.
+pub(crate) async fn apply_engine(
+    app: &AppHandle,
+    kind: EngineKind,
+    node_id: &str,
+    state: &AppState,
+    runtime: Arc<EngineRuntime>,
+    proxy: Arc<ProxyGuard>,
+) -> AppResult<EngineStatus> {
+    let request = prepare_start(state, kind, node_id)?;
+    let was_running = runtime.status().running;
+    let status = run_blocking(move || {
+        if was_running {
+            runtime.stop()?;
+        }
+        start_engine(&runtime, &proxy, request)
+    })
+    .await?;
+    remember_session(state, kind, node_id);
+    crate::refresh_tray(app);
+    Ok(status)
+}
+
 /// Swap what is running without making the user stop and start it: same ports,
 /// same proxy takeover, a kernel replaced underneath.
 ///
@@ -402,20 +430,9 @@ pub async fn engine_apply(
     runtime: Runtime<'_>,
     proxy: Proxy<'_>,
 ) -> AppResult<EngineStatus> {
-    let request = prepare_start(&state, kind, &node_id)?;
     let runtime = Arc::clone(runtime.inner());
     let proxy = Arc::clone(proxy.inner());
-    let was_running = runtime.status().running;
-    let status = run_blocking(move || {
-        if was_running {
-            runtime.stop()?;
-        }
-        start_engine(&runtime, &proxy, request)
-    })
-    .await?;
-    remember_session(&state, kind, &node_id);
-    crate::refresh_tray(&app);
-    Ok(status)
+    apply_engine(&app, kind, &node_id, &state, runtime, proxy).await
 }
 
 /// Stop the kernel, giving the system proxy back first.

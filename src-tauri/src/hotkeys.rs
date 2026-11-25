@@ -25,6 +25,10 @@ pub enum Chord {
     Toggle,
     /// Show the window, or get it out of the way.
     Window,
+    /// Walk the proxy mode one step: rule → global → direct → rule.
+    Mode,
+    /// Measure every node and write the numbers into the nodes page.
+    TestAll,
 }
 
 impl Chord {
@@ -33,6 +37,8 @@ impl Chord {
         match self {
             Chord::Toggle => 1,
             Chord::Window => 2,
+            Chord::Mode => 3,
+            Chord::TestAll => 4,
         }
     }
 
@@ -40,26 +46,43 @@ impl Chord {
         match id {
             1 => Some(Chord::Toggle),
             2 => Some(Chord::Window),
+            3 => Some(Chord::Mode),
+            4 => Some(Chord::TestAll),
             _ => None,
         }
     }
 
-    /// Position in `BINDINGS` — `Toggle` first, the order the settings page
-    /// lists them.
+    /// Position in `BINDINGS` — the order the settings page lists them.
     fn slot(self) -> usize {
         match self {
             Chord::Toggle => 0,
             Chord::Window => 1,
+            Chord::Mode => 2,
+            Chord::TestAll => 3,
         }
     }
 }
 
-/// Both chords, in the order the settings page lists them.
-pub const CHORDS: [Chord; 2] = [Chord::Toggle, Chord::Window];
+/// Every chord, in the order the settings page lists them.
+pub const CHORDS: [Chord; 4] = [Chord::Toggle, Chord::Window, Chord::Mode, Chord::TestAll];
 
 /// What the settings page starts with, and what "恢复默认" puts back.
 pub const DEFAULT_TOGGLE: &str = "Ctrl+Shift+X";
 pub const DEFAULT_WINDOW: &str = "Ctrl+Shift+W";
+pub const DEFAULT_MODE: &str = "Ctrl+Shift+M";
+pub const DEFAULT_TEST_ALL: &str = "Ctrl+Shift+T";
+
+/// The one place that decides what each action starts out as. The settings
+/// defaults, the "恢复默认" button and the settings page all read it, so a new
+/// default is a one-line edit here.
+pub fn default_chord(chord: Chord) -> &'static str {
+    match chord {
+        Chord::Toggle => DEFAULT_TOGGLE,
+        Chord::Window => DEFAULT_WINDOW,
+        Chord::Mode => DEFAULT_MODE,
+        Chord::TestAll => DEFAULT_TEST_ALL,
+    }
+}
 
 /// Windows modifier bits, named as `RegisterHotKey` wants them — control is
 /// 0x2 and shift is 0x4, which is not the order the bit names suggest.
@@ -251,7 +274,7 @@ type Callback = Box<dyn Fn(Chord) + Send + Sync>;
 static CALLBACK: OnceLock<Callback> = OnceLock::new();
 
 /// Current combinations, `None` for a switched-off action.
-static BINDINGS: Mutex<[Option<Combo>; 2]> = Mutex::new([None, None]);
+static BINDINGS: Mutex<[Option<Combo>; 4]> = Mutex::new([None, None, None, None]);
 
 /// The hidden window, once it exists — needed to re-register from another thread.
 static TARGET: OnceLock<isize> = OnceLock::new();
@@ -270,11 +293,13 @@ pub fn install(
     callback: impl Fn(Chord) + Send + Sync + 'static,
     toggle: Option<Combo>,
     window: Option<Combo>,
+    mode: Option<Combo>,
+    test_all: Option<Combo>,
 ) {
     if CALLBACK.set(Box::new(callback)).is_err() {
         return;
     }
-    store(toggle, window);
+    store(toggle, window, mode, test_all);
     let spawned = std::thread::Builder::new()
         .name("hotkeys".to_string())
         .spawn(|| unsafe { windows_impl::run() });
@@ -287,8 +312,13 @@ pub fn install(
 ///
 /// Called after every successful save. Registration happens on the hotkey
 /// thread; this function only stores the wish and wakes that thread.
-pub fn apply(toggle: Option<Combo>, window: Option<Combo>) {
-    store(toggle, window);
+pub fn apply(
+    toggle: Option<Combo>,
+    window: Option<Combo>,
+    mode: Option<Combo>,
+    test_all: Option<Combo>,
+) {
+    store(toggle, window, mode, test_all);
     #[cfg(windows)]
     {
         if let Some(hwnd) = TARGET.get() {
@@ -299,10 +329,17 @@ pub fn apply(toggle: Option<Combo>, window: Option<Combo>) {
     }
 }
 
-fn store(toggle: Option<Combo>, window: Option<Combo>) {
+fn store(
+    toggle: Option<Combo>,
+    window: Option<Combo>,
+    mode: Option<Combo>,
+    test_all: Option<Combo>,
+) {
     if let Ok(mut bindings) = BINDINGS.lock() {
         bindings[Chord::Toggle.slot()] = toggle;
         bindings[Chord::Window.slot()] = window;
+        bindings[Chord::Mode.slot()] = mode;
+        bindings[Chord::TestAll.slot()] = test_all;
     }
 }
 
@@ -345,7 +382,7 @@ mod windows_impl {
         let bindings = BINDINGS
             .lock()
             .map(|guard| *guard)
-            .unwrap_or([None, None]);
+            .unwrap_or([None; 4]);
         for chord in CHORDS {
             let Some(combo) = bindings[chord.slot()] else {
                 eprintln!("x-matrix: 全局快捷键 {} 已关闭", chord_name(chord));
@@ -431,6 +468,10 @@ mod windows_impl {
     ) -> LRESULT {
         if message == WM_HOTKEY {
             if let Some(chord) = chord_for_message(wparam) {
+                // Said out loud because a chord that fires but does nothing is
+                // indistinguishable from a chord that never arrived, and this
+                // line is the only place the two can be told apart.
+                eprintln!("x-matrix: 快捷键 {} 触发", chord_name(chord));
                 if let Some(callback) = CALLBACK.get() {
                     callback(chord);
                 }
@@ -453,6 +494,8 @@ mod windows_impl {
         match chord {
             Chord::Toggle => "启动/停止",
             Chord::Window => "显示/隐藏窗口",
+            Chord::Mode => "切换代理模式",
+            Chord::TestAll => "测所有节点",
         }
     }
 }
@@ -462,6 +505,8 @@ pub fn install(
     _callback: impl Fn(Chord) + Send + Sync + 'static,
     _toggle: Option<Combo>,
     _window: Option<Combo>,
+    _mode: Option<Combo>,
+    _test_all: Option<Combo>,
 ) {
     // The app is Windows-only; other targets keep the symbol so tests compile.
 }
@@ -568,5 +613,41 @@ mod tests {
             let again = Combo::parse(&combo.label()).unwrap();
             assert_eq!(combo, again, "raw: {raw}");
         }
+    }
+
+    #[test]
+    fn every_chord_has_a_stable_id_and_slot() {
+        // The ids are what `RegisterHotKey` is told and what `WM_HOTKEY` hands
+        // back; a duplicate would make one action unreachable, a gap would make
+        // `from_id` answer `None` for a chord that is registered.
+        assert_eq!(CHORDS.map(|chord| chord.id()), [1, 2, 3, 4]);
+        assert_eq!(CHORDS.map(|chord| chord.slot()), [0, 1, 2, 3]);
+        for (slot, chord) in CHORDS.iter().enumerate() {
+            assert_eq!(chord.slot(), slot, "slot of {chord:?}");
+            assert_eq!(Chord::from_id(chord.id() as usize), Some(*chord));
+        }
+        assert_eq!(Chord::from_id(0), None);
+        assert_eq!(Chord::from_id(5), None);
+    }
+
+    #[test]
+    fn the_new_defaults_parse_and_keep_their_spelling() {
+        // `default_chord` is the single source the settings defaults read, so
+        // both new actions must come back as text `Combo::parse` accepts.
+        assert_eq!(default_chord(Chord::Mode), DEFAULT_MODE);
+        assert_eq!(default_chord(Chord::TestAll), DEFAULT_TEST_ALL);
+        for chord in [Chord::Mode, Chord::TestAll] {
+            let raw = default_chord(chord);
+            assert_eq!(Combo::parse(raw).unwrap().label(), raw, "raw: {raw}");
+        }
+        // And the four defaults are distinct: a shared chord would mean one
+        // action could never fire.
+        let mut labels: Vec<String> = CHORDS
+            .iter()
+            .map(|chord| Combo::parse(default_chord(*chord)).unwrap().label())
+            .collect();
+        labels.sort();
+        labels.dedup();
+        assert_eq!(labels.len(), CHORDS.len());
     }
 }

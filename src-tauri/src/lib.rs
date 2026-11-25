@@ -171,8 +171,12 @@ pub fn run() {
             // This thread is the one that notices first.
             watch_engine_exits(app.handle().clone());
             auto_connect(app.handle().clone());
+            // Same shape as the auto-connect above, and for the same reason:
+            // probing every node is slow enough that doing it inline would hold
+            // the first frame. Only runs when the user switched it on.
+            test_on_start(app.handle().clone());
 
-            // Both chords come from the settings, so they can be rebound (and
+            // Every chord comes from the settings, so they can be rebound (and
             // switched off by clearing the text). A shortcut the user cannot
             // find is the same as no shortcut, which is why the settings page
             // shows what is actually registered.
@@ -278,6 +282,30 @@ fn auto_connect(app: AppHandle) {
                 refresh_tray(&app);
             }
             Err(error) => eprintln!("x-matrix: 自动连接失败：{error}"),
+        }
+    });
+}
+
+/// One latency round at startup, when the user asked for it.
+///
+/// Same shape as `auto_connect`: its own thread, every skip and failure only
+/// logged, so a slow or dead network can never delay or break the launch. No
+/// kernel is needed — the probe is a plain TCP handshake (`net::latency`).
+fn test_on_start(app: AppHandle) {
+    std::thread::spawn(move || {
+        let Some(state) = app.try_state::<AppState>() else {
+            return;
+        };
+        if !state.settings.read().test_on_start {
+            return;
+        }
+        if state.nodes.read().is_empty() {
+            eprintln!("x-matrix: 启动时测速跳过，还没有节点");
+            return;
+        }
+        match tauri::async_runtime::block_on(commands::node::probe_nodes(&state, Vec::new())) {
+            Ok(probes) => eprintln!("x-matrix: 启动时测速完成，{} 个节点", probes.len()),
+            Err(error) => eprintln!("x-matrix: 启动时测速失败（不影响启动）：{error}"),
         }
     });
 }
@@ -633,7 +661,7 @@ fn ensure_window_reachable(window: &tauri::WebviewWindow) {
     }
 }
 
-/// Wires both chords to the window: start/stop, and show/hide.
+/// Wires every chord to the window: start/stop, show/hide, mode, test-all.
 ///
 /// Registration is best effort — another proxy client may already own the
 /// combination, and an app that refuses to start over a shortcut would be
@@ -641,22 +669,116 @@ fn ensure_window_reachable(window: &tauri::WebviewWindow) {
 fn install_hotkeys(app: &AppHandle) {
     let app_handle = app.clone();
     // Read the saved chords under the same lock the save path takes, so a
-    // startup racing a save still registers one coherent pair.
-    let (toggle, window) = {
+    // startup racing a save still registers one coherent set.
+    let (toggle, window, mode, test_all) = {
         let settings = app.state::<AppState>().settings.read().clone();
         (
             hotkeys::parse_optional(&settings.hotkey_toggle).ok().flatten(),
             hotkeys::parse_optional(&settings.hotkey_window).ok().flatten(),
+            hotkeys::parse_optional(&settings.hotkey_mode).ok().flatten(),
+            hotkeys::parse_optional(&settings.hotkey_test_all).ok().flatten(),
         )
     };
     hotkeys::install(
         move |chord| match chord {
             hotkeys::Chord::Toggle => toggle_kernel(&app_handle),
             hotkeys::Chord::Window => toggle_window(&app_handle),
+            hotkeys::Chord::Mode => cycle_mode(&app_handle),
+            hotkeys::Chord::TestAll => test_all_nodes(&app_handle),
         },
         toggle,
         window,
+        mode,
+        test_all,
     );
+}
+
+/// One press of the mode chord: store the next mode, and if a kernel is running
+/// re-render it on the same ports through the same swap the UI uses.
+///
+/// The mode is saved even when nothing is running — the tray and the settings
+/// page have to show what the user just picked, and the next start reads it
+/// from the store. Every failure is logged only: a hotkey that throws a dialog
+/// nobody asked for would be worse than one that quietly did nothing.
+fn cycle_mode(app: &AppHandle) {
+    let Some(state) = app.try_state::<AppState>() else {
+        return;
+    };
+    let next = {
+        let mut settings = state.settings.write();
+        let next = domain::settings::next_mode(settings.mode);
+        settings.mode = next;
+        next
+    };
+    if let Err(error) = state.persist() {
+        // The in-memory value is what the UI reads, so the switch still looks
+        // applied; only the store write failed, which is worth a line, not a
+        // panic and not a silent rollback.
+        eprintln!("x-matrix: 热键切换模式后保存失败：{error}");
+    }
+    let Some(runtime) = app.try_state::<Arc<EngineRuntime>>() else {
+        return;
+    };
+    let status = runtime.status();
+    if !status.running {
+        refresh_tray(app);
+        return;
+    }
+    let Some(proxy) = app.try_state::<Arc<ProxyGuard>>() else {
+        return;
+    };
+    // The running kernel knows what it was started with; the settings are the
+    // fallback for the moment between a start and `remember_session`.
+    let kind = status.kind.or_else(|| {
+        state
+            .settings
+            .read()
+            .last_engine
+            .as_deref()
+            .and_then(EngineKind::parse)
+    });
+    let node_id = status
+        .node_id
+        .clone()
+        .or_else(|| state.settings.read().last_node_id.clone());
+    let (Some(kind), Some(node_id)) = (kind, node_id) else {
+        eprintln!(
+            "x-matrix: 热键切到 {next:?} 模式，但不知道当前用的是哪个内核/节点，模式已保存，下次启动生效"
+        );
+        refresh_tray(app);
+        return;
+    };
+    match tauri::async_runtime::block_on(commands::engine::apply_engine(
+        app,
+        kind,
+        &node_id,
+        &state,
+        Arc::clone(&runtime),
+        Arc::clone(&proxy),
+    )) {
+        Ok(_) => {
+            eprintln!("x-matrix: 热键切到 {next:?} 模式，内核已按新配置重启");
+            refresh_tray(app);
+        }
+        Err(error) => {
+            eprintln!("x-matrix: 热键切到 {next:?} 模式后重启内核失败（模式已保存）：{error}");
+        }
+    }
+}
+
+/// One press of the "test all" chord: the same full round the nodes page runs,
+/// on its own thread so the hotkey message loop stays free to pump chords.
+fn test_all_nodes(app: &AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let Some(state) = app.try_state::<AppState>() else {
+            return;
+        };
+        match tauri::async_runtime::block_on(commands::node::probe_nodes(&state, Vec::new())) {
+            Ok(probes) => eprintln!("x-matrix: 热键测速完成，{} 个节点", probes.len()),
+            Err(error) => eprintln!("x-matrix: 热键测速失败：{error}"),
+        }
+    });
 }
 
 /// Bring the window back from the tray (or from minimised).

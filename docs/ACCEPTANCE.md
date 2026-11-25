@@ -1896,3 +1896,69 @@ PHASES="migrate" ./59-profiles-accept.sh p4   # v1 → v2 升级
 **一句实话**
 
 多配置的两条主判据是真机验过的：两个配置各自的节点与规则互不污染（节点页与路由页逐项对得上），切换时内核确实按新配置重启（两次 PID 都变了），备份文件里也确实带着非激活那份的 3 个节点。**没验的**有三处，写清楚以免被读成「全覆盖」：一是「新配置里没有节点 → 内核保持停止」这条分支（种子的两个配置都有节点）；二是托盘菜单跟着刷新的样子（脚本只读了首页徽章，没有展开托盘）；三是计划里提到的 merge / script 覆盖脚本——这一轮只做到了 profile 层（节点、订阅、规则、策略组、规则集各自独立），订阅级覆盖脚本没有做，`render.rs` 也仍是「按当前激活配置渲染」而不是「按 profile 分支渲染」。
+
+## 60. 热键再加两个动作、启动时测速：注册和动作都验了，真实按键那一段没验成（2026-11-25，云电脑 cloudpc-test）
+
+候选表核查（`docs/CANDIDATES-PLAN.md`）里只剩两项半截：审计要的四个热键动作里 `mode` / `test_all` 没有，测速里 `test_on_start` 没有。这一节把这两项补齐，并如实验到哪一步。
+
+### 要证的事
+
+1. 四个动作都能各自绑一个组合键，默认 `Ctrl+Shift+X` / `Ctrl+Shift+W` / `Ctrl+Shift+M` / `Ctrl+Shift+T`，老 store 读出来不会退化。
+2. 清空某个组合时，只有那一个动作打「已关闭」，其余三个照常注册。
+3. 组合同一时刻只能被一个进程独占：应用在跑时，另一个进程再注册同一个组合必须失败。
+4. 系统投递 `WM_HOTKEY` 之后，四个动作都真的做了事：启停内核、测全部节点、切代理模式（会在跑时按新配置重启内核）、显示/隐藏窗口。
+5. `test_on_start` 打开时，启动后不点任何按钮就有延迟；关掉时一条都不写。
+6. 快捷键面板四行、测速区多一个开关，`保存` 之后落盘、重启还在。
+
+### 验法
+
+```bash
+./60-hotkeys-accept.sh h1                 # 四阶段：hotkeys / blind / onstart / offstart
+PHASES="blind" ./60-hotkeys-accept.sh h4  # 只跑对照
+```
+
+驱动 `60-hotkeys.ps1`（`mk_60_body.py` 生成，head 复用 `58-head.ps1`）在每阶段读 store、读内核进程、读首页三个模式胶囊的开关状态，并尝试注入组合键；另有四个一次性探针（都是"先把结论跑出来再决定怎么写文档"用的，不进仓库）：
+
+| 探针 | 干什么 | 结论 |
+|---|---|---|
+| `probe-hotkey.ps1` | 自己注册 `Ctrl+Shift+M` 再自己注入 | 应用没跑时注册成功并命中（`HIT id=3`）；应用在跑时注册返回 `False` → 组合确实被应用独占 |
+| `probe-win.ps1` | 建一个隐藏窗口，注册 `Ctrl+Shift+M`，同进程注入 / 跨进程注入 | 同进程命中，跨进程不命中 |
+| `probe-fg.ps1` / `probe-fg2.ps1` | 先用 `SetForegroundWindow`（UIA 拿到的 `Tauri Window` 句柄）把窗口拉到前台，再注入 | 仍然不命中 |
+| `probe-post3.ps1` | 用 `EnumWindows` 找到类名 `XMatrixHotkeys` 的热键窗口，直接 `PostMessage(WM_HOTKEY, id)` | 四个动作全部按预期执行 |
+
+### 判据
+
+| # | 判据 | 实测 |
+|---|---|---|
+| 1 | 四个组合都注册上 | `err> x-matrix: 全局快捷键 Ctrl+Shift+X 已就绪` / `Ctrl+Shift+W` / `Ctrl+Shift+M` / `Ctrl+Shift+T` 四行齐 |
+| 2 | 清空只影响那一个 | `blind` 阶段 `err> … 全局快捷键 切换代理模式 已关闭`，另三行仍是「已就绪」 |
+| 3 | 组合被独占 | 应用在跑时探针 `register ctrl+shift+m -> False`；应用没跑时同一探针 `-> True` 且自注入 `HIT id=3` |
+| 4a | 启停内核 | `after toggle(1): mode=rule kernels=[] probes=0 app=1`（前一行是 `kernels=[xray#8052]`），日志 `快捷键 启动/停止 触发` + 托盘菜单「内核未运行」 |
+| 4b | 测全部节点 | `after test-all(4): … probes=3`，日志 `快捷键 测所有节点 触发` + `热键测速完成，3 个节点` |
+| 4c | 切代理模式 | `after mode(3): mode=global`（store 落盘），日志 `快捷键 切换代理模式 触发` + 托盘菜单「模式 global」；另一轮内核在跑时是 `mode=global kernels=xray#464`（前一行 `xray#7704`）并追加 `热键切到 Global 模式，内核已按新配置重启` |
+| 4d | 显示/隐藏窗口 | `visible=Ok(true) minimized=Ok(false)` → 再投一次 `visible=Ok(false)` |
+| 5a | 启动时测速打开 | 应用启动 8 秒内 store 里已有三条：`ss-local-1 delay_ms=7`、`ss-local-2 delay_ms=7`、`ss-dead-1 delay_ms=null`（端口没人听，如实记 null） |
+| 5b | 启动时测速关掉 | 22 秒后 `probes=0`、节点页没有任何延迟文字 |
+| 6 | 界面与落盘 | 设置页四行热键 + 「启动时测速」开关；`保存` 后 store 里 `hotkey_mode='Ctrl+Shift+M'`、`test_on_start` 真/假两态都对，重启后保持 |
+| 7 | 真实按键 → 注册 | ⏸ **未验**：三种注入方式（同会话 `keybd_event`、先 `SetForegroundWindow` 再注入、`/rl HIGHEST` 任务注入）都没让应用收到 `WM_HOTKEY`；而同一段注入代码能让注入进程自己注册的热键命中，说明这台机器上「把按键送给另一个进程的注册」这一环做不到 |
+
+### 设计理由
+
+- **四个动作共用一条注册线程，id 固定 1–4。** `Chord` 的 id 是协议的一部分：`WM_HOTKEY` 的 `wParam` 就是它。把新动作插在末尾（3 = 模式、4 = 测速）而不是重排，是为了让老版本注册过的 id 仍然指向同一个动作，也让 `chord_for_message` 的映射保持一张定值表。
+- **保存即生效走 `WM_APP_REREGISTER`，而不是杀掉线程重建。** 重注册必须在 `GetMessageW` 那根线程上做（`RegisterHotKey` 绑线程），所以 `apply()` 只 `PostMessage` 通知，注册动作留在原线程；那条注释里记着"持锁再调 `register_all` 会死锁"的旧账（§41）。
+- **`cycle_mode` 先落盘再重启。** 热键切模式时用户看不到设置页，如果先重启再落盘，内核起来的是新模式而 store 还是旧模式，下次启动就倒退；先写 settings + `persist()`，再走与前端 `engine.apply` 同一条 `apply_engine()` 路径（同一对端口、代理接管不断），失败只写日志不回滚（内存里的模式已经变了，UI 必须跟它一致）。
+- **`test_all_nodes` / `test_on_start` 都开独立线程。** 测速是阻塞网络调用，放在主线程会让热键和托盘一起卡住；启动时测速挂在 `auto_connect` 之后，避免与内核启动抢同一批端口/连接。
+- **热键触发时打一行日志。** `x-matrix: 快捷键 {} 触发` 是这次加的唯一一行"为验收服务"的日志：没有它，"按键到了但动作没跑"和"按键根本没到"在日志里长得一模一样——这次正是靠它把问题定位到注入链，而不是动作链。
+
+### 坑
+
+1. **模拟按键到不了另一个进程的 `RegisterHotKey`**：这台机器上三种注入方式都不行，而同进程自注入能命中。判据 7 因此只能标「未验」，改用 `PostMessage(WM_HOTKEY)` 验动作链——**这条不能写成"热键已验"**。
+2. `FindWindowW('XMatrixHotkeys', $null)` 返回 0，`FindWindow(null,'X-Matrix')` 也返回 0，但 `EnumWindows` + `GetClassNameW` 能枚举到同一个窗口。要按类名找窗口就用 `EnumWindows` 自己筛，不要信 `FindWindow`。
+3. `GetForegroundWindow()` 在这台机器的驱动进程里返回 0（没有前台窗口），所以"先拉到前台再注入"这条路连"是否真的到了前台"都无法自证。
+4. `cleanup.sh` 每轮会删 home 下 `*.ps1`，因此 `run-app.ps1` 必须每轮重推；计划任务本身还在，脚本没了就静默什么都不做（表现为"应用没起来"）。
+5. 只跑 `PHASES="blind"` 时，前一轮的 `DONE` 会留在别的阶段日志里——驱动已经按阶段分文件（`60-tun-<phase>.txt` 同款），`findstr` 只查当阶段那份。
+6. 探针里 `$errFile` 必须自己定义：`58-head.ps1` 只带 helper，不带这个变量，缺了会静默跳过整段（连 `<no file>` 都不打）。
+
+### 一句实话
+
+动作链（四个动作各自的副作用）和注册链（四个组合都被本进程独占）都验了；**"人手按下去"这一段没验**——这台机器上的模拟输入到不了别的进程的热键注册，我们只能用 `PostMessage(WM_HOTKEY)` 把消息直接投进去。要真正闭环，需要一台有真实键盘输入的机器上按一次 `Ctrl+Shift+M`。

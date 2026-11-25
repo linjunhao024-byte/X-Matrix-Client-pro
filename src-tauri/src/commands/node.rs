@@ -489,15 +489,14 @@ pub(crate) async fn delay_offline(
     }
 }
 
-/// TCP handshake latency for a list of nodes, in milliseconds.
+/// Pick the targets, probe them and remember the numbers — the round behind
+/// [`test_nodes_latency`].
 ///
-/// An empty list means every node: that is what "test all" wants, and asking the
-/// frontend to enumerate the same rows it is about to render only creates a
-/// chance for the two lists to disagree.
-#[tauri::command]
-#[specta::specta]
-pub async fn test_nodes_latency(
-    state: State<'_, AppState>,
+/// Lives outside the command so the startup probe and the hotkey can run the
+/// exact same round: `State` only exists inside a command, and duplicating the
+/// pick/probe/remember steps is how the two paths would drift apart.
+pub(crate) async fn probe_nodes(
+    state: &AppState,
     ids: Vec<NodeId>,
 ) -> AppResult<Vec<LatencyProbe>> {
     let (targets, timeout_ms, workers) = {
@@ -530,8 +529,22 @@ pub async fn test_nodes_latency(
     .await
     .map_err(|error| AppError::Internal(format!("后台任务失败：{error}")))?;
 
-    remember_batch(state.inner(), &probes);
+    remember_batch(state, &probes);
     Ok(probes)
+}
+
+/// TCP handshake latency for a list of nodes, in milliseconds.
+///
+/// An empty list means every node: that is what "test all" wants, and asking the
+/// frontend to enumerate the same rows it is about to render only creates a
+/// chance for the two lists to disagree.
+#[tauri::command]
+#[specta::specta]
+pub async fn test_nodes_latency(
+    state: State<'_, AppState>,
+    ids: Vec<NodeId>,
+) -> AppResult<Vec<LatencyProbe>> {
+    probe_nodes(&state, ids).await
 }
 
 /// Delete several nodes in one call.

@@ -5134,5 +5134,29 @@
     "新配置里没有节点，内核保持停止",
     "The new profile has no nodes, so the kernel stays stopped",
     "新設定裡沒有節點，內核保持停止"
+  ],
+  [
+    "settings.hotkeyModeHint",
+    "按一下切换代理模式：规则 → 全局 → 直连 → 规则",
+    "One press walks the proxy mode: rule → global → direct → rule",
+    "按一下切換代理模式：規則 → 全域 → 直連 → 規則"
+  ],
+  [
+    "settings.hotkeyTestAllHint",
+    "按一下测所有节点的延迟（结果写进节点页）",
+    "One press tests every node and writes the numbers into the nodes page",
+    "按一下測所有節點的延遲（結果寫進節點頁）"
+  ],
+  [
+    "settings.testOnStart",
+    "启动时测一轮延迟",
+    "Test once on start",
+    "啟動時測一輪延遲"
+  ],
+  [
+    "settings.testOnStartHint",
+    "打开后，应用起来会自己测一遍全部节点的 TCP 延迟；不启动内核也能测",
+    "With this on, the app tests every node over TCP as soon as it starts; no kernel needed",
+    "打開後，應用起來會自己測一遍全部節點的 TCP 延遲；不啟動內核也能測"
   ]
 ]

@@ -79,6 +79,12 @@ pub struct Settings {
     /// numbers then measure the queue rather than the nodes. Dozens of nodes
     /// make that tediously slow, so the knob exists with a low default.
     pub test_concurrency: u32,
+    /// Run one latency round as soon as the app starts, so the nodes page has
+    /// numbers without anybody pressing "test". Off by default: probing every
+    /// node in a row is noticeable on a metered link, and a start that touches
+    /// thirty endpoints should be a choice, not a surprise.
+    #[serde(default)]
+    pub test_on_start: bool,
     /// WebDAV collection the cloud backup writes into. Empty switches the
     /// feature off entirely: there is no default server to point at, and a
     /// guessed one would be someone else's disk.
@@ -179,6 +185,14 @@ pub struct Settings {
     /// Chord that shows or hides the window, same spelling and same rule.
     #[serde(default = "default_hotkey_window")]
     pub hotkey_window: String,
+    /// Chord that walks the proxy mode one step. Same spelling and same rule as
+    /// the two above: empty switches it off.
+    #[serde(default = "default_hotkey_mode")]
+    pub hotkey_mode: String,
+    /// Chord that measures every node and writes the numbers into the nodes
+    /// page. Same spelling and same rule as the three above.
+    #[serde(default = "default_hotkey_test_all")]
+    pub hotkey_test_all: String,
 }
 
 /// Prompting before elevation is the default: a silent `runas` would replace a
@@ -190,11 +204,19 @@ fn default_prompt_elevation() -> bool {
 /// The chords a fresh install starts with — the ones the app shipped since the
 /// first build, so an existing user sees no change after upgrading.
 fn default_hotkey_toggle() -> String {
-    crate::hotkeys::DEFAULT_TOGGLE.to_string()
+    crate::hotkeys::default_chord(crate::hotkeys::Chord::Toggle).to_string()
 }
 
 fn default_hotkey_window() -> String {
-    crate::hotkeys::DEFAULT_WINDOW.to_string()
+    crate::hotkeys::default_chord(crate::hotkeys::Chord::Window).to_string()
+}
+
+fn default_hotkey_mode() -> String {
+    crate::hotkeys::default_chord(crate::hotkeys::Chord::Mode).to_string()
+}
+
+fn default_hotkey_test_all() -> String {
+    crate::hotkeys::default_chord(crate::hotkeys::Chord::TestAll).to_string()
 }
 
 /// The probe used by every "is this node actually reachable" check. Kept in the
@@ -357,6 +379,17 @@ pub enum ProxyMode {
     Direct,
 }
 
+/// The next mode in the ring the mode hotkey walks: rule → global → direct →
+/// rule. Kept next to the enum (rather than in the hotkey module) so a new
+/// variant cannot be added without every caller seeing where the cycle lives.
+pub fn next_mode(mode: ProxyMode) -> ProxyMode {
+    match mode {
+        ProxyMode::Rule => ProxyMode::Global,
+        ProxyMode::Global => ProxyMode::Direct,
+        ProxyMode::Direct => ProxyMode::Rule,
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "lowercase")]
 pub enum Language {
@@ -413,6 +446,10 @@ impl Default for Settings {
             tun_stack: default_tun_stack(),
             hotkey_toggle: default_hotkey_toggle(),
             hotkey_window: default_hotkey_window(),
+            hotkey_mode: crate::hotkeys::default_chord(crate::hotkeys::Chord::Mode).to_string(),
+            hotkey_test_all: crate::hotkeys::default_chord(crate::hotkeys::Chord::TestAll)
+                .to_string(),
+            test_on_start: false,
         }
     }
 }
@@ -497,20 +534,26 @@ impl Settings {
             }
         }
         self.dns_entries()?;
-        // Both chords are parsed here so a typo is refused at save time instead
+        // Every chord is parsed here so a typo is refused at save time instead
         // of turning into a shortcut that silently does nothing. Empty text is
         // meaningful (switched off), which is why `parse_optional` exists.
-        let toggle = crate::hotkeys::parse_optional(&self.hotkey_toggle)?;
-        let window = crate::hotkeys::parse_optional(&self.hotkey_window)?;
+        let chords = [
+            crate::hotkeys::parse_optional(&self.hotkey_toggle)?,
+            crate::hotkeys::parse_optional(&self.hotkey_window)?,
+            crate::hotkeys::parse_optional(&self.hotkey_mode)?,
+            crate::hotkeys::parse_optional(&self.hotkey_test_all)?,
+        ];
         // Windows keys ids per combination: registering the same chord twice
         // leaves one action unreachable, and the settings page would show two
-        // rows that claim to work.
-        if let (Some(toggle), Some(window)) = (toggle, window) {
-            if toggle == window {
-                return Err(format!(
-                    "两个快捷键不能相同（都是 {}）",
-                    toggle.label()
-                ));
+        // rows that claim to work. Compared pairwise because four actions now
+        // draw from the same pool, so any two of them can collide.
+        for first in 0..chords.len() {
+            for second in first + 1..chords.len() {
+                if let (Some(a), Some(b)) = (chords[first], chords[second]) {
+                    if a == b {
+                        return Err(format!("两个快捷键不能相同（都是 {}）", a.label()));
+                    }
+                }
             }
         }
         Ok(())
@@ -701,6 +744,45 @@ mod tests {
             ..Default::default()
         };
         assert!(s.validate().is_ok());
+    }
+
+    #[test]
+    fn a_new_chord_cannot_reuse_an_old_one() {
+        // S12 added two actions to the same pool: a mode chord equal to the
+        // toggle chord leaves whichever registers second dead, with only a
+        // stderr line to explain it.
+        let s = Settings {
+            hotkey_mode: "Ctrl+Shift+X".into(),
+            ..Default::default()
+        };
+        let error = s.validate().unwrap_err();
+        assert!(error.contains("不能相同"), "error: {error}");
+        // Different spelling, same chord — still a collision.
+        let s = Settings {
+            hotkey_test_all: "ctrl+shift+m".into(),
+            ..Default::default()
+        };
+        assert!(s.validate().is_err());
+    }
+
+    #[test]
+    fn the_new_hotkey_defaults_survive_an_empty_store() {
+        // `#[serde(default = ...)]` must fill in the two new chords for a
+        // store written before S12, where the keys are simply absent.
+        let empty: Settings = serde_json::from_str("{}").expect("empty document must load");
+        assert_eq!(empty.hotkey_mode, "Ctrl+Shift+M");
+        assert_eq!(empty.hotkey_test_all, "Ctrl+Shift+T");
+        assert!(!empty.test_on_start, "probing every node on start is opt-in");
+        assert!(empty.validate().is_ok());
+    }
+
+    #[test]
+    fn the_mode_hotkey_ring_visits_every_mode_and_returns() {
+        // Three presses must come back to where they started, and each press
+        // must land on a mode the previous one did not.
+        assert_eq!(next_mode(ProxyMode::Rule), ProxyMode::Global);
+        assert_eq!(next_mode(ProxyMode::Global), ProxyMode::Direct);
+        assert_eq!(next_mode(ProxyMode::Direct), ProxyMode::Rule);
     }
 
     #[test]

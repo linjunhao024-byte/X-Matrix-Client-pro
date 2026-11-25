@@ -776,6 +776,10 @@ export const en: Record<string, string> = {
   "settings.kernel.updated": "Updated to {version}",
   "settings.kernel.checksumOk": "sha256 {hash} · verified",
   "settings.kernel.checksumLocal": "sha256 {hash} · no upstream digest, not verified",
+  "settings.hotkeyModeHint": "One press walks the proxy mode: rule → global → direct → rule",
+  "settings.hotkeyTestAllHint": "One press tests every node and writes the numbers into the nodes page",
+  "settings.testOnStart": "Test once on start",
+  "settings.testOnStartHint": "With this on, the app tests every node over TCP as soon as it starts; no kernel needed",
   // sidebar
   "sidebar.collapse": "Collapse sidebar",
   "sidebar.collapseShort": "Collapse",

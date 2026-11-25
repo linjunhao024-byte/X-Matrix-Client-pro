@@ -201,6 +201,8 @@ pub fn save_settings(
     crate::hotkeys::apply(
         crate::hotkeys::parse_optional(&settings.hotkey_toggle).ok().flatten(),
         crate::hotkeys::parse_optional(&settings.hotkey_window).ok().flatten(),
+        crate::hotkeys::parse_optional(&settings.hotkey_mode).ok().flatten(),
+        crate::hotkeys::parse_optional(&settings.hotkey_test_all).ok().flatten(),
     );
 
     // The tray lists the node names and checks the current mode, so a saved
