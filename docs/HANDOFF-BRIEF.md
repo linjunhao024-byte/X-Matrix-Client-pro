@@ -1,6 +1,6 @@
 # 新窗口开工简报（X-Matrix Client Pro）
 
-> 写于 2026-11-26 02:5x（§61 这一版：S1–S11 与两张候选表全部完成；用户点名的「代码缺口 1」已写完，**真机验收没跑成**——测试机整机掉线）。给**下一个窗口**的你自己看：先读这一页，够用就别翻长文档；需要细节时按文末索引跳。
+> 写于 2026-11-26 04:5x（§61 这一版：S1–S11、两张候选表、用户点名的「代码缺口 1」全部完成**且真机验收已补**；下一步是 §62 安装包 E2E）。给**下一个窗口**的你自己看：先读这一页，够用就别翻长文档；需要细节时按文末索引跳。
 > 长文档：`docs/HANDOVER.md`（地图、候选表、云电脑手册）、`docs/ACCEPTANCE.md`（每条功能的判据与踩坑）、`docs/PARITY-PLAN.md`（S1–S13 计划与进度表）、`docs/CANDIDATES-PLAN.md`（两张候选表逐条核查的结论）。
 
 ## 1. 三十秒现状
@@ -10,9 +10,9 @@
 | 仓库 / 工作区 | `D:\GitHub-Warehouse\X-Matrix-Client-Pro`（Tauri 2 + Vue 3 + TS） |
 | HEAD | 本简报这条 docs 提交；功能提交查 `git log --oneline -- <anchor>` 的第一条：§61 `src-tauri/src/engine/merge.rs`、§60 `src-tauri/src/hotkeys.rs`、§59 `src-tauri/src/store.rs`、§58 `src-tauri/src/engine/singbox.rs`、§57 `src-tauri/src/service.rs`、§56 `src-tauri/src/elevate.rs`、§55 `src-tauri/src/power.rs`、§54 `src-tauri/src/net/webdav.rs`、§53 `src-tauri/src/engine/release.rs`、§52 `src-tauri/src/engine/groupwatch.rs`、§51 `src-tauri/src/sysproc.rs`、§50 `src/services/accent.ts`、§49（S8）、`a794438`（§48）、`6fd790f`（§47） |
 | 规模 | **98** 个 IPC 命令 / Rust 单测 **539** / vitest **116**（12 文件）/ i18n **865 键 × 3 语言** |
-| 验收 | `docs/ACCEPTANCE.md` 写到 **§61**：§0–§60 全是云电脑真机点出来的（各节末尾的「一句实话」列着未验项）；**§61 例外——代码与门槛已过、真机没跑**，判据表里需要真机的行都标 ⏸，原因写在节首与「一句实话」里 |
-| 云电脑 | **当前不可达**（2026-11-26 02:25 起：Tailscale 显示 `cloud-pc-test active`，但 `ping` / `ssh` 100% 丢包、`tailscale ping` 超时 `rx 0`）。上次干净收尾时状态是：`ProxyEnable=0x0`、无 `xm*`/`tunkill`/`xmlisten` 任务、无内核进程、无 `XMatrixKernel` 服务 |
-| 构建产物 | `src-tauri/target/release/x-matrix.exe`（11,115,008 B @2026-11-26 02:14，md5 `e5ec8f604cd4e63da510f05897010693`，含 §21–§61）；**安装包已能离线打**：`bundle/msi/X-Matrix_0.1.0_x64_en-US.msi`（5,156,864 B）、`bundle/nsis/X-Matrix_0.1.0_x64-setup.exe`（3,587,111 B） |
+| 验收 | `docs/ACCEPTANCE.md` 写到 **§61**，全部是云电脑真机点出来的（各节末尾的「一句实话」列着未验项）；§61 的判据 1–8 已过（覆盖进落盘配置、服务日志被界面读到），9/10 与非管理员路径仍未验 |
+| 云电脑 | 可用（02:52 已恢复；03:0x 又闪断过一次，重连即通）。末态：`ProxyEnable=0x0`、无 `xm*`/`tunkill`/`xmlisten` 任务、无内核进程、`XMatrixKernel` 服务已卸载 |
+| 构建产物 | `src-tauri/target/release/x-matrix.exe`（11,115,008 B @2026-11-26 03:56，md5 `5a678eed81c41e7ed7f3b126a0bbc42e`，含 §21–§61 与 03:56 的两处修复）；安装包 ``bundle/msi/X-Matrix_0.1.0_x64_en-US.msi``（5,156,864 B）与 ``bundle/nsis/X-Matrix_0.1.0_x64-setup.exe``（3,587,111 B）是 02:14 那次产的，**不含 03:56 的修复**，做 E2E 前要重打 |
 | 目标 | 功能追平 V2RayN / Clash、二者互补，并把各功能之间**说得清、配合得上**（用户原话，长期有效） |
 
 ## 2. 常用的四条命令
@@ -36,33 +36,16 @@ https_proxy=http://127.0.0.1:10808 git push origin main
 
 改 Rust 的 `#[tauri::command]` 签名后必须 `npm run gen:contract`；新增 i18n 键必须走 `scripts/i18n-pairs.json` + `python scripts/gen_i18n.py`（三份字典会一起生成）。
 
-## 3. 下一个任务：把 §61 的真机验收补上，然后做安装包 E2E（§62）
+## 3. 下一个任务：§62 安装包 E2E（全新安装 → 首启 → 订阅 → 内核 → 代理 → 卸载）
 
-用户 2026-11-26 的指令是「先做 1 和 2，3 我之后自己测试，4 你也可以在做完 1 和 2 之后做」：
+用户 2026-11-26 点名要做「1 代码缺口 + 2 安装包与全新安装 E2E」：1 已完成并验（§61），2 只出了安装包、脚本还没写。
 
-- **1（两个代码缺口）**：服务日志路径 + 配置覆盖层 merge —— 代码、门槛、构建都完成了，**真机验收待补**（§61）。
-- **2（安装包 + 全新机器 E2E）**：MSI/NSIS 已经打出来了（见 §1），E2E 脚本还没写；**等机器回来**才能跑。
-- **3（真键盘 / 真 UAC / 真 WebDAV）**：用户自己测，不要抢。
-- **4（长跑 / 压力）**：用户说做完 1 和 2 之后「也可以」做。环回节点就够压（`127.0.0.1:8388/8389` + 死端口 9999）；不需要用户提供真节点。
+要做的事（顺序别跳）：
 
-机器回来后的顺序：
-
-1. `bash /d/tmp/shots/61-merge-accept.sh m1` —— 两个阶段（`merge` / `svclog`）。要拿到：落盘 `configs/xray.json` 的 `dns.servers` 恰好是覆盖里的两条（`1.1.1.1` / `9.9.9.9`，不是设置里的 `8.8.8.8` 加覆盖的三条）、界面里坏 YAML 被拒并显示解析器原话、装服务后 `%ProgramData%\X-Matrix\service\xray.log` 非空且日志页能看到行。
-2. 把 `docs/ACCEPTANCE.md` §61 判据表里 ⏸ 的行换成实测数字，改 `docs/HANDOVER.md` §0.17 的「真机结论」段，把这一页的「验收」行也改掉。
-3. 写 `D:\tmp\shots\62-msi-e2e.sh`（`e2e-sub.yaml` / `subserv.ps1` / `ss-e2e.json` 已在 `D:\tmp\shots\e2e\`）：卸旧 → 清 `%APPDATA%\com.xmatrix.client` → `msiexec /i X-Matrix_0.1.0_x64_en-US.msi /qn` → 首启 → 加假订阅（`http://127.0.0.1:8090/sub`）→ 起内核 → `curl -x http://127.0.0.1:7890 http://cp.cloudflare.com/` 期望 204 → 开系统代理查注册表 → 停 → 卸载 → 验 `%ProgramData%`/AppData/服务/注册表都清干净。**§62 里要如实写两件事**：内核二进制是预置的（云电脑到 GitHub 只有 5.5 KB/s），以及 `msiexec` 需要管理员（这台机器是 Administrator）。
-4. 若用户还要第 4 项：长跑（30 分钟）+ 20 次配置切换 + 200 次启停，记 `WorkingSet64` / 句柄数 / 日志大小 / 端口绑定时延的曲线，别只写「稳定」。
-
-若用户给的是**新功能**，沿用这套固定流程（十三项都是这么走完的）：
-
-1. 写任务书到 `D:\tmp\handover\tasks\S<n>-*.md`（判据、钉死的设计、可改文件范围、验证命令、禁区）；
-2. 派**一个**子代理（同时最多 1 个，用完即弃；它常静默死亡，所以必须自己读 diff 复验，必要时自己写完）；
-3. 自己跑 `npm run check` + `cd src-tauri && cargo test --lib`，必要时补测试/补实现；
-4. `npx tauri build --no-bundle`，记下 `stat -c%s` 与 `md5sum`；
-5. 云电脑真机验收（见 §4），判据以**日志里的数字与回读值为准**，不信「看起来像」；
-6. 写 `docs/ACCEPTANCE.md` 新章（要证的事 / 验法 / 判据表 / 设计理由 / 坑 / 一句实话），同步 `docs/PARITY-PLAN.md`（结果段 + 进度表行）、`docs/HANDOVER.md`（§0.1 硬数字 + 一条 §0.x + checklist）、`ARCHITECTURE.md:277-278`、`README.md:65,81`；
-7. `git add -A && git commit`，push，最后 `bash /d/tmp/shots/cleanup.sh`。
-
-已完成：S2 PAC（§48）、S8 分离端口（§49）、S10 强调色（§50）、S11 进程选择器（§51）、S9 回退/负载组（§52）、S3 内核更新（§53）、S6 WebDAV 备份（§54）、S5 轻量模式（§55）、S4a 提权（§56，判据 7、8 未验）、S4b 内核服务（§57，三项未验）、S1 TUN（§58，非管理员拒绝未验）、S7 多配置（§59，merge/script 未做→merge 已在 §61 补上）、候选表两项（§60，真实按键未验）、代码缺口两项（§61，真机待补）。
+1. **重打安装包**：`npx tauri build`（带 bundle），拿到新的 `bundle/msi/X-Matrix_0.1.0_x64_en-US.msi` 与 `bundle/nsis/X-Matrix_0.1.0_x64-setup.exe`，记下 md5 与尺寸（02:14 那两个包不含 03:56 的修复）。
+2. 写 `D:\tmp\shots\62-msi-e2e.sh`：卸旧 → 清 `%APPDATA%\com.xmatrix.client` → `msiexec /i <msi> /qn` → 首启（`run-app.ps1`）→ 加假订阅（`D:\tmp\shots\e2e\subserv.ps1` 起 8090 提供 `e2e-sub.yaml`）→ 起内核 → `curl -x http://127.0.0.1:7890 http://cp.cloudflare.com/` 期望 204 → 开系统代理查注册表 → 停止 → 卸载 → 验「程序目录/快捷方式/服务/进程/`ProxyEnable`」都清干净。
+3. 写 `docs/ACCEPTANCE.md` §62，判据表里**如实写「两个内核二进制是预置进去的」**（云电脑到 GitHub 只有 5.5 KB/s，下载 16.7 MB 要 50 分钟），以及没验的（真订阅源、微软商店/域策略、Win10）。
+4. 同步计数（IPC **98** / Rust **539** / vitest 116 / i18n **865**）与 `docs/HANDOVER.md`（§0.18、§0.1 表、产物行、checklist）、`docs/PARITY-PLAN.md`（S14 行）、本简报。
 
 ## 4. 云电脑（真机验收的唯一场所）
 

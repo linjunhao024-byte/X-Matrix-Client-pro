@@ -18,14 +18,14 @@
 | 项 | 值 |
 |---|---|
 | 代码 HEAD | 「feat(profiles): several configurations, one kernel at a time」，含 §59（S7 多配置）；前一条是「feat(tun): take over the machine at the adapter, and only when sing-box and admin can do it」（§58）；前一条是「feat(service): let a Windows service own the kernel, so it can run as SYSTEM」（§57）；再往前：§56（S4a 提权）、§54（S6，查 `src-tauri/src/engine/release.rs`/`net/webdav.rs`）、§53（S3，查 `src-tauri/src/engine/release.rs`）、§52（S9）、§51（S11）、§50（S10）、§49（S8）、`a794438`（§48）、`6fd790f`（§47） |
-| 未提交 | 无。§61（覆盖层 merge + 服务日志路径）的代码、构建、`docs/ACCEPTANCE.md` §61 都在同一次提交里（见 §0.17）；**§61 的真机验收没跑成**——测试机 02:25 掉线，判据表里需要真机的行都标 ⏸ |
+| 未提交 | 无。§61（覆盖层 merge + 服务日志路径）的代码、构建、`docs/ACCEPTANCE.md` §61 都在同一次提交里（见 §0.17）；§61 的真机验收已补上（`61-merge-accept.sh m20`，判据 1–8 全过，9/10 仍未验） |
 | 上一版未提交清单（留档） | `src-tauri/src/domain/settings.rs`、`src-tauri/src/engine/{mod,render,runtime,xray}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§39 分片）；再上一版：`src-tauri/src/engine/{mod,runtime}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§37 统一提示）；再上一版：`src-tauri/src/commands/settings.rs`、`src-tauri/src/commands/sysproxy.rs`、`src/stores/sysproxy.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`、`docs/ACCEPTANCE.md`（§36 系统代理即时生效） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库；之后每次收尾都跟着更新 |
 | IPC 命令 | **98**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
 | Rust 单测 | **539 passed**（`ARCHITECTURE.md:278` 已同步） |
 | 前端检查 | `npm run check` 全绿：vue-tsc / architecture（68 文件）/ contract / vitest **116**（12 文件） |
 | i18n | **865** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
-| 桌面产物 | 桌面上的旧副本**已不存在**；产物是 `src-tauri/target/release/x-matrix.exe`（11,115,008 B @2026-11-26 02:14，md5 `e5ec8f604cd4e63da510f05897010693`），以及第一次打出来的安装包 `src-tauri/target/release/bundle/msi/X-Matrix_0.1.0_x64_en-US.msi`（5,156,864 B）与 `bundle/nsis/X-Matrix_0.1.0_x64-setup.exe`（3,587,111 B），含 §21–§61 全部改动 |
+| 桌面产物 | 桌面上的旧副本**已不存在**；产物是 `src-tauri/target/release/x-matrix.exe`（11,115,008 B @2026-11-26 03:56，md5 `5a678eed81c41e7ed7f3b126a0bbc42e`，含 §61 的两处收尾修复），以及安装包 `src-tauri/target/release/bundle/msi/X-Matrix_0.1.0_x64_en-US.msi`（5,156,864 B）与 `bundle/nsis/X-Matrix_0.1.0_x64-setup.exe`（3,587,111 B）——**这两个包是 02:14 那次构建产的，不含 03:56 的两处修复**，做安装包 E2E 前要重打 |
 | 验收文档 | `docs/ACCEPTANCE.md` §0–§61（§7 历史空缺，编号不连续但内容完整） |
 | 云电脑 | 干净：`ProxyEnable=0x0`、无 X-Matrix/sing-box/xray 进程、无 `xm*` 计划任务 |
 
@@ -216,11 +216,12 @@
 - 新模块 `src-tauri/src/engine/merge.rs`：`merge_text(base, overlay)` 深合并（映射递归、数组整段替换、标量覆盖、`null` 覆盖成 `null`、空覆盖逐字节原样）；合并点在 `Engine::render_config` 的默认实现，渲染器改名 `render_config_raw`。
 - `Document.merge` / `ProfileParts.merge` / `ProfileView.merge`，新命令 `profile_merge_set`（IPC 97 → 98）；界面「配置」页每行可展开一个 YAML 编辑区，写明「数组整段替换 / 重启才生效 / 不是 JavaScript」。
 
-**真机结论**：**没有**。测试机 02:25 左右整机掉线（Tailscale 显示 active、`ping`/`ssh` 100% 丢包、`tailscale ping` 超时 `rx 0`），`61-merge-accept.sh m1` 跑到 merge 阶段时断在 ssh 上。`docs/ACCEPTANCE.md` §61 的判据表因此把「覆盖进落盘配置」「服务日志页能看到行」等行标 ⏸，只留了纯函数与命令层测试能证的那些行。
+**真机结论（2026-11-26 04:34，`61-merge-accept.sh m20`）**：`docs/ACCEPTANCE.md` §61 判据 1–8 全过——种子里 `log.loglevel: debug` 的覆盖**进了内核读的那份 `configs\xray.json`**（`config loglevel: "debug"`，默认是 `warning`）；界面「覆盖（merge）」展开、粘贴、保存后 `store.merge` 从 `log:\n  loglevel: debug` 变成 `dns:\n  servers:\n    - 9.9.9.9`；服务阶段内核由 `XMatrixKernel` 起（`kernel owner: user=NT AUTHORITY\SYSTEM`），**服务日志落在 `%ProgramData%\X-Matrix\xray.log`（父目录，配置在同级 `service\` 子目录）**，日志页 `8 / 8 行` 且首行配置路径就是 `service\xray.json`。判据 9（卸载后日志页回用户目录）、10（非管理员装服务被拒）仍未验。
+- 掉线那一轮暴露的真问题：种子 `store.json` 里 `dns_servers` 写成数组（结构体是 `String`）→ 整份文档被 `Store::read` 静默改名 `.corrupt`、应用起默认文档 → 整轮验收看起来像「产品没生效」。**种子必须拿应用自己写的默认文档当基座**。
 
 **计数**：IPC **98**、Rust **539 passed**、vitest 116（12 文件）、i18n **865** 键。
 
-**下一步**：机器回来后依次跑 `bash /d/tmp/shots/61-merge-accept.sh m1`（§61）与 `bash /d/tmp/shots/62-msi-e2e.sh fresh`（§62 安装包 E2E，脚本待写），把 ⏸ 换成实测数字后再改这一节与 §61。
+**下一步**：重打带 bundle 的安装包（`npx tauri build`），跑 `bash /d/tmp/shots/62-msi-e2e.sh fresh`（§62 全新安装 E2E，脚本待写），把判据 9/10 与非管理员路径留到有真实令牌的机器上再验。
 
 ## 1. 项目坐标与命令
 
@@ -234,10 +235,10 @@
 | 后端测试 | `cd src-tauri && cargo test --lib` |
 | 契约重生成 | `npm run gen:contract`（改了命令签名就必须跑，`check:contract` 会拦） |
 | 桌面产物 | `/c/Users/83611/Desktop/X-Matrix.exe`、`/c/Users/83611/Desktop/X-Matrix_0.1.0_x64-setup.exe` |
-| 当前构建产物 | `src-tauri/target/release/x-matrix.exe` **11,084,288 B @2026-11-25 20:37，md5 `8ebbcba7fbd37af649bff3af4d2d56d2`**（含 §21–§60）；桌面副本已不在，需要时自己 `cp` 过去 |
+| 当前构建产物 | `src-tauri/target/release/x-matrix.exe` **11,115,008 B @2026-11-26 03:56，md5 `5a678eed81c41e7ed7f3b126a0bbc42e`**（含 §21–§61）；安装包为 02:14 那次构建（不含 03:56 的两处修复），做 E2E 前先重打 |
 
-**计数基线（改动后记得同步文档）**：命令 **92**、`cargo test --lib` **489**、vitest **116**（12 个文件）、i18n **829** 键。
-> `README.md:81` 与 `ARCHITECTURE.md:277-278` 已同步为 97 条命令 / 514 项测试。
+**计数基线（改动后记得同步文档）**：命令 **98**、`cargo test --lib` **539**、vitest **116**（12 个文件）、i18n **865** 键。
+> `README.md:81` 与 `ARCHITECTURE.md:277-278` 已同步为 98 条命令 / 539 项测试。
 
 命令数核算法：
 

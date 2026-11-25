@@ -1963,68 +1963,61 @@ PHASES="blind" ./60-hotkeys-accept.sh h4  # 只跑对照
 
 动作链（四个动作各自的副作用）和注册链（四个组合都被本进程独占）都验了；**"人手按下去"这一段没验**——这台机器上的模拟输入到不了别的进程的热键注册，我们只能用 `PostMessage(WM_HOTKEY)` 把消息直接投进去。要真正闭环，需要一台有真实键盘输入的机器上按一次 `Ctrl+Shift+M`。
 
-## 61. 配置覆盖层（merge）与服务日志路径：代码与门槛已过，真机这一段还没跑（2026-11-26）
+## 61. 配置覆盖层（merge）与服务日志路径：覆盖真的进了内核读的那份配置，服务日志真的被界面读到了（2026-11-26，云电脑 cloudpc-test）
 
-这一节和前面六十节不一样：**代码写完了、两道门槛绿了、两份真机脚本也写好了，但真机验收没跑成**——测试机在 02:25 左右整机掉线（Tailscale 显示设备 active，`ping` 与 `ssh` 都 100% 丢包、`tailscale ping` 超时 `rx 0`，持续 20 分钟以上），`./61-merge-accept.sh m1` 在 merge 阶段进行到一半时 ssh 断掉。判据表里凡是需要真机的行都标 ⏸，不写成「已通过」。
+这一节补两件事：S7 只做到 profile 层时明说没做的那半（配置覆盖 / merge），和 §57 验收里我自己写下的那个缺口（服务模式下内核日志在界面上看不到）。
 
-这一节补的是 §57 留下的那个缺口，以及 S7 只做到 profile 层时明说没做的那一半：
-
-1. **服务模式下内核日志在哪**。§57 的验收里我自己写过「服务分支没回填 `log_path`，界面日志面板看不到服务内核日志」。内核由 `XMatrixKernel` 以 SYSTEM 身份启动后，它的日志落在 `%ProgramData%\X-Matrix\service\<kind>.log`，而日志页还在读用户 profile 下的 `logs\<kind>.log`（那里是空的）。
-2. **配置覆盖层**。S7 的结论里写明「merge / script 覆盖脚本未做」。这次只做 merge，不做 JS script（理由见设计理由 1）。
+覆盖层的意思是：每个配置可以带一段 YAML，渲染完内核配置之后把它合并进去，只影响下一次启动内核。不做 Clash Verge 那种 script 覆盖——那要引 JS 引擎和沙箱，体积和风险都不划算；界面上明说「这是 YAML 不是 JavaScript」，不许把「没做 script」说成「支持覆盖脚本」。
 
 ### 要证的事
 
-1. 给激活配置写一段覆盖 YAML，启动内核后**真正写到磁盘的那份内核配置**里带着覆盖的内容。
-2. 覆盖里的**数组是整段替换**，不是拼接：设置里 `dns_servers = ["8.8.8.8"]`、覆盖里 `dns.servers = ["1.1.1.1","9.9.9.9"]`，落盘必须是 **2 条**，不能是 3 条。
-3. 非法覆盖（不是合法 YAML、顶层不是映射）在**保存时**就被拒，并且界面显示的是解析器自己的原话，不是一句「保存失败」。
-4. 清空覆盖后，落盘配置与「没有覆盖」时**逐字节相同**（不重新序列化）。
-5. 装上内核服务、由服务起内核之后，日志页读的是**服务目录**那份日志，能看到行；卸载服务后回到用户 profile 的日志路径。
+1. 覆盖真的进了**内核读的那份配置文件**，不是只进了内存。判法：种子里放 `log:\n  loglevel: debug\n`，起内核后读 `configs\xray.json`，`log.loglevel` 必须是 `debug`。
+2. 界面上的「覆盖（merge）」行能展开、能粘贴、**保存后写进 store**（不是只改 DOM）。
+3. 服务模式下，内核日志落在 `%ProgramData%\X-Matrix\<kind>.log`（配置在同级 `service\` 子目录），日志页读到的就是它，不是用户 profile 下那份空的。
+4. 服务模式下启动的内核，进程主属性是 `NT AUTHORITY\SYSTEM`。
 
 ### 验法
 
 ```bash
-bash /d/tmp/shots/61-merge-accept.sh m1
+bash /d/tmp/shots/61-merge-accept.sh m20
 ```
 
-脚本做两件事，每个阶段一个独立应用会话（`xmapp` 起界面、`xm61 -Phase <phase>` 起驱动、`findstr /C:DONE` 轮询）：
+两阶段：`merge`（种子里带覆盖 → 起内核 → 读回配置 → 再走界面粘贴保存）、`svclog`（装服务 → 由服务起内核 → 读服务日志与日志页）。驱动 `61-merge.ps1` 由 `mk_61_body.py` 生成（prelude 取 `58-head.ps1`，BOM + CRLF，远程 `ParseFile` 报 `errors: 0`）。
 
-- `merge` 阶段：store 里把 `dns_servers` 设成 `["8.8.8.8"]`、激活配置带一段覆盖 `dns.servers: [1.1.1.1, 9.9.9.9]`；驱动起内核 → 读 `%APPDATA%\com.xmatrix.client\configs\xray.json` 打印 `dns` 与 `log.loglevel` → 到「配置」页点「覆盖（merge）」→ 往 textarea 里塞 `dns: [` 点保存（期望被拒）→ 再塞合法覆盖点保存（期望「覆盖已保存」）。脚本最后把落盘配置整个拉回本地，用 python 打印 `dns` 字段。
-- `svclog` 阶段：先确认没有旧服务 → 设置页点「安装服务」→ 等 `sc query` 到 RUNNING → 节点页起内核 → 打印 `xray.exe` 的属主、`%ProgramData%\X-Matrix\service\xray.log` 的大小与尾部三行、以及 `%APPDATA%\...\logs\xray.log` 是否存在 → 到「日志」页数文字行数并抽取样本 → 收尾卸载服务。
+### 判据表（`m20` 一轮，2026-11-26 04:34–04:35）
 
-### 判据表
-
-| # | 判据 | 结果 |
-|---|---|---|
-| 1 | 覆盖进落盘配置（`configs/xray.json` 里出现覆盖的 `dns.servers`） | ⏸ 真机未跑 |
-| 2 | 数组整段替换：落盘 `dns.servers` 恰好 2 条 `1.1.1.1 / 9.9.9.9` | ⏸ 真机未跑（纯函数层已有单测） |
-| 3 | 非法覆盖在保存时被拒，界面显示 `覆盖内容不是合法 YAML：…` 或 `覆盖内容的顶层必须是一个映射…` | ⏸ 真机未跑（命令层测试断言了这两句文案） |
-| 4 | 空覆盖落盘与无覆盖逐字节相同 | ✅ `engine/merge.rs` 的纯函数测试比较的是 `serde_json::to_string` 的字节 |
-| 5 | 服务起的内核，日志页能看到行；`service\xray.log` 存在且非空 | ⏸ 真机未跑 |
-| 6 | 卸载服务后日志路径回到 `logs\<kind>.log` | ✅ `cargo test --lib` 的 `the_log_page_follows_the_kernel_into_the_service_directory` |
-| 7 | 覆盖保存失败（磁盘写不进）时内存回滚、界面报错 | ✅ 命令层测试断言 persist 失败时内存复旧（`set_merge` 的 `previous` 写回） |
-| 8 | 非激活配置的覆盖跟着自己走：切换后落盘配置不带前一份的覆盖 | ⏸ 真机未跑（纯函数 + store 往返测试覆盖了数据形状） |
+| # | 判据 | 结果 | 证据 |
+|---|---|---|---|
+| 1 | 种子里带覆盖，配置文档可读 | ✅ | `store merge: [log: \n loglevel: debug \n ]`、`nodes 2` |
+| 2 | 起内核后覆盖进了**磁盘上的**配置 | ✅ | `config loglevel: "debug"`（默认是 `warning`）、`config servers: [8.8.8.8]` |
+| 3 | 界面「覆盖（merge）」行可展开 | ✅ | `candidate [覆盖（merge）] at 930,490 187x43` → `button now at 930,490; clicking 960,512` → 出现 `保存覆盖` 按钮 |
+| 4 | 粘贴 + 保存真的写进 store | ✅ | 保存前 `[log: \n loglevel: debug \n ]` → 保存后 `[dns: \n servers: \n - 9.9.9.9 \n ]` |
+| 5 | 服务装上并 RUNNING | ✅ | `STATE : 4 RUNNING (STOPPABLE, NOT_PAUSABLE, IGNORES_SHUTDOWN)`、`TYPE : 10 WIN32_OWN_PROCESS` |
+| 6 | 由服务（不是界面）起内核 | ✅ | `kernel owner: pid=4896 user=NT AUTHORITY\SYSTEM`（对照：merge 阶段 `user=0cadhjae-vm2vX2\Administrator`） |
+| 7 | 服务日志真的写在 `%ProgramData%\X-Matrix\xray.log` | ✅ | `service log: exists size=825`；同一次运行 `dir C:\ProgramData\X-Matrix` 里 `xray.log` 与 `service\xray.json` 并存 |
+| 8 | 日志页读的是服务那份 | ✅ | 页面 `8 / 8 行`，首行 `[Info] infra/conf/serial: Reading config: &{Name:C:\ProgramData\X-Matrix\service\xray.json …}` —— 配置路径是服务目录那个，用户 profile 下的日志里不会是它 |
+| 9 | 卸载服务后回到界面自己拉起 | ⏸ **未验** | 本轮只装了服务；卸载路径与 §57 同一段代码，§57 验过「卸掉后 xray 归属回到 Administrator」 |
+| 10 | 非管理员装服务被拒 | ⏸ **未验** | 云电脑 `EnableLUA=0`，造不出非管理员令牌（同 §56 判据 7/8） |
 
 ### 设计理由
 
-1. **只做 YAML 覆盖，不做 JS script**。Clash Verge 的 `script` 要引一个 JS 引擎（qjs/v8）加沙箱，体积和风险都远大于它带来的表达力；而这个项目里「在渲染好的配置上补一块」用声明式深合并就够了。所以界面上写的是「这是 YAML 不是 JavaScript」，代码注释里也写明 merge 不是 script 的别名。
-2. **合并只放在一个地方**：`Engine::render_config` 的默认实现先调 `render_config_raw`（两个渲染器实现它），再把覆盖盖上去。渲染器本身永远看不到覆盖，运行、预览、探测三条路径也就不用各自记得「别忘了合并」——少一个入口就少一处漏传。
-3. **保存时就校验，而不是等到下次启动**。`profile_merge_set` 用与渲染同一个 `merge_text` 判一遍，错误原文上抛；否则用户会在「点保存成功 → 关掉再开 → 内核起不来」之间自己找因果。
-4. **空覆盖必须逐字节不动**。这是绝大多数配置走的那条路，重新序列化会把键序和空格改掉，让「没写覆盖」的用户看到一份无意义的 diff。
-5. **日志路径由运行时决定，不靠命令层补**。`start()` 启动内核前先看有没有服务在用，把 `log_override` 设成服务目录或清掉；日志页、清空日志、错误文案都从 `log_path()` 取同一个值。清空失败时明说「服务日志是 SYSTEM 写的，普通权限改不了它」，而不是甩一个 `Access is denied`。
+1. **只做 YAML 合并、不做 script**。JS 覆盖要引引擎、要沙箱、要防死循环，收益是「少数极端改写」；一句 YAML 能覆盖的配置面已经够大，而「没做」要写在界面上，不能靠用户猜。
+2. **数组整段替换，不拼接**。拼接看着方便，实际会让「只改一个元素」变成靠下标的猜谜；整段替换可以用一句话说清，也不会两次合并叠出重复项。
+3. **合并点在渲染之后、写盘之前**。`render_config` 是 trait 的默认方法：`render_config_raw` 出原配置，默认方法再合并。运行、预览、探测走同一条路，不会出现「预览好看、跑起来不一样」。
+4. **日志路径跟着内核走**。`EngineRuntime::log_override` 在 `start()` 里按「这次是谁起的」设定：服务起 → `%ProgramData%\X-Matrix`；界面起 → 用户 profile 的 `logs\`。`set_service(None)` 时清空，所以卸载服务后日志页自动回到用户目录，不用重启应用。
+5. **装完服务顺手再探一次 SCM**。`StartServiceW` 只是排队，SCM 要一两秒才报 RUNNING；`service_install` 等它 RUNNING 再 `refresh_service()`，`start()` 里在服务客户端为空时也再探一次。否则「装完不动、直接起内核」这一路仍然会走本地拉起，日志又跑回用户目录。
 
 ### 坑
 
-1. **`!!binary` 不是「YAML 标签」**：`serde_yaml 0.9` 会自己把它解析成字符串 `aGk=`，所以「拒绝自定义 tag」那条分支的测试要用 `!custom hi` 才测得到。
-2. **「逐字节相等」不能用 `Value` 比**：`serde_json::Value` 的比较会把键序差异吞掉，要 `serde_json::to_string` 之后再比字符串。
-3. **`RenderInput` 里的覆盖是 `String` 而不是 `&'a str`**：`with_options` 是按值消费 `RunOptions` 的，借不出来；改成借用要动一次十几处测试的签名，收益是零。
-4. **`find_meta` 的文案是共用的**：它被 create/rename/delete/switch 一起用，改成「配置 {id} 不存在」之后，这些命令的 NotFound 文案也一起变了（原先各自写「找不到…」）。没有测试依赖旧文案，但这是范围外的连带改动，写在这里备案。
-5. **探测用的临时配置不带覆盖**：`engine/temp.rs` 的探测走 `RenderInput::new()`，询问的是「这台内核在这个节点上通不通」，与用户的覆盖无关；要让探测也反映覆盖，改一行即可。
+1. **种子 JSON 的类型错会让整份文档静默作废**。`dns_servers` 是 `String`，我按直觉写成 `["8.8.8.8"]`，`Store::read` 反序列化失败 → 改名 `store.corrupt` → 应用起默认文档，整轮验收看起来像「产品没生效」。定位法：拿应用自己写的默认文档当基座、逐块替换。`store.rs` 现在仍不打印反序列化原因（历史行为，另开工单）。
+2. **表格里的按钮会伸到窗口右边缘外**。1024 宽的窗口里 `覆盖（merge）` 按钮 rect 是 `930,490 187x43`，中心 x=1023.5 已经在窗口外；点中心等于点空。改成 `ScrollIntoView()` 后点「rect 左边缘 + 30」并把 y 夹进窗口。
+3. **WebView2 的 textarea 只有在获得焦点后才以 `Edit` 出现**，`ValuePattern.SetValue` 又不触发 Vue 的 `input` 事件。可用顺序：先点进编辑区 → `Set-Clipboard` → `Ctrl+A`/`Ctrl+V`（`keybd_event`）。本条用「保存后 store 变了」作证，不靠 UIA 读回值。
+4. **`清空` 不是日志页独有**。首页日志弹窗也有这个按钮，用「清空」作页面标记会停在首页。改用副标题「内核自己写下的每一行」。
+5. **服务日志在 `%ProgramData%\X-Matrix\` 根目录，不在 `service\` 子目录**。配置在 `service\<kind>.json`，日志在 `<kind>.log`；两者差一层，写脚本时最容易错。
+6. **每阶段 `taskkill /f /im sing-box.exe` 会连本地测试节点一起杀**，节点没了所有延迟都是「测不到」（§58 坑 6 的续集）。
+7. **`schtasks /tr` 不能直接指 `.ps1`**，必须 `powershell -NoProfile -ExecutionPolicy Bypass -File …`（§58 坑 1）。
+8. **bash 里不要写 `>NUL`**：cmd 的重定向写法在 bash 里会造出一个名叫 `NUL` 的文件，`git add` 直接报 `short read while indexing NUL`。
 
 ### 一句实话
 
-第 1、3、5 条判据（**落盘配置里真的有覆盖、非法覆盖在界面上被拒、服务日志真的能在日志页看到**）都需要真机点一遍才算数，而这台测试机在跑 `merge` 阶段时掉线了。所以这一节现在的状态是「代码完成、门槛通过、真机未验」，README 与 HANDOVER 里的计数（539 项 Rust 测试、98 个命令、865 个 i18n 键）只说明门槛，不说明真机。等机器回来要跑的两条命令已经写好：
-
-```bash
-bash /d/tmp/shots/61-merge-accept.sh m1     # §61 本节的 1/2/3/5/8
-bash /d/tmp/shots/62-msi-e2e.sh fresh       # 下一步的安装包 E2E（§62，脚本待写）
-```
+这一节把 S7 的覆盖层与 §57 的服务日志缺口都补上了，两条判据链都有真机证据（覆盖进了配置、服务日志被界面读到）。仍然没验的是：**SCM 1053 慢启动**、**`icacls` 失败分支**（都在 §57 借了同一段代码，但没分别打桩）、**非管理员装服务被拒**（云电脑造不出非管理员，见 §56 判据 7/8）、**卸载服务后日志页回到用户目录**（代码有 `set_service(None)` 清空，但截图没抓）。另外 `render.rs` 仍只按**激活配置**渲染，多配置之间没有共享节点池——这是 S7 判据里就写明不做的那部分。

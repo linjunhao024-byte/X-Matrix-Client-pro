@@ -563,6 +563,13 @@ impl EngineRuntime {
         let exe = self.binary_path(kind);
         let args = engine.args(&config_path.to_string_lossy());
 
+        // An install during this session may have happened after the last
+        // probe, and `StartServiceW` returns before the service reports
+        // RUNNING. Ask the SCM once here instead of starting a second kernel
+        // as this user and leaving the service idle until the next launch.
+        if self.service.read().is_none() {
+            self.refresh_service();
+        }
         let service = self.service.read().clone();
         // The service runs as SYSTEM and writes the kernel log into its own
         // directory, so `log_path` has to follow the kernel: reading this user's

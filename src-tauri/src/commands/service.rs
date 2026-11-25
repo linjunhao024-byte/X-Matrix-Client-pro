@@ -57,6 +57,15 @@ pub fn service_install(runtime: State<'_, Arc<EngineRuntime>>) -> AppResult<Serv
     }
     let engines_dir = runtime.engines_dir().to_path_buf();
     let warning = crate::service::install(&engines_dir)?;
+    // `StartServiceW` only queues the start; the SCM reports RUNNING a moment
+    // later. Probe until it does, otherwise the client stays unset and the
+    // first kernel start after an install would still run as this user.
+    for _ in 0..30 {
+        if crate::service_client::status().running {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
     runtime.refresh_service();
     let mut state = ServiceState::from(crate::service_client::status());
     // The service is installed and running at this point, so the warning rides
