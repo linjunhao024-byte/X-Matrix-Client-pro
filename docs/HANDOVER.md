@@ -10,7 +10,7 @@
 ## 0. 三句话现状
 
 1. 主体功能已追平 V2RayN / Clash 的日常面：双内核（Xray / sing-box）渲染与启停、系统代理接管与还原、订阅/整包导入、Clash 配置连同 **策略组与规则** 一起导入、运行中热切换节点与代理模式、托盘子菜单、日志页、hysteria2 / tuic、真实延迟（分组与节点）、流量历史落盘、一键断开全部 + 进程归属、测速预算与「选最快」、域名正则 / 域名分类匹配器、诊断包导出、全局快捷键。
-2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§61）。
+2. 验收方式是**真机**：每一条都跑到云电脑 `100.106.121.0`（Windows Server，Console 会话）上点出来、读日志/读配置文件核对，结论写进 `docs/ACCEPTANCE.md`（现有 §0–§62）。
 3. 交接时那处未提交的工作（N12 应用内更新检查）已经构建、真机验收并提交；此后又合入四件事：`--quit` 正常退出并删除托盘图标（§21）、GEO 数据文件卡片与镜像回退下载（§23）、测速记录落盘（§24）。工作区现在是干净的。
 
 ### 0.1 进度快照（交接这一刻的硬数字）
@@ -25,8 +25,8 @@
 | Rust 单测 | **539 passed**（`ARCHITECTURE.md:278` 已同步） |
 | 前端检查 | `npm run check` 全绿：vue-tsc / architecture（68 文件）/ contract / vitest **116**（12 文件） |
 | i18n | **865** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
-| 桌面产物 | 桌面上的旧副本**已不存在**；产物是 `src-tauri/target/release/x-matrix.exe`（11,115,008 B @2026-11-26 03:56，md5 `5a678eed81c41e7ed7f3b126a0bbc42e`，含 §61 的两处收尾修复），以及安装包 `src-tauri/target/release/bundle/msi/X-Matrix_0.1.0_x64_en-US.msi`（5,156,864 B）与 `bundle/nsis/X-Matrix_0.1.0_x64-setup.exe`（3,587,111 B）——**这两个包是 02:14 那次构建产的，不含 03:56 的两处修复**，做安装包 E2E 前要重打 |
-| 验收文档 | `docs/ACCEPTANCE.md` §0–§61（§7 历史空缺，编号不连续但内容完整） |
+| 桌面产物 | 桌面上的旧副本**已不存在**；产物是 `src-tauri/target/release/x-matrix.exe`（11,115,008 B @2026-11-26 15:27，md5 `2b48cd496cca5602f609be5c0d729e25`，含 §62 那处订阅刷新修复），以及安装包 `src-tauri/target/release/bundle/msi/X-Matrix_0.1.0_x64_en-US.msi`（5,156,864 B，md5 `5ded88e8bac04a0d706b446d6fc9916c`）与 `bundle/nsis/X-Matrix_0.1.0_x64-setup.exe`（3,587,292 B）——两个包都是同一次带 bundle 的构建产的，§62 的 E2E 就是用这个 MSI 验的 |
+| 验收文档 | `docs/ACCEPTANCE.md` §0–§62（§7 历史空缺，编号不连续但内容完整） |
 | 云电脑 | 干净：`ProxyEnable=0x0`、无 X-Matrix/sing-box/xray 进程、无 `xm*` 计划任务 |
 
 **下一步的确定顺序**（做完一条打一个勾，别跳）：
@@ -50,6 +50,7 @@
 - [x] 18. §56（S4a）提权：`elevate.rs` 令牌判断 + `ShellExecuteEx` runas + `--relaunch-wait` 握手 + 设置页「权限」节；判据 7、8（非管理员文案、真提权）在这台机器上造不出条件，已如实标未验
 - [x] 20. §59（S7）多配置：`store.json` v2（激活内联 + 非激活每份一个文件）+ 五条 profile 命令 + `ProfilesView` + 备份带全部配置 → 构建 → 云电脑 v1 升级/两向切换/云备份三段验收 → 写 §59 → 提交（2026-11-25 18:4x）
 - [x] 22. §61（代码缺口）覆盖层 merge + 服务日志路径：代码/门槛已过，真机待补（测试机掉线）
+- [x] 23. §62（安装包 E2E）MSI 装/首启/订阅即拉节点/系统代理/卸载：`62-msi-e2e.sh e2e10`+`e2e11`，11 行判据全过（真下载内核、Win10/Win11、升级安装未验）
 - [x] 21. §60（候选表剩余）热键加 `mode` / `test_all` 两个动作 + 启动时测速：四个组合注册、清空单个组合、独占性、四个动作的副作用、`test_on_start` 真假两态都验了；**真实按键 → `RegisterHotKey` 那一段没验**（这台机器的模拟输入到不了别的进程的注册）→ 写 §60 → 提交（2026-11-25 20:5x）
 - [x] 19. §58（S1）TUN：`Settings.tun_enabled/tun_stack` + sing-box tun 入站与 `sniff` + `start_engine` 三条渲染前拒绝 + 界面开关 → 构建 → 云电脑四阶段验收（两条拒绝、网卡与路由接管、隧道 204、停止复原）→ 写 §58 → 提交（2026-11-25 17:4x）
 - [x] 15. §53（S3）内核下载/更新：`release.rs` 解析 + sha256 核对 + `stage/promote` → 构建 → 云电脑三阶段验收（xray 真换文件并用同节点重启、sing-box 无校验值照装但明说未核、自定义路径拒绝且不下载）→ 写 §53 → 提交（2026-11-25 10:10）
@@ -223,6 +224,20 @@
 
 **下一步**：重打带 bundle 的安装包（`npx tauri build`），跑 `bash /d/tmp/shots/62-msi-e2e.sh fresh`（§62 全新安装 E2E，脚本待写），把判据 9/10 与非管理员路径留到有真实令牌的机器上再验。
 
+### 0.18 安装包 E2E（2026-11-26）
+
+**为什么做**：前面 61 节的验收都是「先放好 store 再点功能」，没有任何一节回答「一个空机器用 MSI 装一遍能不能用、卸了会不会留垃圾」。
+
+**做了什么**：
+
+- 用带 bundle 的构建产出 `X-Matrix_0.1.0_x64_en-US.msi`（WiX）与 `X-Matrix_0.1.0_x64-setup.exe`（NSIS），并记 md5。
+- 写 `D:\tmp\shots\62-msi-e2e.sh`：清掉 `%APPDATA%`/`%LOCALAPPDATA%`/`Program Files` 三个位置 → `msiexec /i /qn` → 预置两个内核 → 起订阅服务与环回节点 → 首启 → 建订阅 → 开系统代理 → 起内核 → `curl` 经代理拿 204 → 停内核 → `msiexec /x` → 逐项查残留。
+- **改了一处产品**：`src/views/SubscriptionsView.vue` 新建订阅成功后补一次 `await refreshOne(created)`，让「新建订阅」立刻拉节点（原来是写一行就结束，节点要等手动刷新）。这是 E2E 抓出来的真实缺口。
+
+**验收**：§62，判据 11 行全过（装/首启/订阅/代理接管/经代理 204/停止还原/卸载/程序目录/服务 1060/无进程/用户数据保留是设计）。**没验**：不带预置内核的全新安装（GitHub 5.5 KB/s）、Win10 与物理 Win11、MSI 升级路径、卸载时应用仍在运行的拦截。
+
+**计数**：IPC 98、Rust 539、vitest 116、i18n 865（这节只改了前端一处，数字不动）。
+
 ## 1. 项目坐标与命令
 
 | 项 | 值 |
@@ -235,7 +250,7 @@
 | 后端测试 | `cd src-tauri && cargo test --lib` |
 | 契约重生成 | `npm run gen:contract`（改了命令签名就必须跑，`check:contract` 会拦） |
 | 桌面产物 | `/c/Users/83611/Desktop/X-Matrix.exe`、`/c/Users/83611/Desktop/X-Matrix_0.1.0_x64-setup.exe` |
-| 当前构建产物 | `src-tauri/target/release/x-matrix.exe` **11,115,008 B @2026-11-26 03:56，md5 `5a678eed81c41e7ed7f3b126a0bbc42e`**（含 §21–§61）；安装包为 02:14 那次构建（不含 03:56 的两处修复），做 E2E 前先重打 |
+| 当前构建产物 | `src-tauri/target/release/x-matrix.exe` **11,115,008 B @2026-11-26 15:27，md5 `2b48cd496cca5602f609be5c0d729e25`**（含 §21–§62）；安装包同一次构建：MSI 5,156,864 B（md5 `5ded88e8bac04a0d706b446d6fc9916c`）、NSIS 3,587,292 B |
 
 **计数基线（改动后记得同步文档）**：命令 **98**、`cargo test --lib` **539**、vitest **116**（12 个文件）、i18n **865** 键。
 > `README.md:81` 与 `ARCHITECTURE.md:277-278` 已同步为 98 条命令 / 539 项测试。
@@ -291,7 +306,7 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 
 ## 4. 已完成的功能与验收索引
 
-`docs/ACCEPTANCE.md` 是**唯一可信的进度表**（§0–§61 共 61 节，每节都有「验法 + 判据 + 设计理由 + 坑」）：
+`docs/ACCEPTANCE.md` 是**唯一可信的进度表**（§0–§62 共 62 节，每节都有「验法 + 判据 + 设计理由 + 坑」）：
 
 | 节 | 内容 |
 |---|---|

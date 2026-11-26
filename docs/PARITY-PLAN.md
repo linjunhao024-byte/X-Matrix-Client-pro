@@ -146,3 +146,14 @@ sing-box `tun` 入站（`auto_route`、`strict_route`、`stack: system`），需
 | S7 多配置 | **已完成**（2026-11-25，profile 层与三条判据；merge / script 覆盖脚本未做，见 §59） | 与 `src-tauri/src/store.rs` 同一次提交（`git log --oneline -- src-tauri/src/store.rs` 最新一条） | `docs/ACCEPTANCE.md` §59；真机脚本 `D:\tmp\shots\59-profiles-accept.sh`、`seed59.py`、`mk_59_body.py` |
 | S12 热键与启动测速 | **已完成**（2026-11-25，见 §60；真实按键未验） | 与 `src-tauri/src/hotkeys.rs` 同一次提交 | `docs/ACCEPTANCE.md` §60；真机脚本 `60-hotkeys-accept.sh` |
 | S13 覆盖层 merge + 服务日志 | **已完成**（2026-11-26；判据 1–8 真机过，9/10 未验） | 与 `src-tauri/src/engine/merge.rs` 同一次提交 | `docs/ACCEPTANCE.md` §61；真机脚本 `61-merge-accept.sh m20` |
+| S14 安装包 E2E | **已完成**（2026-11-26） | 与 `src/views/SubscriptionsView.vue` 同一次提交（`git log --oneline -- src/views/SubscriptionsView.vue` 第一条） | §62；脚本 `D:\tmp\shots\62-msi-e2e.sh` |
+
+### S14 · 结果（2026-11-26）
+
+**做了什么**：用带 bundle 的构建产出 MSI/NSIS，并写了一条从「空机器」开始的安装包 E2E（`D:\tmp\shots\62-msi-e2e.sh`）：清三个位置 → `msiexec /i /qn` → 预置内核 → 起订阅服务与环回节点 → 首启 → 建订阅 → 开系统代理 → 起内核 → 经代理 `curl` → 停内核 → `msiexec /x` → 逐项查残留。E2E 过程中改掉一处真实缺口：**新建订阅只写行不拉节点**，现在 `SubscriptionsView.submit()` 在新建成功后走一次与「刷新」完全相同的 `refreshOne(created)`。
+
+**真机结论**（§62 判据 11 行全过）：装成功（`exit=0`、`Program Files\X-Matrix` + 卸载键）；首启自建默认配置；保存订阅后页面立刻「「E2E」更新完成：2 个节点（跳过 1 个）」、节点页出现 `E2E-A`/`E2E-B`；起内核后 `ProxyEnable=1` + `ProxyServer=127.0.0.1:7890`，经代理 `curl` 拿到 204；停止后 `ProxyEnable=0` 且直连 204；卸载 `exit=0`、程序目录消失、`sc query` 1060、无残留进程、`%APPDATA%` 保留（设计）。
+
+**判据收窄**：① 「从 GitHub 现下内核」没在全新安装里验（云电脑 5.5 KB/s，内核是脚本预置的，属于 §53 的镜像验法）；② 只在 Windows Server 2022 + WebView2 上验，Win10 / 物理 Win11 桌面没验；③ MSI 升级安装（0.1.0 → 0.1.1）没做；④ 卸载时应用仍在运行会不会被拦没验（脚本先 `quit`）。
+
+**计数**：IPC 98、Rust 539、vitest 116、i18n 865（本节只改前端一处，数字不变）；产物 `x-matrix.exe` 11,115,008 B md5 `2b48cd496cca5602f609be5c0d729e25`，MSI md5 `5ded88e8bac04a0d706b446d6fc9916c`。

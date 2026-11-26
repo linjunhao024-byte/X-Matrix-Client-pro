@@ -1,18 +1,18 @@
 # 新窗口开工简报（X-Matrix Client Pro）
 
-> 写于 2026-11-26 04:5x（§61 这一版：S1–S11、两张候选表、用户点名的「代码缺口 1」全部完成**且真机验收已补**；下一步是 §62 安装包 E2E）。给**下一个窗口**的你自己看：先读这一页，够用就别翻长文档；需要细节时按文末索引跳。
-> 长文档：`docs/HANDOVER.md`（地图、候选表、云电脑手册）、`docs/ACCEPTANCE.md`（每条功能的判据与踩坑）、`docs/PARITY-PLAN.md`（S1–S13 计划与进度表）、`docs/CANDIDATES-PLAN.md`（两张候选表逐条核查的结论）。
+> 写于 2026-11-26 15:5x（§62 这一版：S1–S14 全部完成并真机验收；用户点名的「代码缺口 1」与「安装包 + 全新安装 E2E」都做完了；下一步是第 4 项长跑/压力，再往后是用户自测的第 3 项）
+> 长文档：`docs/HANDOVER.md`（地图、候选表、云电脑手册）、`docs/ACCEPTANCE.md`（每条功能的判据与踩坑）、`docs/PARITY-PLAN.md`（S1–S14 计划与进度表）、`docs/CANDIDATES-PLAN.md`（两张候选表逐条核查的结论）。
 
 ## 1. 三十秒现状
 
 | 项 | 值 |
 |---|---|
 | 仓库 / 工作区 | `D:\GitHub-Warehouse\X-Matrix-Client-Pro`（Tauri 2 + Vue 3 + TS） |
-| HEAD | 本简报这条 docs 提交；功能提交查 `git log --oneline -- <anchor>` 的第一条：§61 `src-tauri/src/engine/merge.rs`、§60 `src-tauri/src/hotkeys.rs`、§59 `src-tauri/src/store.rs`、§58 `src-tauri/src/engine/singbox.rs`、§57 `src-tauri/src/service.rs`、§56 `src-tauri/src/elevate.rs`、§55 `src-tauri/src/power.rs`、§54 `src-tauri/src/net/webdav.rs`、§53 `src-tauri/src/engine/release.rs`、§52 `src-tauri/src/engine/groupwatch.rs`、§51 `src-tauri/src/sysproc.rs`、§50 `src/services/accent.ts`、§49（S8）、`a794438`（§48）、`6fd790f`（§47） |
+| HEAD | 本简报这条 docs 提交；功能提交查 `git log --oneline -- <anchor>` 的第一条：§62 `src/views/SubscriptionsView.vue`、§61 `src-tauri/src/engine/merge.rs`、§60 `src-tauri/src/hotkeys.rs`、§59 `src-tauri/src/store.rs`、§58 `src-tauri/src/engine/singbox.rs`、§57 `src-tauri/src/service.rs`、§56 `src-tauri/src/elevate.rs`、§55 `src-tauri/src/power.rs`、§54 `src-tauri/src/net/webdav.rs`、§53 `src-tauri/src/engine/release.rs`、§52 `src-tauri/src/engine/groupwatch.rs`、§51 `src-tauri/src/sysproc.rs`、§50 `src/services/accent.ts`、§49（S8）、`a794438`（§48）、`6fd790f`（§47） |
 | 规模 | **98** 个 IPC 命令 / Rust 单测 **539** / vitest **116**（12 文件）/ i18n **865 键 × 3 语言** |
-| 验收 | `docs/ACCEPTANCE.md` 写到 **§61**，全部是云电脑真机点出来的（各节末尾的「一句实话」列着未验项）；§61 的判据 1–8 已过（覆盖进落盘配置、服务日志被界面读到），9/10 与非管理员路径仍未验 |
+| 验收 | `docs/ACCEPTANCE.md` 写到 **§62**，全部是云电脑真机点出来的（各节末尾的「一句实话」列着未验项）；§61 判据 1–8、§62 判据 11 行已过；仍未验的集中在 §56（真提权）、§57（SCM 1053 / icacls 失败 / 非管理员）、§58（非管理员拒绝 TUN）、§60（真实按键）、§62（真下载内核、Win10/Win11、升级安装） |
 | 云电脑 | 可用（02:52 已恢复；03:0x 又闪断过一次，重连即通）。末态：`ProxyEnable=0x0`、无 `xm*`/`tunkill`/`xmlisten` 任务、无内核进程、`XMatrixKernel` 服务已卸载 |
-| 构建产物 | `src-tauri/target/release/x-matrix.exe`（11,115,008 B @2026-11-26 03:56，md5 `5a678eed81c41e7ed7f3b126a0bbc42e`，含 §21–§61 与 03:56 的两处修复）；安装包 ``bundle/msi/X-Matrix_0.1.0_x64_en-US.msi``（5,156,864 B）与 ``bundle/nsis/X-Matrix_0.1.0_x64-setup.exe``（3,587,111 B）是 02:14 那次产的，**不含 03:56 的修复**，做 E2E 前要重打 |
+| 构建产物 | `src-tauri/target/release/x-matrix.exe`（11,115,008 B @2026-11-26 15:27，md5 `2b48cd496cca5602f609be5c0d729e25`，含 §62 的订阅刷新修复）；安装包同一次带 bundle 的构建：`bundle/msi/X-Matrix_0.1.0_x64_en-US.msi` 5,156,864 B（md5 `5ded88e8bac04a0d706b446d6fc9916c`）、`bundle/nsis/X-Matrix_0.1.0_x64-setup.exe` 3,587,292 B |
 | 目标 | 功能追平 V2RayN / Clash、二者互补，并把各功能之间**说得清、配合得上**（用户原话，长期有效） |
 
 ## 2. 常用的四条命令
@@ -36,16 +36,25 @@ https_proxy=http://127.0.0.1:10808 git push origin main
 
 改 Rust 的 `#[tauri::command]` 签名后必须 `npm run gen:contract`；新增 i18n 键必须走 `scripts/i18n-pairs.json` + `python scripts/gen_i18n.py`（三份字典会一起生成）。
 
-## 3. 下一个任务：§62 安装包 E2E（全新安装 → 首启 → 订阅 → 内核 → 代理 → 卸载）
+## 3. 下一个任务：第 4 项 长跑 / 压力（用户点名「1 和 2 做完之后也可以做」）
 
-用户 2026-11-26 点名要做「1 代码缺口 + 2 安装包与全新安装 E2E」：1 已完成并验（§61），2 只出了安装包、脚本还没写。
+用户 2026-11-26 的原话：「那就先做 1 和 2，3 我之后自己测试，4 你也可以在做完 1 和 2 之后做」。1（服务日志回填 + merge 覆盖层）与 2（MSI + 全新安装 E2E）都已完成并真机验收，3 由用户自测，所以现在轮到 4。
 
-要做的事（顺序别跳）：
+物料已经写好、还没跑：
 
-1. **重打安装包**：`npx tauri build`（带 bundle），拿到新的 `bundle/msi/X-Matrix_0.1.0_x64_en-US.msi` 与 `bundle/nsis/X-Matrix_0.1.0_x64-setup.exe`，记下 md5 与尺寸（02:14 那两个包不含 03:56 的修复）。
-2. 写 `D:\tmp\shots\62-msi-e2e.sh`：卸旧 → 清 `%APPDATA%\com.xmatrix.client` → `msiexec /i <msi> /qn` → 首启（`run-app.ps1`）→ 加假订阅（`D:\tmp\shots\e2e\subserv.ps1` 起 8090 提供 `e2e-sub.yaml`）→ 起内核 → `curl -x http://127.0.0.1:7890 http://cp.cloudflare.com/` 期望 204 → 开系统代理查注册表 → 停止 → 卸载 → 验「程序目录/快捷方式/服务/进程/`ProxyEnable`」都清干净。
-3. 写 `docs/ACCEPTANCE.md` §62，判据表里**如实写「两个内核二进制是预置进去的」**（云电脑到 GitHub 只有 5.5 KB/s，下载 16.7 MB 要 50 分钟），以及没验的（真订阅源、微软商店/域策略、Win10）。
-4. 同步计数（IPC **98** / Rust **539** / vitest 116 / i18n **865**）与 `docs/HANDOVER.md`（§0.18、§0.1 表、产物行、checklist）、`docs/PARITY-PLAN.md`（S14 行）、本简报。
+- `D:\tmp\shots\63-soak.ps1`（在会话 1 里跑：循环起停内核 N 轮，每轮记 `WorkingSet64`/`HandleCount`/`ThreadCount`、`ProxyEnable`、残留内核数、`logs\xray.log` 字节数）
+- `D:\tmp\shots\63-soak-accept.sh`（部署 exe、推驱动、起 8388/8389 环回 shadowsocks **测试服务器**、种一份与订阅无关的 store、`xm63` 跑轮次、回拉日志、`cleanup.sh`）
+- `D:\tmp\shots\pin63.py`（从应用自己写的 `del/store-default.json` 派生 `store63.json`，两条 `E2E-A`/`E2E-B` shadowsocks 节点、`last_engine=sing-box`）
+
+要验的东西（写进 `docs/ACCEPTANCE.md` §63）：
+
+1. 连续起停内核 20 轮：每轮 `xray.exe` 都真的起来又真的消失，没有残留进程。
+2. 界面进程的工作集/句柄数不随轮次单调上升（记首轮与末轮的差值，如实写数字）。
+3. 每轮 `ProxyEnable` 起时为 1、停后回 0（系统代理不泄漏）。
+4. 日志文件按轮增长但不失控（记首末字节数）。
+5. 真机时间成本记下来（每轮几秒），下一窗口好估算。
+
+**不需要真节点**：环回 shadowsocks（`127.0.0.1:8388/8389`）足够压出进程启停、端口重绑、内存/句柄增长、日志增长、托盘与 store 刷新、切换竞态；压不出的是真网络层（RTT/抖动/丢包、TLS/QUIC、真订阅 URL、真 DNS/geoip），那是用户自测的第 3 项。
 
 ## 4. 云电脑（真机验收的唯一场所）
 
@@ -121,3 +130,8 @@ SSH="C:/Windows/System32/OpenSSH/ssh.exe"
 - 设计规则：`C:\Users\83611\DESIGN-SKILL.md`，检查器 `python /c/Users/83611/check-design.py`
 - 真机脚本目录：`D:\tmp\shots\`（每个 § 一对 `mk_xx.py` + `xx-accept.sh`；`cleanup.sh` 是收尾）
 - 任务书目录：`D:\tmp\handover\tasks\`
+39. ⭐ **模拟按键到不了别的进程注册的热键**：`keybd_event` 在会话 1 里注入，被 `RegisterHotKey` 的应用收不到（自己进程内可以）。验动作链用 `PostMessage(0x0312, id)` 打到类名 `XMatrixHotkeys` 的窗口；动作触发前必须先 `eprintln!` 一行「已触发」，否则分不清「没收到」与「收到没做」。
+40. ⭐ **`ValuePattern.SetValue` 不触发 Vue 的 `input` 事件**：WebView2 的文本框要「点进去 + 剪贴板 + `Ctrl+A`/`Ctrl+V`」才真的改得动 `v-model`。
+41. ⭐ **节点页顶部的 `Xray`/`sing-box` 不是筛选器**，是「用哪个内核跑」；列表空就是前端 nodes store 空，不是页签问题。
+42. ⭐ **`sc query` 中文输出在 bash 里是 GBK 乱码**：判「服务不存在」只认数字 `1060`。
+43. ⭐ **E2E 抓到的产品缺口**：新建订阅原先只写一行、不拉节点；现在 `SubscriptionsView.submit()` 新建成功后 `await refreshOne(created)`，失败保留订阅行并显示原因。

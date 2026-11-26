@@ -2021,3 +2021,88 @@ bash /d/tmp/shots/61-merge-accept.sh m20
 ### 一句实话
 
 这一节把 S7 的覆盖层与 §57 的服务日志缺口都补上了，两条判据链都有真机证据（覆盖进了配置、服务日志被界面读到）。仍然没验的是：**SCM 1053 慢启动**、**`icacls` 失败分支**（都在 §57 借了同一段代码，但没分别打桩）、**非管理员装服务被拒**（云电脑造不出非管理员，见 §56 判据 7/8）、**卸载服务后日志页回到用户目录**（代码有 `set_service(None)` 清空，但截图没抓）。另外 `render.rs` 仍只按**激活配置**渲染，多配置之间没有共享节点池——这是 S7 判据里就写明不做的那部分。
+
+## 62. 安装包：从 MSI 装进空机器，到卸载之后什么都不剩（2026-11-26，云电脑 cloudpc-test）
+
+前面 61 节都是「先放好 store、再点功能」。这一节问的是另一个问题：**一个没装过这个应用的 Windows 机器，用我们自己做出来的安装包装一遍，能不能装上、能不能用、卸了会不会留垃圾。**
+
+用的是带 bundle 的构建（`npx tauri build`，不是一直用的 `--no-bundle`）：
+
+- `src-tauri/target/release/x-matrix.exe` 11,115,008 B，md5 `2b48cd496cca5602f609be5c0d729e25`
+- `src-tauri/target/release/bundle/msi/X-Matrix_0.1.0_x64_en-US.msi` 5,156,864 B，md5 `5ded88e8bac04a0d706b446d6fc9916c`
+- `src-tauri/target/release/bundle/nsis/X-Matrix_0.1.0_x64-setup.exe` 3,587,292 B
+
+### 要证的五件事
+
+1. `msiexec /i *.msi /qn` 在**从未装过**的机器上能装成功，程序目录与卸载键都对。
+2. 装完第一次启动，应用能自己生成一份默认配置，不崩。
+3. 在界面上新建订阅 → **节点页立刻就有节点**（这一条是这次 E2E 抓出来的真实缺口，见下面的「缺口的修法」）。
+4. 起内核之后系统代理被接管（`ProxyEnable=1`、`ProxyServer=127.0.0.1:7890`），并且**真的能出去**（经代理拿 204）。
+5. 停止内核、卸载应用之后：系统代理被还原（`ProxyEnable=0`）、程序目录没了、服务没了、没有残留进程。
+
+### 验法
+
+```bash
+bash /d/tmp/shots/62-msi-e2e.sh e2e10   # 装 → 首启 → 订阅 → 起内核 → 代理 → 停止
+bash /d/tmp/shots/62-msi-e2e.sh e2e11   # 同上，再走一遍卸载与清理检查
+```
+
+脚本按顺序做十二步：停掉旧任务/进程/服务 → 备份 `engines` 目录后**清空** `%APPDATA%\com.xmatrix.client`、`%LOCALAPPDATA%\com.xmatrix.client`、`C:\Program Files\X-Matrix` → 推物料（`msi`、驱动、订阅服务、ss 测试服务）→ `msiexec /i ... /qn /l*v` 并查 `Program Files\X-Matrix` 与卸载键 → 把两个内核二进制预置进新的 `engines` → 起 8090 订阅服务与 8388/8389 两个 shadowsocks 环回节点 → 起安装版应用 → 跑驱动（`first`：建订阅、开系统代理、起内核；`stop`：停内核）→ 中间 `curl -x http://127.0.0.1:7890 http://cp.cloudflare.com/` 与查注册表 → 收尾 `msiexec /x` 卸载并逐项查残留 → `cleanup.sh`。
+
+### 判据
+
+| # | 要证的事 | 结果 |
+|---|---|---|
+| 1 | MSI 静默装成功 | ✅ `exit=0`；`C:\Program Files\X-Matrix` 出现；`InstallLocation=C:\Program Files\X-Matrix\`、`DisplayName=X-Matrix` |
+| 2 | 装完的首启写默认配置 | ✅ 首启后 `store.json` 由应用自己生成；界面正常、内核未运行、托盘图标创建 |
+| 3 | 新建订阅后节点立刻出现 | ✅ 保存后页面立刻出现「「E2E」更新完成：2 个节点（替换 0 个），跳过 1 个（重复或无法识别）」；节点页 `E2E-A`/`E2E-B` 两行 |
+| 4 | 起内核后接管系统代理 | ✅ `ProxyEnable=1`、`ProxyServer=127.0.0.1:7890`；`kernels after start: xray#2300` |
+| 5 | 经代理真的能出去 | ✅ `curl -x http://127.0.0.1:7890 http://cp.cloudflare.com/` → 204 |
+| 6 | 停止后自己还原系统代理 | ✅ `kernels after stop` 只剩测试服务器；`ProxyEnable=0`、`ProxyServer` 空；直连也是 204 |
+| 7 | 卸载成功 | ✅ `msiexec /x` `exit=0` |
+| 8 | 卸载后程序目录消失 | ✅ `program-files-gone`；卸载键里查不到 X-Matrix |
+| 9 | 卸载后服务与进程消失 | ✅ `sc query XMatrixKernel` → `1060`（服务不存在）；`tasklist` 无 `X-Matrix.exe` |
+| 10 | 卸载后系统代理仍是还原态 | ✅ `ProxyEnable=0` |
+| 11 | 用户数据保留（设计如此） | ✅ `%APPDATA%\com.xmatrix.client` 仍有 `store.json`、`configs`、`engines`、`logs` |
+
+### 缺口：新建订阅只写了行，不拉节点（这次 E2E 抓到的）
+
+第一次跑到第 3 条时看到：订阅保存成功、`store.json` 里确实有 `E2E` 订阅和两个节点，**但节点页是空的**。查下来是前端的问题：
+
+`src/views/SubscriptionsView.vue` 的 `submit()` 在新建分支里只调 `store.create(name, url)`，把这一行写进 `store.json` 就结束了；拉取节点是「刷新」按钮、或到期刷新（`refresh_due`）才做的事。所以用户新加一个订阅，看到的是一行没有任何节点的订阅，得自己再点一次「刷新」——这在 Clash Verge / v2RayN 里都不是这个行为。
+
+修法最小化：新建成功后走一次与「刷新」按钮完全相同的路径，
+
+```ts
+      // A row with no nodes is not a subscription yet: fetch it once through
+      // the same path the 刷新 button uses, so what the dialog just created is
+      // visible on the nodes page. A failed fetch keeps the row and says why.
+      await refreshOne(created)
+```
+
+`refreshOne` 会写回「更新完成：N 个节点」的提示、失败时把原因显示在同一处，并且它自己处理「刷新换了节点 id 导致内核还在跑旧配置」的情况（§47）。**拉取失败时订阅行保留**，不静默删除。
+
+### 设计理由
+
+- **安装包用 WiX/MSI，不用自解压 exe**：MSI 有静默安装参数、有卸载键，系统管理员能看清装了什么；NSIS 那份只当备选（`targets="all"` 同时产出）。
+- **内核不进安装包**：内核是独立上游文件（§53 会自己下载/更新），安装包只装界面；`engines` 放在 `%APPDATA%` 下，跟着用户走。
+- **系统代理由内核启动路径接管，不由界面单独写**：`ProxyEnable=1` 是 `start_engine` 里接管的那一步做的（§48 的固定代理/ PAC 二选一），停止时同一处释放；所以 E2E 只验「起内核 → 代理在」「停内核 → 代理回」，没有第二条写注册表的路径。
+- **卸载不删用户数据**：`store.json`、`logs`、`engines` 留在 `%APPDATA%`，重装后配置与日志还在；真要清是用户自己删目录（这一条写进了上面的判据 11，不是「忘了删」）。
+- **订阅创建即拉取**：新建订阅的目的就是拿到节点；把它和「刷新」分成两步会让用户以为导入失败（这正是这次 E2E 暴露的）。
+
+### 坑
+
+1. **云电脑到 GitHub 只有 5.5 KB/s**（§53 里量过），16.7 MB 的 Xray 要五十分钟。所以这一节的「内核」是脚本预置进 `engines` 的：**「从零下载内核」没有在全新安装里验**，那是 §53 用镜像验的。
+2. **UIA 在 ssh 会话 0 里看不到会话 1 的窗口**：所有点在会话 1 里跑的驱动都必须用 `schtasks /sc once /st 23:59 /it` 起，不能直接在 ssh 里跑。
+3. **`ValuePattern.SetValue` 不触发 Vue 的 `input` 事件**：WebView2 的输入框要用「点进去 + 剪贴板 + `Ctrl+A`/`Ctrl+V`」才真的改得动 `v-model`（§61 已经踩过一次，这次在订阅表单又踩到）。
+4. **页签不是筛选器**：节点页顶部的 `Xray` / `sing-box` 选的是「用哪个内核跑」，不是「只看这个内核的节点」。一开始我以为 shadowsocks 节点只在 sing-box 页签可见，白改了两轮驱动；真正的原因是前端节点列表没刷新。
+5. **侧栏不是 Button**：`Navigate-Robust` 用鼠标坐标点，模态框关掉后残留覆盖层会吞掉点击；改成按元素 `Name` 找、优先 `InvokePattern` 才稳。
+6. **`sc query` 的中文输出在 bash 里是 GBK 乱码**：判「服务不存在」只认 `1060` 这个数字。
+7. **cmd 里的竖线会被吃掉**：`powershell -Command "... | Select-Object"` 报 `'Select-Object' 不是内部或外部命令`，检查一律写 `.ps1` 用 `-File` 跑。
+8. **`cleanup.sh` 会删 home 目录下的 `*.ps1`/`*.bat`/`*.txt`**：每轮验收要重新推启动器与驱动，否则第二轮「应用起不来」。
+
+### 一句实话
+
+- 这一节验的是 **MSI 装 / 首启 / 订阅 / 系统代理 / 停止 / 卸载**这一整条链，全部是云电脑上真机点出来的。
+- **没验**：不带预置内核的全新安装（GitHub 限速）；`Win10` 与真正的物理 Windows 11 桌面（只有这台 Server 2022 + WebView2）；MSI 的「升级安装」路径（0.1.0 → 0.1.1 没做）；卸载时正在运行的应用会不会被拦住（脚本是先 `quit` 再卸的）。
+- 还留下一个已知差异：卸载后 `engines` 与 `logs` 留在 `%APPDATA%`，这是有意的，判据 11 写的就是它。

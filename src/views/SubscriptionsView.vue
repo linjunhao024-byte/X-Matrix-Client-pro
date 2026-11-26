@@ -207,6 +207,10 @@ async function submit(): Promise<void> {
           exclude: form.exclude,
         })
       }
+      // A row with no nodes is not a subscription yet: fetch it once through
+      // the same path the 刷新 button uses, so what the dialog just created is
+      // visible on the nodes page. A failed fetch keeps the row and says why.
+      await refreshOne(created)
     }
     editing.value = false
   } catch (cause) {
