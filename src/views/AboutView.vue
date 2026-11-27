@@ -39,9 +39,12 @@ onMounted(async () => {
  * compare it with.
  *
  * The "not supported" rows are deliberate: a switch that silently does nothing
- * is worse than a line that says no and explains why. TUN needs a virtual
- * adapter driver and would collide with an already-running proxy; PAC exists,
- * but only for the part a script can express (domain names).
+ * is worse than a line that says no and explains why. But the same rule cuts
+ * the other way: a row that still says "not built" after the feature shipped
+ * is a lie about our own limits. TUN and kernel auto-update were both listed
+ * here long after they landed; every release re-reads this table against what
+ * actually ships. PAC is supported for the part a script can express
+ * (domain names only).
  */
 interface Capability {
   key: string
@@ -56,9 +59,9 @@ const capabilities: Capability[] = [
   { key: 'subscription', supported: true, note: 'about.caps.subscription.note' },
   { key: 'connections', supported: true, note: 'about.caps.connections.note' },
   { key: 'backup', supported: true, note: 'about.caps.backup.note' },
-  { key: 'tun', supported: false, note: 'about.caps.tun.note' },
+  { key: 'tun', supported: true, note: 'about.caps.tun.note' },
   { key: 'pac', supported: true, note: 'about.caps.pac.note' },
-  { key: 'update', supported: false, note: 'about.caps.update.note' },
+  { key: 'update', supported: true, note: 'about.caps.update.note' },
 ]
 
 async function openDataDir(): Promise<void> {

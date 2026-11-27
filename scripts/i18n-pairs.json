@@ -109,9 +109,9 @@
   ],
   [
     "about.caps.tun.note",
-    "没做：要装虚拟网卡驱动并接管全局流量，会和机器上已在跑的代理打架。",
-    "Not built: it needs a virtual adapter driver and hijacks all traffic, which fights with any proxy already running.",
-    "沒做：要裝虛擬網卡驅動並接管全域流量，會和機器上已在跑的代理打架。"
+    "支持，但只对 sing-box：Xray 内核没有 TUN 入站；TUN 与系统代理互斥；非管理员要先装内核服务。",
+    "Built, but sing-box only: Xray has no TUN inbound; TUN and the system proxy exclude each other; without admin rights, install the kernel service first.",
+    "支援，但只對 sing-box：Xray 內核沒有 TUN 入站；TUN 與系統代理互斥；非管理員要先裝內核服務。"
   ],
   [
     "about.caps.unsupported",
@@ -127,9 +127,9 @@
   ],
   [
     "about.caps.update.note",
-    "没做：内核需手动放进 engines 目录，界面会显示它的版本号。",
-    "Not built: kernels are placed in the engines folder by hand; the UI shows their version.",
-    "沒做：內核需手動放進 engines 目錄，界面會顯示它的版本號。"
+    "支持：查 GitHub Release → 下载 → 有 sha256 就核对、没有就明说「未核对」→ 替换，旧文件留 .old。",
+    "Built: checks GitHub releases, downloads, and verifies sha256 when the release publishes one (and says so when it does not); the replaced binary stays as .old.",
+    "支援：查 GitHub Release → 下載 → 有 sha256 就核對、沒有就明說「未核對」→ 替換，舊檔留 .old。"
   ],
   [
     "about.diagnostics.export",
