@@ -1350,12 +1350,6 @@
     "Xray 沒有選擇器出口：這個組在配置裡是啟動時定下的靜態副本，不會回退也不會輪換。"
   ],
   [
-    "home.binaryMissing",
-    "没找到 {name}。把它放进内核目录，然后重启程序。",
-    "{name} was not found. Put it in the kernels folder, then restart the app.",
-    "沒找到 {name}。把它放進內核目錄，然後重啟程序。"
-  ],
-  [
     "home.chart.empty",
     "启动内核后，这里会出现最近一分钟的速率曲线。",
     "Start the kernel and the last minute of traffic shows up here.",
@@ -1498,6 +1492,48 @@
     "版本 {version} · 读取中…",
     "Version {version} · loading…",
     "版本 {version} · 讀取中…"
+  ],
+  [
+    "home.kernelHint.title",
+    "还没有可用的内核",
+    "No kernel is ready yet",
+    "還沒有可用的內核"
+  ],
+  [
+    "home.kernelHint.missing",
+    "缺少 {name}。它应该放在这个目录：",
+    "{name} is missing. It belongs in this folder:",
+    "缺少 {name}。它應該放在這個目錄："
+  ],
+  [
+    "home.kernelHint.how",
+    "两条路：去设置页的「内核二进制」点「检查更新」，让程序下载；或者把官方 {name} 放进上面的目录，然后重启程序。",
+    "Two ways out: open Settings → “Kernel binaries” and press “Check for updates” to let the app download it, or drop the official {name} into the folder above and restart the app.",
+    "兩條路：去設定頁的「內核二進位」點「檢查更新」，讓程式下載；或者把官方 {name} 放進上面的目錄，然後重啟程式。"
+  ],
+  [
+    "home.kernelHint.settings",
+    "打开设置",
+    "Open Settings",
+    "開啟設定"
+  ],
+  [
+    "home.kernelHint.dismiss",
+    "知道了",
+    "Got it",
+    "知道了"
+  ],
+  [
+    "home.kernelUpdate.new",
+    "发现新内核 {version}（本机 {current}）",
+    "New kernel available: {version} (this machine has {current})",
+    "發現新內核 {version}（本機 {current}）"
+  ],
+  [
+    "home.kernelUpdate.note",
+    "打开设置页的「内核二进制」手动更新；这里只提示，不会自动更换。",
+    "Update it yourself in Settings → “Kernel binaries”; this is a notice, never an automatic swap.",
+    "開啟設定頁的「內核二進位」手動更新；這裡只提示，不會自動更換。"
   ],
   [
     "home.kernelVersion",
@@ -4264,6 +4300,18 @@
     "默认使用应用目录里的内核；这里可以换成便携安装，或你已经信任的那个版本。留空即恢复默认。",
     "By default the kernel comes from the app's engines folder. Point it at a portable install or a build you already trust; empty means the default.",
     "預設使用應用目錄裡的內核；這裡可以換成便攜安裝，或你已經信任的那個版本。留空即恢復預設。"
+  ],
+  [
+    "settings.kernel.autoCheck",
+    "每天自动检查内核更新",
+    "Check for kernel updates daily",
+    "每天自動檢查內核更新"
+  ],
+  [
+    "settings.kernel.autoCheckHint",
+    "每天最多查一次；只提示，不自动更换。",
+    "At most one lookup a day; it only notifies, never swaps the binary.",
+    "每天最多查一次；只提示，不會自動更換。"
   ],
   [
     "settings.kernel.choose",

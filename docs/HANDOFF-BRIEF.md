@@ -9,7 +9,7 @@
 |---|---|
 | 仓库 / 工作区 | `D:\GitHub-Warehouse\X-Matrix-Client-Pro`（Tauri 2 + Vue 3 + TS） |
 | HEAD | 本简报这条 docs 提交；功能提交查 `git log --oneline -- <anchor>` 的第一条：§62 `src/views/SubscriptionsView.vue`、§61 `src-tauri/src/engine/merge.rs`、§60 `src-tauri/src/hotkeys.rs`、§59 `src-tauri/src/store.rs`、§58 `src-tauri/src/engine/singbox.rs`、§57 `src-tauri/src/service.rs`、§56 `src-tauri/src/elevate.rs`、§55 `src-tauri/src/power.rs`、§54 `src-tauri/src/net/webdav.rs`、§53 `src-tauri/src/engine/release.rs`、§52 `src-tauri/src/engine/groupwatch.rs`、§51 `src-tauri/src/sysproc.rs`、§50 `src/services/accent.ts`、§49（S8）、`a794438`（§48）、`6fd790f`（§47） |
-| 规模 | **98** 个 IPC 命令 / Rust 单测 **539** / vitest **116**（12 文件）/ i18n **865 键 × 3 语言** |
+| 规模 | **98** 个 IPC 命令 / Rust 单测 **539** / vitest **136**（13 文件）/ i18n **873 键 × 3 语言** |
 | 验收 | `docs/ACCEPTANCE.md` 写到 **§62**，全部是云电脑真机点出来的（各节末尾的「一句实话」列着未验项）；§61 判据 1–8、§62 判据 11 行已过；仍未验的集中在 §56（真提权）、§57（SCM 1053 / icacls 失败 / 非管理员）、§58（非管理员拒绝 TUN）、§60（真实按键）、§62（真下载内核、Win10/Win11、升级安装） |
 | 云电脑 | 可用（02:52 已恢复；03:0x 又闪断过一次，重连即通）。末态：`ProxyEnable=0x0`、无 `xm*`/`tunkill`/`xmlisten` 任务、无内核进程、`XMatrixKernel` 服务已卸载 |
 | 构建产物 | `src-tauri/target/release/x-matrix.exe`（11,115,008 B @2026-11-26 15:27，md5 `2b48cd496cca5602f609be5c0d729e25`，含 §62 的订阅刷新修复）；安装包同一次带 bundle 的构建：`bundle/msi/X-Matrix_0.1.0_x64_en-US.msi` 5,156,864 B（md5 `5ded88e8bac04a0d706b446d6fc9916c`）、`bundle/nsis/X-Matrix_0.1.0_x64-setup.exe` 3,587,292 B |
@@ -47,6 +47,7 @@ https_proxy=http://127.0.0.1:10808 git push origin main
 | 4 长跑/压力 | ✅ 已做、已验 | §63；`D:\tmp\shots\63-soak.ps1` + `63-soak-accept.sh`，20+40 轮 0 失败 |
 | 3 真键盘/UAC/真 WebDAV | ⏸ 用户自测 | 需要真实按键、真实管理员令牌、真实 WebDAV 服务器 |
 | 附：关于页能力表纠正 | ✅ 已做、已验 | §64；`64-about-accept.sh about1`；TUN 与内核在线更新两行从「不支持」翻绿 |
+| 附：缺内核提示条 + 启动查更新 | ✅ 已做、已验 | §65；`65-accept.sh hint2` + `65-off.sh`；24h 闸、只提示不自动换、开关真能关 |
 
 **§63 的结论（一句话）**：同一实例里走界面启停内核 60 轮，没有残留内核、没有残留系统代理、PID 不复用、工作集 13.5–14.9 MB 稳定；句柄 512–517 → 收敛 527（最大 533），只判到「60 轮内未证泄漏」，没到「证明不泄漏」。
 

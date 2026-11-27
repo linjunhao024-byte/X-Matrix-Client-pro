@@ -15,6 +15,8 @@ const THEME_KEY = 'xm.ui.theme'
 const COLLAPSE_KEY = 'xm.ui.sidebar-collapsed'
 /** Accent choice lives beside the theme: both are look-and-feel, not settings. */
 const ACCENT_KEY = 'xm.ui.accent'
+/** Whether the app may look for a newer kernel once a day on its own. */
+const KERNEL_UPDATE_KEY = 'xm.ui.kernelUpdateCheck'
 
 function isThemeMode(value: string | null): value is ThemeMode {
   return value === 'light' || value === 'dark' || value === 'system'
@@ -28,6 +30,15 @@ export const useUiStore = defineStore('ui', () => {
   const themeMode = ref<ThemeMode>('system')
   const systemPrefersDark = ref(false)
   const sidebarCollapsed = ref(false)
+
+  /**
+   * Ask the release feed about a newer kernel at most once a day.
+   *
+   * On by default: an unpatched kernel is a security problem, and the check is
+   * one request. It only ever *tells* the user — installing stays a click in
+   * Settings, because swapping a binary under a live tunnel is their call.
+   */
+  const kernelUpdateCheck = ref(true)
 
   /**
    * The accent the user picked, read once at store creation.
@@ -136,11 +147,26 @@ export const useUiStore = defineStore('ui', () => {
     localStorage.setItem(COLLAPSE_KEY, String(sidebarCollapsed.value))
   }
 
+  /**
+   * Persist the automatic update check preference.
+   *
+   * Written on change rather than on save: the next launch reads it before the
+   * first paint, and a switch that only took effect after a restart would be a
+   * fake switch.
+   */
+  function setKernelUpdateCheck(enabled: boolean) {
+    kernelUpdateCheck.value = enabled
+    localStorage.setItem(KERNEL_UPDATE_KEY, String(enabled))
+  }
+
   /** Called once from `main.ts`, before the first paint. */
   function init() {
     const savedTheme = localStorage.getItem(THEME_KEY)
     if (isThemeMode(savedTheme)) themeMode.value = savedTheme
     sidebarCollapsed.value = localStorage.getItem(COLLAPSE_KEY) === 'true'
+    // Absent means "never turned off": the default is on, so only an explicit
+    // 'false' disables the startup check.
+    kernelUpdateCheck.value = localStorage.getItem(KERNEL_UPDATE_KEY) !== 'false'
     // Re-read rather than trust the value from store creation: storage may have
     // changed between the two moments (another window, a restored session).
     accent.value = resolveAccent(localStorage.getItem(ACCENT_KEY))
@@ -161,6 +187,7 @@ export const useUiStore = defineStore('ui', () => {
     accent,
     accentVersion,
     sidebarCollapsed,
+    kernelUpdateCheck,
     lastError,
     reportError,
     dismissError,
@@ -168,6 +195,7 @@ export const useUiStore = defineStore('ui', () => {
     setTheme,
     toggleTheme,
     toggleSidebar,
+    setKernelUpdateCheck,
     setAccent,
     resetAccent,
     applyAccent,

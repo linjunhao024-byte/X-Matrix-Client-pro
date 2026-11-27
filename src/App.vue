@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted } from 'vue'
 import AppIcon from './components/AppIcon.vue'
 import AppSidebar from './components/AppSidebar.vue'
 import { t } from './i18n'
+import { autoCheck } from './services/kernelupdate'
 import { initQuiet, disposeQuiet } from './stores/lite'
 import { useEngineStore } from './stores/engine'
 import { useUiStore } from './stores/ui'
@@ -20,7 +21,24 @@ onMounted(() => {
   // refuses while `quiet`, and the store's own watch arms it on a reveal.
   void initQuiet().then(() => engine.startPolling())
   void engine.watchExits()
+  void checkKernelUpdate()
 })
+
+/**
+ * One quiet look-up for a newer kernel, at most once a day.
+ *
+ * The *backend's* status decides which kernel is asked about, not the default
+ * in the store: a session that resumes with sing-box running must be told about
+ * sing-box. `autoCheck` swallows its own failures — offline and a blocked
+ * GitHub both end as "no banner", never as an error the user has to dismiss.
+ */
+async function checkKernelUpdate(): Promise<void> {
+  // The poller's first tick usually answers this already; ask only when it has
+  // not landed yet (a window opened straight into the tray skips the poller).
+  if (!engine.status) await engine.refreshStatus()
+  await autoCheck(engine.kind, { enabled: ui.kernelUpdateCheck })
+}
+
 onBeforeUnmount(() => {
   engine.unwatchExits()
   engine.stopPolling()

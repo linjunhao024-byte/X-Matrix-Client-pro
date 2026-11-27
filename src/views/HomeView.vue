@@ -17,6 +17,7 @@ const ConfigDialog = defineAsyncComponent(() => import('../components/ConfigDial
 import { t } from '../i18n'
 import { api, describeError, type AppInfo, type EngineKind, type ExitIp, type ProxyMode } from '../services/contract'
 import { formatBytes, formatRate, formatWhen } from '../services/format'
+import { kernelDirectory, releases as kernelUpdates, showKernelHint } from '../services/kernelupdate'
 import { quotaAlerts } from '../services/quota'
 import { useEngineStore } from '../stores/engine'
 import { initQuiet, useQuiet } from '../stores/lite'
@@ -182,6 +183,59 @@ function dismissOnboarding(): void {
 function goToSubscriptions(): void {
   void router.push({ name: 'subscriptions' })
 }
+
+const KERNEL_HINT_KEY = 'xm.ui.kernelHintDismissed'
+const kernelHintDismissed = ref(localStorage.getItem(KERNEL_HINT_KEY) === 'true')
+
+/**
+ * The folder the hint names: the backend's own path, not a guessed
+ * `%APPDATA%` string. A custom binary override is looked up somewhere else, and
+ * sending the user to the default folder would be worse than saying nothing.
+ */
+const kernelHintDir = computed(() => kernelDirectory(engine.currentBinary?.path ?? ''))
+
+/**
+ * First launch with no kernel on disk.
+ *
+ * Hidden while a kernel runs — it was launched from a file, so nothing is
+ * missing — and hidden once dismissed, because Settings repeats all of it and a
+ * bar that cannot be closed turns a hint into nagging.
+ */
+const kernelHintVisible = computed(() =>
+  showKernelHint({
+    missing: engine.binaryMissing,
+    running: engine.running,
+    dismissed: kernelHintDismissed.value,
+  }),
+)
+
+function dismissKernelHint(): void {
+  kernelHintDismissed.value = true
+  localStorage.setItem(KERNEL_HINT_KEY, 'true')
+}
+
+/**
+ * Settings → the kernel block.
+ *
+ * Deliberately not `kernelInstall`: the startup check says "a newer build
+ * exists", and swapping the binary under a live tunnel stays the user's click.
+ */
+function openKernelSettings(): void {
+  void router.push({ name: 'settings', hash: '#kernel' })
+}
+
+/**
+ * What the daily lookup found for the selected kernel, if it is news.
+ *
+ * A null `current` means "no binary here yet", which is the hint bar's job, not
+ * an update; equal versions mean nothing to say. The version strings are the
+ * backend's own, never a local guess.
+ */
+const kernelUpdate = computed<{ version: string; current: string } | null>(() => {
+  const release = kernelUpdates.value[engine.kind]
+  if (!release?.current || release.current === release.version) return null
+  return { version: release.version, current: release.current }
+})
 
 const engineLabel = computed(() => {
   const kind = engine.status?.kind
@@ -467,6 +521,50 @@ async function stopEngine() {
       </RouterLink>
     </div>
 
+    <!-- No kernel on disk: one bar that says which file, which folder, and the
+         two ways out. It disappears the moment a binary exists, so the start
+         button never fails with the backend's raw path error. -->
+    <div v-if="kernelHintVisible" class="alert alert-warn kernel-hint">
+      <div class="row kernel-hint-head">
+        <strong>{{ t('home.kernelHint.title') }}</strong>
+        <span class="spacer" />
+        <button type="button" class="btn btn-sm" @click="dismissKernelHint()">
+          {{ t('home.kernelHint.dismiss') }}
+        </button>
+      </div>
+      <p class="kernel-hint-line">
+        {{ t('home.kernelHint.missing', { name: engine.currentBinary?.name ?? '' }) }}
+      </p>
+      <code class="kernel-hint-dir mono">{{ kernelHintDir }}</code>
+      <p class="kernel-hint-line">
+        {{ t('home.kernelHint.how', { name: engine.currentBinary?.name ?? '' }) }}
+      </p>
+      <div class="row">
+        <button type="button" class="btn btn-primary btn-sm" @click="openKernelSettings()">
+          {{ t('home.kernelHint.settings') }}
+        </button>
+        <button type="button" class="btn btn-sm" @click="engine.openEnginesDir()">
+          <AppIcon name="inbox" :size="15" />
+          {{ t('common.openDir') }}
+        </button>
+      </div>
+    </div>
+
+    <!-- The daily check found a newer official build. One line and a door to
+         Settings; nothing is installed from here. -->
+    <div v-if="kernelUpdate" class="alert alert-info kernel-update">
+      <div class="row">
+        <span>
+          {{ t('home.kernelUpdate.new', { version: kernelUpdate.version, current: kernelUpdate.current }) }}
+        </span>
+        <span class="spacer" />
+        <button type="button" class="btn btn-sm" @click="openKernelSettings()">
+          {{ t('home.kernelHint.settings') }}
+        </button>
+      </div>
+      <p class="kernel-update-note">{{ t('home.kernelUpdate.note') }}</p>
+    </div>
+
     <!-- First run: three steps, then it never comes back. -->
     <section v-if="showOnboarding" class="glass onboard">
       <div class="row">
@@ -600,17 +698,6 @@ async function stopEngine() {
       </div>
 
       <p v-if="kernelVersion" class="field-hint kernel-version">{{ t('home.kernelVersion', { version: kernelVersion }) }}</p>
-
-      <div v-if="engine.binaryMissing && engine.currentBinary" class="alert">
-        <div class="row">
-          <span>
-            {{ t('home.binaryMissing', { name: engine.currentBinary.name }) }}
-          </span>
-          <button class="btn btn-sm" type="button" @click="engine.openEnginesDir()">
-            {{ t('common.openDir') }}
-          </button>
-        </div>
-      </div>
 
       <dl v-if="engine.status?.running" class="facts">
         <div><dt>PID</dt><dd class="mono">{{ engine.status.pid }}</dd></div>
@@ -955,6 +1042,34 @@ async function stopEngine() {
 
 .quota-line {
   margin: 0;
+}
+
+/* Kernel hint: the alert supplies tone, these rules only lay the sentences out.
+   The folder is its own line because it gets copied into Explorer by hand. */
+.kernel-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kernel-hint-head {
+  align-items: center;
+}
+
+.kernel-hint-line {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.kernel-hint-dir {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+}
+
+.kernel-update-note {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
 }
 
 .quota-link {

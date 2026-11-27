@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import StaleConfig from '../components/StaleConfig.vue'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
 import { availableLocales, locale, setLocale, t } from '../i18n'
@@ -19,6 +20,7 @@ import {
   type ServiceState_Serialize,
   type Settings_Serialize,
 } from '../services/contract'
+import { releases as kernelUpdates } from '../services/kernelupdate'
 import { useEngineStore } from '../stores/engine'
 import { useSettingsStore } from '../stores/settings'
 import { useSystemProxyStore } from '../stores/sysproxy'
@@ -28,6 +30,7 @@ const store = useSettingsStore()
 const proxy = useSystemProxyStore()
 const engine = useEngineStore()
 const ui = useUiStore()
+const route = useRoute()
 
 /**
  * Theme and accent live in the UI store, not in the saved settings: they are
@@ -667,6 +670,36 @@ const kernelReleases = ref<Partial<Record<EngineKind, KernelRelease_Serialize>>>
 const installing = ref<EngineKind | null>(null)
 
 /**
+ * Seed the rows with the lookup the app already made at startup.
+ *
+ * Asking again on arrival would be a second network round for the same answer.
+ * The values are the backend's own; a manual 检查更新 still replaces them, and
+ * the 更新 button appears without that extra click when a newer build exists.
+ */
+function seedKernelReleases(source: Partial<Record<EngineKind, KernelRelease_Serialize>>): void {
+  for (const { kind } of kernels) {
+    const release = source[kind]
+    if (!release) continue
+    kernelReleases.value[kind] = release
+    // Say the same one-liner a manual check would. Skip when this session
+    // already has something more specific (a check result, an install report):
+    // the startup answer is the oldest news there is.
+    if (!kernelNotes.value[kind]) kernelNotes.value[kind] = describeRelease(release)
+  }
+}
+seedKernelReleases(kernelUpdates.value)
+// The startup check may still be in flight when this page opens; take its
+// answer when it lands rather than leaving the block blank until a manual click.
+watch(kernelUpdates, (next) => seedKernelReleases(next))
+
+/** The startup lookup's verdict for the selected kernel, when it is news. */
+const kernelAutoRelease = computed<{ version: string; current: string } | null>(() => {
+  const release = kernelUpdates.value[engine.kind]
+  if (!release?.current || release.current === release.version) return null
+  return { version: release.version, current: release.current }
+})
+
+/**
  * Is there a newer official build than the one on this machine?
  *
  * Nothing is offered before a check has run: without the newest version there
@@ -754,6 +787,13 @@ onMounted(async () => {
   await refreshService()
   await refreshKernelBinaries()
   await refreshWebdav()
+  // Home's "打开设置" arrives with `#kernel`; without this the block it points
+  // at usually sits below the fold. The router has no scrollBehavior because
+  // `.page` scrolls its own container, not the window.
+  if (route.hash === '#kernel') {
+    await nextTick()
+    document.getElementById('kernel')?.scrollIntoView({ block: 'start' })
+  }
 })
 
 async function save() {
@@ -1080,9 +1120,20 @@ async function save() {
         <p class="field-hint">{{ t('settings.fragmentHint') }}</p>
       </section>
 
-      <section class="surface-plain panel">
+      <section id="kernel" class="surface-plain panel">
         <h2 class="section-title">{{ t('settings.kernel.title') }}</h2>
         <p class="field-hint">{{ t('settings.kernel.hint') }}</p>
+        <!-- A real switch: off means `autoCheck` returns before it sends
+             anything, not that the banner is merely hidden. -->
+        <ToggleSwitch
+          :model-value="ui.kernelUpdateCheck"
+          :label="t('settings.kernel.autoCheck')"
+          :description="t('settings.kernel.autoCheckHint')"
+          @update:model-value="ui.setKernelUpdateCheck($event)"
+        />
+        <p v-if="kernelAutoRelease" class="field-hint">
+          {{ t('home.kernelUpdate.new', { version: kernelAutoRelease.version, current: kernelAutoRelease.current }) }}
+        </p>
         <div v-for="row in kernelRows" :key="row.kind" class="kernel-row">
           <div class="kernel-head">
             <span class="field-label">{{ row.label }}</span>

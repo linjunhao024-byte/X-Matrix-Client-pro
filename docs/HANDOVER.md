@@ -23,10 +23,10 @@
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库；之后每次收尾都跟着更新 |
 | IPC 命令 | **98**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
 | Rust 单测 | **539 passed**（`ARCHITECTURE.md:278` 已同步） |
-| 前端检查 | `npm run check` 全绿：vue-tsc / architecture（68 文件）/ contract / vitest **116**（12 文件） |
-| i18n | **865** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
+| 前端检查 | `npm run check` 全绿：vue-tsc / architecture（70 文件）/ contract / vitest **136**（13 文件） |
+| i18n | **873** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
 | 桌面产物 | 桌面上的旧副本**已不存在**；产物是 `src-tauri/target/release/x-matrix.exe`（11,115,008 B @2026-11-26 15:27，md5 `2b48cd496cca5602f609be5c0d729e25`，含 §62 那处订阅刷新修复），以及安装包 `src-tauri/target/release/bundle/msi/X-Matrix_0.1.0_x64_en-US.msi`（5,156,864 B，md5 `5ded88e8bac04a0d706b446d6fc9916c`）与 `bundle/nsis/X-Matrix_0.1.0_x64-setup.exe`（3,587,292 B）——两个包都是同一次带 bundle 的构建产的，§62 的 E2E 就是用这个 MSI 验的 |
-| 验收文档 | `docs/ACCEPTANCE.md` §0–§64（§7 历史空缺，编号不连续但内容完整） |
+| 验收文档 | `docs/ACCEPTANCE.md` §0–§65（§7 历史空缺，编号不连续但内容完整） |
 | 云电脑 | 干净：`ProxyEnable=0x0`、无 X-Matrix/sing-box/xray 进程、无 `xm*` 计划任务 |
 
 **下一步的确定顺序**（做完一条打一个勾，别跳）：
@@ -51,6 +51,7 @@
 - [x] 20. §59（S7）多配置：`store.json` v2（激活内联 + 非激活每份一个文件）+ 五条 profile 命令 + `ProfilesView` + 备份带全部配置 → 构建 → 云电脑 v1 升级/两向切换/云备份三段验收 → 写 §59 → 提交（2026-11-25 18:4x）
 - [x] 22. §61（代码缺口）覆盖层 merge + 服务日志路径：代码/门槛已过，真机待补（测试机掉线）
 - [x] 25. §64（关于页能力表）TUN 与内核更新从「不支持」翻成「支持」：`64-about-accept.sh about1`，UIA 文本 + 截图双证，865 键不变
+- [x] 26. §65（缺内核提示条 + 启动查更新）新建 `src/services/kernelupdate.ts`（24h 闸、失败不落闸、开关先返回）+ 20 条 vitest；`65-accept.sh hint2` 8 次启动：提示条三按钮、关掉重启不再出现、`发现新内核 99.9.9` 只出现一次、镜像日志整个 run 只 1 个 `200`；`65-off.sh` 证开关 On→Off 并跨重启保持；vitest 136 / i18n 873
 - [x] 24. §63（长跑/压力）同一实例启停内核 20+40 轮：`0 失败`、无残留内核/代理、工作集 13.5–14.9 MB、句柄 512→527（未证泄漏）
 - [x] 23. §62（安装包 E2E）MSI 装/首启/订阅即拉节点/系统代理/卸载：`62-msi-e2e.sh e2e10`+`e2e11`，11 行判据全过（真下载内核、Win10/Win11、升级安装未验）
 - [x] 21. §60（候选表剩余）热键加 `mode` / `test_all` 两个动作 + 启动时测速：四个组合注册、清空单个组合、独占性、四个动作的副作用、`test_on_start` 真假两态都验了；**真实按键 → `RegisterHotKey` 那一段没验**（这台机器的模拟输入到不了别的进程的注册）→ 写 §60 → 提交（2026-11-25 20:5x）
@@ -269,6 +270,23 @@
 
 **计数**：IPC 98、Rust 539、vitest 116、i18n 865（只改前端文案与布尔）。
 
+### 0.21 缺内核的提示条 + 启动查更新（2026-11-27）
+
+**为什么做**：§53 把「下载并换内核」做完了，但入口只在设置页那颗按钮上。新装的应用一个内核都没有，首页只说「未运行」，用户得自己猜去设置页翻「内核二进制」——§64 刚把关于页那两行翻成「支持」，落差就更明显了。
+
+**做了什么**：
+
+- 新 `src/services/kernelupdate.ts`（纯逻辑，20 条 vitest）：`shouldCheck` 24h 闸（`DAY_MS = 86_400_000`）、`recordCheck` **只在查成功后**写时间戳、`autoCheck(kind, { enabled })` 关闭即 `return null`（不发请求）、`showKernelHint({ missing, running, dismissed })` 三者合取、`kernelDirectory(path)` 只做展示用截断。
+- `src/views/HomeView.vue`：缺内核提示条（缺哪个文件 + 目录 + 「打开设置」/「打开目录」/「知道了」）与新版本横幅；`猜测` 全部走字典键。
+- `src/views/SettingsView.vue`：内核区块加 `id="kernel"`（「打开设置」直接滚过去）与「每天自动检查内核更新」开关；`src/App.vue` 启动时先 `refreshStatus` 再 `autoCheck`；`src/stores/ui.ts` 的 `kernelUpdateCheck` 存 `localStorage['xm.ui.kernelUpdateCheck']`。
+- 顺手删掉一条已经没人引用的 `home.binaryMissing`，再补 9 条新键 → 865 − 1 + 9 = **873**。
+
+**验收**：§65，12 行判据全过（提示条标题/目录/缺文件行/三按钮、关掉后当次与重启后都不再出现、`发现新内核 99.9.9（本机 26.10.31）` 只在第一天出现一次、镜像日志整个 run 只有 1 行 `200`、开关 `On -> Off` 且重启后仍是 `Off`）。**没验**：真去 `api.github.com` 拉 release（用等长替换的本机镜像）、关掉开关后「一个请求都不发」（闸已落，分不开）、英/繁渲染、「打开目录」真的弹出资源管理器。
+
+**计数**：IPC 98（不变）、Rust 539（不变）、vitest **136**（13 文件，+20）、i18n **873**（+8）。
+
+---
+
 ## 1. 项目坐标与命令
 
 | 项 | 值 |
@@ -281,9 +299,9 @@
 | 后端测试 | `cd src-tauri && cargo test --lib` |
 | 契约重生成 | `npm run gen:contract`（改了命令签名就必须跑，`check:contract` 会拦） |
 | 桌面产物 | `/c/Users/83611/Desktop/X-Matrix.exe`、`/c/Users/83611/Desktop/X-Matrix_0.1.0_x64-setup.exe` |
-| 当前构建产物 | `src-tauri/target/release/x-matrix.exe` **11,115,008 B @2026-11-26 15:27，md5 `2b48cd496cca5602f609be5c0d729e25`**（含 §21–§62）；安装包同一次构建：MSI 5,156,864 B（md5 `5ded88e8bac04a0d706b446d6fc9916c`）、NSIS 3,587,292 B |
+| 当前构建产物 | `src-tauri/target/release/x-matrix.exe` **11,116,544 B @2026-11-27 22:13，md5 `caffebb7bc58e891fdd572de27a3838a`**（含 §21–§65）；安装包同一次构建：MSI 5,156,864 B（md5 `aff0e4b5ffc18f39e83111eb2ce6f4c9`）、NSIS 3,589,171 B（md5 `218e660cc13b9a53478d824ea3af2791`） |
 
-**计数基线（改动后记得同步文档）**：命令 **98**、`cargo test --lib` **539**、vitest **116**（12 个文件）、i18n **865** 键。
+**计数基线（改动后记得同步文档）**：命令 **98**、`cargo test --lib` **539**、vitest **136**（13 个文件）、i18n **873** 键。
 > `README.md:81` 与 `ARCHITECTURE.md:277-278` 已同步为 98 条命令 / 539 项测试。
 
 命令数核算法：
