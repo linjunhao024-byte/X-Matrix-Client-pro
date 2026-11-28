@@ -2486,3 +2486,52 @@ DOTNET_ROOT=D:\CODE.config\dotnet D:\CODE.config\dotnet\dotnet.exe \
 ### 一句实话
 
 20 条路由逐条打过，17 条 200、3 条是我自己写错 id 的设计内 404。**没验**：`node_delay_offline` 真正起临时内核的那条路径（本机不许起内核，云电脑这轮也没给能连通的节点，只能证明它在「节点不存在」时正确 404、在内核正在运行时正确拒绝）；`list_processes` 的 Fake 枚举器不存在，单测只断言返回数组形状。这两条都写进了 `P1-REPORT.md` §5 的遗留。
+
+## §69 P1 批次 C：subscription / ruleset / routing 的 21 条命令进 HTTP 通道
+
+> 2026-11-29。P1 第三批，做完通道上有 65 条路由（A 24 + B 20 + C 21），覆盖测试断言 `checked == 65`。
+> 这一批顺手消掉了批次 A 记下的分层倒挂：`services::engine` 不再反调 `commands::ruleset`。
+
+### 验法
+
+同一个 `D:/tmp/shots/p1-accept.sh`，只换 `p1-routes.txt`（`D:/tmp/shots/mkc.py` 生成，20 行）。core 是本批新构建的 `x-matrix.exe`，md5 `dd455cbede8d72896347b355e1717fc4`。
+
+**故意少打一条**：`ruleset/update_geo_assets` 一次要下几 MB GeoIP 数据、超时 180 s，而 cloudpc-test 到 GitHub 约 5 kB/s，打它会把 30 秒的冒烟变成三分钟且不提供任何新信息。它的安全分支由单测覆盖，这里如实登记为「本批未在真机打」。
+
+正文一律用三种形状：新建一个能成功的对象、用一个不存在的 id、用空体。**不真发订阅请求、不下规则集、不动内核。**
+
+### 判据（实测）
+
+| # | 判据 | 实测 |
+|---|---|---|
+| 1 | 通道鉴权仍然有效 | `A1 no token: 401`、`A2 wrong token: 401` |
+| 2 | 20 条路由全部有响应、无一挂起 | `routes total=20 200=14 non-200=6`，整轮 3 秒 |
+| 3 | 6 条非 200 全部是「我给了不存在的 id」 | 4 条 `规则集 no-such-set 不存在`、2 条 `订阅 no-such-sub 不存在`，均 404 `not_found` |
+| 4 | 规则写命令真落盘并能被匹配到 | `upsert_rule` 返回 `C-RULE`；随后 `test_domain a.example.org` → `{"action":{"kind":"direct"},"rule":"C-RULE","skipped":0}`——**域名后缀规则真的命中了** |
+| 5 | 规则开关/删除真生效 | `toggle_rule` 回 `"enabled":false`；`delete_rule` 回 `[]` |
+| 6 | 规则集能从 UI 形状创建并读回 | `create_rule_set {"name":"C-SET","url":""}` → `id=rs-18ec4fb7edeca5140, source=local, entry_count=0`；再 `list_rule_sets` 里还是它 |
+| 7 | GeoIP 资产状态可读（不下载） | `geo_assets` → 6 条 `{"exists":false,"bytes":0.0,"path":"…engines\\geoip.dat"}` |
+| 8 | 订阅能从 UI 形状创建并读回 | `create_subscription {"name":"C-SUB","url":"http://127.0.0.1:9/x.yaml"}` → `id=sub-18ec4fb80192fbe01, node_count=0`（没去拉，所以是 0）；再 `list_subscriptions` 里还是它 |
+| 9 | 定时刷新入口在无可刷新项时安全返回 | `refresh_due` → `[]` |
+| 10 | 分层倒挂已消除 | `grep -rn "commands::ruleset" src-tauri/src/services` 空输出；`loaded_sets` 已下移到 `services/ruleset.rs` |
+| 11 | 契约未被动过 | `git diff --stat src/services/bindings.ts` 空；`contract up to date` |
+| 12 | 门槛 | `cargo test --lib` **637 passed**（622→637，+15）、`npm run check` 全绿（architecture 70 文件、vitest 136） |
+| 13 | 收尾干净 | `/shutdown` → `endpoint gone: True`；`ProxyEnable=0x0`；无 `xmp1` 任务；无 xray / sing-box 残留 |
+
+### 设计理由
+
+- **`loaded_sets` 下移而不是加一层转发**：它是「把启用的规则集读进内存给渲染用」，属于业务，本来就是 services 该有的东西。留在 `commands/ruleset.rs` 里再让 services 反过来调它，core 就永远绕不开 Tauri 模块。搬完两边都干净，commands 侧只留 `#[tauri::command]` 的壳。
+- **`create_*` 只收 `name` + `url`**：UI 表单只有这两个输入，`id` 与 `source`/`entry_count` 是服务端定的。让 HTTP 侧也能自造 `id` 等于把「谁是 id 的主人」这件事搞乱——`CreateRuleSetArgs`/`CreateSubscriptionArgs` 就是为此存在的窄入参。
+- **`SubscriptionArgs`/`RuleSetArgs` 里嵌整个对象**：`upsert_*` 的语义就是「用这一份覆盖那一份」，入参天然是一个完整实体；只给 id 再给几个字段会变成 patch，而 UI 没有 patch 语义。
+- **`refresh_due` 也进通道**：它是「把所有到期的源刷一遍」，窗口侧原本挂定时器调用；以后定时器可以只留在壳里，core 侧同一入口随时可被调，两边行为一致。
+
+### 坑
+
+1. **中文错误消息在冒烟日志里是乱码**（`瑙勫垯闆?` 其实是「规则集」）：core 发的是 UTF-8 JSON，写入 `p1.txt` 的 `Add-Content` 用系统 ANSI（cp936）落盘，于是字节被当 cp936 解释。**产品没问题**（curl 打印的是原样字节），是驱动的记录编码问题；以后读这类日志要按 UTF-8 解，别按「乱码=产品错」判断。
+2. **`create_rule_set` 的 `url` 必须给**（哪怕空串），少字段会 400 `missing field url`——`CreateRuleSetArgs` 两个字段都非 `Option`。这是故意的：让「建本地集」和「建远程集」走同一个入参，`url` 空即本地。
+3. **刚创建的对象立刻 `list` 能看到，但 `node_count` 是 0**：新建订阅不拉取（§62 修的是「前端立即刷新」，core 的 `create` 仍只写行）。走通道时想立刻有节点必须再调 `refresh_subscription`。
+4. **`refresh_subscription` 打不存在的 id 是 404 而不是 200+空**：与 `refresh_due` 的「无到期项回空数组」不同，前者点名某个源，点不到就是错。写验收预期时别把两者混为一谈。
+
+### 一句实话
+
+20 条逐个打过，14 条 200、6 条是我故意给的错 id（404，产品正确）。真机**没验**：`update_geo_assets`（会下几 MB，跳过的理由写在上头）、`refresh_subscription` 命中真实源后的导入路径（本机与云电脑都没有可连的订阅地址）、`refresh_rule_set` 拉远程集的解析（同上）。这三条的单测只覆盖「缺 id / 空 url」这类安全分支，已在 `P1-REPORT.md` §5 登记。

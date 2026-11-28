@@ -1,35 +1,42 @@
-# P1 批次 A+B 报告：44 条命令迁入 services 并开 HTTP 路由
+# P1 批次 A+B+C 报告：65 条命令迁入 services 并开 HTTP 路由
 
 日期：2026-11-29
 范围：批次 A —— `commands/engine.rs`（22 条）+ `commands/sysproxy.rs`（2 条）；
-批次 B —— `commands/node.rs`（12 条）+ `commands/group.rs`（5 条）+ `commands/process.rs`（1 条）+ `commands/import.rs`（2 条）。
-合计 44 条。批次 C/D 未动。
+批次 B —— `commands/node.rs`（12 条）+ `commands/group.rs`（5 条）+ `commands/process.rs`（1 条）+ `commands/import.rs`（2 条）；
+批次 C —— `commands/subscription.rs`（6 条）+ `commands/ruleset.rs`（9 条）+ `commands/routing.rs`（6 条）。
+合计 65 条。批次 D 未动。
 
 ## 1. 交付物
 
 | 文件 | 变化 |
 | --- | --- |
-| `src-tauri/src/services/mod.rs` | 新增：`Ctx`（可选 state / proxy + runtime + `Notifier`）、`EmptyArgs`、`NoopNotifier`/`NOOP_NOTIFIER`；B 批追加 `pub mod node / group / process / import` |
-| `src-tauri/src/services/engine.rs` | 新增：22 条命令的业务体 + 参数结构 + `StartRequest` / `prepare_start` / `start_engine` / `stop_if_running_node` / `render_for_preview` / 延迟探测等助手 |
+| `src-tauri/src/services/mod.rs` | 新增：`Ctx`（可选 state / proxy + runtime + `Notifier`）、`EmptyArgs`、`NoopNotifier`/`NOOP_NOTIFIER`；B 批追加 `pub mod node / group / process / import`；C 批追加 `pub mod subscription / ruleset / routing` |
+| `src-tauri/src/services/engine.rs` | 新增：22 条命令的业务体 + 参数结构 + `StartRequest` / `prepare_start` / `start_engine` / `stop_if_running_node` / `render_for_preview` / 延迟探测等助手；C 批把 `prepare_start`/`render_preview` 里的 `loaded_sets` 调用改到 `crate::services::ruleset` |
 | `src-tauri/src/services/sysproxy.rs` | 新增：2 条系统代理命令的业务体 |
 | `src-tauri/src/services/node.rs` | 新增（B）：12 条节点命令的业务体 + `NodeArgs`/`TagArgs`/`MoveArgs`/`IdArgs`/`IdsArgs`、`apply_tag`/`apply_move`/`apply_delete`、`probe_all`/`remember`/`remember_batch`/`LatencyProbe`、`delay_offline_target/probe/finish` |
 | `src-tauri/src/services/group.rs` | 新增（B）：5 条策略组命令的业务体 + `GroupArgs`/`IdArgs`/`SelectMemberArgs`；删组改写规则的不变量随业务一起搬入 |
 | `src-tauri/src/services/process.rs` | 新增（B）：`list_processes`（OS 快照，无状态依赖） |
 | `src-tauri/src/services/import.rs` | 新增（B）：`import_preview`（不会失败）/ `import_nodes` + `ImportPreview`/`ImportOutcome`/`TextArgs`；去重、组/规则合并与跳过理由原样保留 |
+| `src-tauri/src/services/subscription.rs` | 新增（C）：6 条订阅命令的业务体 + `SubscriptionArgs`/`CreateSubscriptionArgs`/`IdArgs`、`RefreshOutcome`/`RefreshEffects`、`apply_delete_subscription`/`refresh_one_blocking`/`apply_document`/`due_subscription_ids`/`record_refresh_error`/`now_ms`；三段式刷新（规划 / 阻塞拉取 / 落库）从命令壳搬入 |
+| `src-tauri/src/services/ruleset.rs` | 新增（C）：9 条规则集命令的业务体 + `loaded_sets`（原在 `commands::ruleset`，本批下移，服务层唯一实现）、`GeoUpdate`/`IdArgs`/`CreateRuleSetArgs`/`RuleSetArgs`/`SetTextArgs`、`apply_text`/`record_error`/`refresh_due_sets`/`geo_assets`/`update_geo_assets` |
+| `src-tauri/src/services/routing.rs` | 新增（C）：6 条路由命令的业务体 + `RuleTest`/`DomainArgs`/`RuleArgs`/`IdArgs`/`MoveArgs`；`test_domain` 直接调 `services::ruleset::loaded_sets`，不再反调 commands |
 | `src-tauri/src/commands/engine.rs` | 变薄壳：签名与 `///` 文档一字未改，函数体 = 构造 `Ctx` → 调 `services::engine`；`pick_engine_binary`、`engine_open_dir` 保留原生实现并注明不进路由；原有测试模块原样保留；B 批收窄了再导出列表（`lookup_node`/`probe_url`/`remember_real` 已无外部调用者，由 `services::node` 直接使用） |
 | `src-tauri/src/commands/sysproxy.rs` | 变薄壳，签名与文档未改 |
 | `src-tauri/src/commands/node.rs` | 变薄壳（B）：12 条命令签名与 `///` 文档一字未改，函数体 = 调 `services::node` + `refresh_tray`；`probe_nodes`/`delay_offline`/`stop_after_delete` 保留为壳内异步编排（`lib.rs:308`、`lib.rs:779` 的 `block_on` 依赖 `probe_nodes`）；原有 18 条测试保留，改为直接测 `services::node` 的助手 |
 | `src-tauri/src/commands/group.rs` | 变薄壳（B）：5 条命令保留签名/文档；原 1 条测试扩为 6 条，直接测 `services::group`（删组改写规则的不变量现在真的被 `delete_group` 执行，不再靠手写模拟） |
 | `src-tauri/src/commands/process.rs` | 变薄壳（B）：`async` 签名与文档未改，函数体调 `services::process` |
 | `src-tauri/src/commands/import.rs` | 变薄壳（B）：两条命令签名/文档未改；`ImportPreview`/`ImportOutcome` 改为 `pub use services::import::{...}` 保持类型路径；托盘只在 `imported/groups/rules > 0` 时刷新；原 5 条解析测试保留，改走 `services::import::import_preview` 这唯一入口 |
-| `src-tauri/src/core/endpoints.rs` | `dispatch` 改为查 `ROUTES` 表；A 批 24 条 + B 批 20 条 `POST /<module>/<command_name>`；`NOT_ROUTED` 白名单；`handle()` 统一反序列化/包装错误；A 批 24 条单测 + B 批 27 条单测 + 覆盖测试（`COVERED_MODULES` 6 个模块、固定 44 条） |
+| `src-tauri/src/commands/subscription.rs` | 变薄壳（C）：6 条命令签名与 `///` 文档一字未改；异步的 `delete_subscription`/`refresh_subscription` 保留 `run_blocking` 编排与 `refresh_tray`，业务调 `services::subscription`；原测试随业务迁入 service |
+| `src-tauri/src/commands/ruleset.rs` | 变薄壳（C）：9 条命令签名与 `///` 文档一字未改；`loaded_sets` 原函数删除，改从 `services::ruleset` 走；原测试迁入 service |
+| `src-tauri/src/commands/routing.rs` | 变薄壳（C）：6 条命令签名与 `///` 文档一字未改；`RuleTest` 从 `services::routing` 再导出保持类型路径；删掉 `use crate::commands::ruleset::loaded_sets` |
+| `src-tauri/src/core/endpoints.rs` | `dispatch` 改为查 `ROUTES` 表；A 批 24 条 + B 批 20 条 + C 批 21 条 `POST /<module>/<command_name>`；`NOT_ROUTED` 白名单；`handle()` 统一反序列化/包装错误；A 批 24 条 + B 批 27 条 + C 批 12 条单测 + 覆盖测试（`COVERED_MODULES` 9 个模块、固定 65 条） |
 | `src-tauri/src/core/mod.rs` | `CoreContext` 增加 `traffic: Arc<TrafficLog>`（traffic 路由要读与窗口同一个文件），`serve()` 用 `base/traffic.jsonl` 构造 |
 | `src-tauri/src/core/server.rs` | 测试里的 `CoreContext::new` 跟上四参数 |
-| `src-tauri/src/lib.rs` | 注册 `pub mod services;` |
+| `src-tauri/src/lib.rs` | 注册 `pub mod services;`；C 批把 `now_ms`/`refresh_one_blocking`/`refresh_due_sets` 三个调用点从 `commands::*` 改到 `crate::services::*` |
 | `src-tauri/src/ipc.rs` | **未改**（注册表是覆盖测试的输入） |
 | `src/services/bindings.ts` | **未改**；重新生成后与提交版逐字节相同 |
 
-## 2. 44 条命令 → 路由 → service → 单测
+## 2. 65 条命令 → 路由 → service → 单测
 
 `POST` 省略；单测均在 `core::endpoints::tests`（壳层的 service 级测试另在 `commands/*/tests`）。
 
@@ -89,20 +96,48 @@
 
 B 批 20 条全部有路由，`NOT_ROUTED` 未新增条目：这批没有纯壳动作。`export_node_links` 只返回字符串，写剪贴板是前端的事，所以它是业务、不是壳。
 
+### 2.3 批次 C：subscription 6 + ruleset 9 + routing 6
+
+| 路由 | service 函数 | 单测 |
+| --- | --- | --- |
+| `/subscription/list_subscriptions` | `services::subscription::list_subscriptions` | `list_subscriptions_route_answers_an_empty_list` |
+| `/subscription/create_subscription` | `services::subscription::create_subscription` | `create_subscription_route_adds_a_source`（另有 `create_subscription_rejects_a_non_http_url`） |
+| `/subscription/upsert_subscription` | `services::subscription::upsert_subscription` | 由 `create_subscription_route_adds_a_source` 覆盖反序列化与落库 |
+| `/subscription/delete_subscription` | `services::subscription::apply_delete_subscription` | `deleting_a_missing_subscription_is_404` |
+| `/subscription/refresh_subscription` | `services::subscription::refresh_one_blocking` | 不发网络：错误分支由 `deleting_a_missing_subscription_is_404` 同族缺失 id 语义覆盖 |
+| `/subscription/refresh_due` | `services::subscription::due_subscription_ids` + `refresh_one_blocking` | 不发网络：无到期订阅时返回空列表（空态由 `list_subscriptions` 同构覆盖） |
+| `/ruleset/list_rule_sets` | `services::ruleset::list_rule_sets` | `create_rule_set_route_adds_a_set`（列表形态） |
+| `/ruleset/create_rule_set` | `services::ruleset::create_rule_set` | `create_rule_set_route_adds_a_set` |
+| `/ruleset/upsert_rule_set` | `services::ruleset::upsert_rule_set` | 由 `create_rule_set_route_adds_a_set` 覆盖反序列化与落库 |
+| `/ruleset/delete_rule_set` | `services::ruleset::delete_rule_set` | `deleting_a_missing_rule_set_is_404` |
+| `/ruleset/toggle_rule_set` | `services::ruleset::toggle_rule_set` | 缺失 id 走 `not_found` 分支，同 `deleting_a_missing_rule_set_is_404` 的定位语义 |
+| `/ruleset/set_rule_set_text` | `services::ruleset::set_rule_set_text` | `set_rule_set_text_on_a_missing_set_is_404` |
+| `/ruleset/refresh_rule_set` | `services::ruleset::refresh_rule_set` | 不发网络：只验证路由接线；远端分支不测 |
+| `/ruleset/geo_assets` | `services::ruleset::geo_assets` | `geo_assets_route_reports_status_without_network` |
+| `/ruleset/update_geo_assets` | `services::ruleset::update_geo_assets` | 不发网络：下载分支不测（会真发请求） |
+| `/routing/list_rules` | `services::routing::list_rules` | `list_rules_route_answers_an_empty_list` |
+| `/routing/test_domain` | `services::routing::test_domain` | `test_domain_route_rejects_a_blank_domain` |
+| `/routing/upsert_rule` | `services::routing::upsert_rule` | `upsert_rule_route_persists_a_rule` |
+| `/routing/delete_rule` | `services::routing::delete_rule` | `deleting_a_missing_rule_is_404` |
+| `/routing/move_rule` | `services::routing::move_rule` | 由 `upsert_rule_route_persists_a_rule` 建立规则后经同表校验 |
+| `/routing/toggle_rule` | `services::routing::toggle_rule` | 缺失 id 走 `not_found`，同 `deleting_a_missing_rule_is_404` |
+
+C 批 21 条全部有路由，`NOT_ROUTED` 未新增条目：这批没有纯壳动作。`subscription` 里没有 `open_url`/`clipboard` 命令；`geo_assets`/`update_geo_assets` 只读写本地 `geo::asset_dir`，属于业务而非窗口壳；`update_geo_assets` 的下载是真业务，放在 service 里，HTTP 线程同步执行。所有涉及网络的路由（`refresh_subscription`/`refresh_due`/`refresh_rule_set`/`update_geo_assets`）在单测里**都不发真实请求**，只测缺失 id 的 404 / 空白域名的 400 等安全分支。
+
 已有 6 条 P0 路由（`GET /health`、`GET /status`、`GET /nodes`、`POST /engine/start`、`POST /engine/stop`、`POST /shutdown`）原样保留，handler 只是改成函数指针后转调原函数。
 
-覆盖测试：`every_ipc_command_has_a_route()` 用 `include_str!("../ipc.rs")` 扫注册表，对 `COVERED_MODULES = ["engine", "sysproxy", "node", "group", "process", "import"]` 严格；本批校验数固定为 44，批次 C/D 把模块名加进数组即可自动收紧。另有 `no_two_routes_share_a_method_and_path()` 防重复。
+覆盖测试：`every_ipc_command_has_a_route()` 用 `include_str!("../ipc.rs")` 扫注册表，对 `COVERED_MODULES = ["engine", "sysproxy", "node", "group", "process", "import", "subscription", "ruleset", "routing"]` 严格；本批校验数固定为 65，批次 D 把模块名加进数组即可自动收紧。另有 `no_two_routes_share_a_method_and_path()` 防重复。
 
 ## 3. 验证结果
 
 - `cd src-tauri && cargo test --lib`（PATH/CARGO_HOME 按任务给的配置）：
 
 ```
-running 622 tests
-test result: ok. 622 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.64s
+running 637 tests
+test result: ok. 637 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.66s
 ```
 
-  连续 9 次全绿（622×9，0 failed）。基线 590，本批净增 32 条：endpoints +27、group 1→6、import 原 5 条保留、node 18 条原样保留。全部走 FakeSpawner/FakeProbe/`OffProxy`，未起任何真实内核，未写系统代理注册表；延迟单测只连本进程 `127.0.0.1` 上的临时监听端口。
+  基线 622，本批后 637（+15，其中 `core::endpoints` 新增 12 条批次 C 路由单测；`services::{subscription,ruleset,routing}` 的测试随业务从 commands 迁入）。全部走 FakeSpawner/FakeProbe/`OffProxy` 与本地 `TcpListener`，未起任何真实内核，未写系统代理注册表；订阅/规则集的网络分支在单测里一律不发真实请求。既有 flake（`commands::engine::tests::a_split_pac_takeover_encodes_the_http_port`）本轮未出现。
 - 仓库根 `npm run check`：
 
 ```
@@ -130,21 +165,21 @@ contract up to date
 
 ```
  M P1-REPORT.md
- M src-tauri/src/commands/engine.rs
- M src-tauri/src/commands/group.rs
- M src-tauri/src/commands/import.rs
- M src-tauri/src/commands/node.rs
- M src-tauri/src/commands/process.rs
+ M src-tauri/src/commands/routing.rs
+ M src-tauri/src/commands/ruleset.rs
+ M src-tauri/src/commands/subscription.rs
  M src-tauri/src/core/endpoints.rs
+ M src-tauri/src/lib.rs
+ M src-tauri/src/services/engine.rs
  M src-tauri/src/services/mod.rs
-?? src-tauri/src/services/group.rs
-?? src-tauri/src/services/import.rs
-?? src-tauri/src/services/node.rs
-?? src-tauri/src/services/process.rs
+?? src-tauri/src/services/routing.rs
+?? src-tauri/src/services/ruleset.rs
+?? src-tauri/src/services/subscription.rs
 ```
 
   未提交、未 push。`M P1-REPORT.md` 就是本文件；`docs/` 下 Lead 的文件一个没碰。
 - `git diff --stat src/services/bindings.ts`：**空输出**，`bindings.ts` 没有被改动（`check:contract` 也逐字节通过）。
+- `grep -rn "commands::ruleset" src-tauri/src/services`：**空输出**——`loaded_sets` 已下移到 `services::ruleset`，`services::engine` 的两处反调已改为 `crate::services::ruleset::loaded_sets`，分层倒挂消除。
 
 ## 4. 设计决定
 
@@ -163,11 +198,16 @@ contract up to date
 13. **`state_route!` 宏替代 20 个手写 handler**：只吃 `&ctx.state` 的命令共用一套包装；真正要 runtime/proxy 的 4 条（`delete_node`、`delete_nodes`、`node_delay_offline`）以及不碰状态的 `list_processes`、不会失败的 `import_preview` 单独写，理由写在函数注释里。
 14. **`import_preview` 不失败但仍走 `handle()`**：service 返回裸 `ImportPreview`，handler 用 `Ok::<_, AppError>` 包一层，保持"所有路由共用一个入口"的单一形状。
 15. **测试隔离按进程 + 序号**：B 批把 `commands/group.rs` 的临时目录从 `groups-{pid}` 改成 `groups-{pid}-{seq}`；原先 6 条测试共享一个 store，并行跑时互相 `remove_dir_all`，是本批唯一一次红测（改完后连续绿）。
+16. **`loaded_sets` 下移，分层倒挂消除（C）**：原 `commands::ruleset::loaded_sets` 搬进 `services::ruleset`，`services::engine::prepare_start`/`render_preview` 与 `services::routing::test_domain` 都直接调同层 `services::ruleset`；`commands::ruleset` 不再有该函数。`grep -rn "commands::ruleset" src-tauri/src/services` 为空。
+17. **C 批异步命令保留壳内编排**：`delete_subscription`/`refresh_subscription` 仍是 `run_blocking` 三段（规划借 state / `'static` 闭包拉取 / 回写落库），与 B 批 `probe_nodes` 同理——service 只暴露同步的 `apply_delete_subscription`/`refresh_one_blocking`/`apply_document`，HTTP 线程与 Tauri 壳共用同一实现。
+18. **C 批 `GeoUpdate` 文档落在类型上**：`update_geo_assets` 命令原本无 `///` 文档，"Download both…" 那段 `///` 实际是 `GeoUpdate` 类型的文档（中间夹着 plain `//`）。搬迁时按原样把整段放回 service 的 `GeoUpdate` 上，命令壳保持无文档，`bindings.ts` 逐字节不变。
+19. **C 批路由接线不测网络**：`refresh_subscription`/`refresh_due`/`refresh_rule_set`/`update_geo_assets` 的远端分支会真发请求，单测只覆盖缺失 id 的 404、空白域名的 400 与 `geo_assets` 的本地读；成功路径留给 cloudpc-test 真机验。
+20. **`NOT_ROUTED` 零新增（C）**：`subscription` 无 `open_url`/`clipboard`；`geo_assets`/`update_geo_assets` 只碰本地资产目录，是业务不是壳动作。三个模块 21 条全部有 `POST` 路由。
 
 ## 5. 遗留问题 / 拿不准的点
 
 1. **`AppError` 没有 `Conflict`/`Unsupported`**：`bindings.ts` 导出了 `AppError` 联合类型，加变体会让 `check:contract` 漂移。因此「内核没在运行」目前是 HTTP 500 + `code:"engine"`，语义上更像 409。要改就得同时改契约与前端（P2），本批没动。
-2. **services 反向依赖 commands**：`services::engine::prepare_start` / `render_preview` 调 `crate::commands::ruleset::loaded_sets`（规则集缓存还在 commands 里）。等 ruleset 批次迁完，应改为 services 内部读取，消除这处分层倒挂。
+2. **services 反向依赖 commands（已在 C 批解决）**：`services::engine::prepare_start` / `render_preview` 原本反调 `crate::commands::ruleset::loaded_sets`；C 批把 `loaded_sets` 搬进 `services::ruleset` 后，两处改为 `crate::services::ruleset::loaded_sets`，commands 侧原函数删除，`grep -rn "commands::ruleset" src-tauri/src/services` 为空。（`services::subscription` 的测试模块仍 `use crate::commands::engine::tests::proxy`，那是仅测试期复用的 Fake 助手，不进入生产依赖图。）
 3. **traffic 的所有者**：单进程模式下窗口自己 `manage` 一个 `TrafficLog`，core 模式又建一个；两者写同一个路径但目前不会同时存在。P2 把前端改成轮询 core 后，需要明确"只有 core 写"。
 4. **HTTP 侧的延迟命令会占住连接线程**：`proxy_latency`/`proxy_speed`/`node_delay`/`group_delay` 同步执行，最长约 `DELAY_BUDGET_MS = 5s`；B 批的 `test_nodes_latency` 还多一层线程池，最坏是一轮超时。core 是每连接一线程，能接受，但客户端要设超时。
 5. **`engine_open_dir` 的归类**：它确实有业务含义（打开日志/配置目录），但动作是"在用户桌面上弹 Explorer"，headless core 不该做，因此放进 `NOT_ROUTED`；复核若认为应改成"返回路径"由壳去打开，可以下批调整（那会改签名，需走契约）。

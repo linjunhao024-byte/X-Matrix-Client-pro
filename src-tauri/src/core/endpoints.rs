@@ -33,6 +33,7 @@ use crate::services::engine as svc_engine;
 use crate::services::sysproxy as svc_sysproxy;
 use crate::services::{group as svc_group, import as svc_import, node as svc_node};
 use crate::services::process as svc_process;
+use crate::services::{routing as svc_routing, ruleset as svc_ruleset, subscription as svc_subscription};
 use crate::services::{Ctx, EmptyArgs, NOOP_NOTIFIER};
 
 /// Check the token, then route. Authentication comes first on purpose: an
@@ -132,6 +133,27 @@ pub const ROUTES: &[Route] = &[
     Route { method: "POST", path: "/process/list_processes", handler: r_list_processes },
     Route { method: "POST", path: "/import/import_preview", handler: r_import_preview },
     Route { method: "POST", path: "/import/import_nodes", handler: r_import_nodes },
+    Route { method: "POST", path: "/subscription/list_subscriptions", handler: r_list_subscriptions },
+    Route { method: "POST", path: "/subscription/create_subscription", handler: r_create_subscription },
+    Route { method: "POST", path: "/subscription/upsert_subscription", handler: r_upsert_subscription },
+    Route { method: "POST", path: "/subscription/delete_subscription", handler: r_delete_subscription },
+    Route { method: "POST", path: "/subscription/refresh_subscription", handler: r_refresh_subscription },
+    Route { method: "POST", path: "/subscription/refresh_due", handler: r_refresh_due },
+    Route { method: "POST", path: "/ruleset/list_rule_sets", handler: r_list_rule_sets },
+    Route { method: "POST", path: "/ruleset/create_rule_set", handler: r_create_rule_set },
+    Route { method: "POST", path: "/ruleset/upsert_rule_set", handler: r_upsert_rule_set },
+    Route { method: "POST", path: "/ruleset/delete_rule_set", handler: r_delete_rule_set },
+    Route { method: "POST", path: "/ruleset/toggle_rule_set", handler: r_toggle_rule_set },
+    Route { method: "POST", path: "/ruleset/set_rule_set_text", handler: r_set_rule_set_text },
+    Route { method: "POST", path: "/ruleset/refresh_rule_set", handler: r_refresh_rule_set },
+    Route { method: "POST", path: "/ruleset/geo_assets", handler: r_geo_assets },
+    Route { method: "POST", path: "/ruleset/update_geo_assets", handler: r_update_geo_assets },
+    Route { method: "POST", path: "/routing/list_rules", handler: r_list_rules },
+    Route { method: "POST", path: "/routing/test_domain", handler: r_test_domain },
+    Route { method: "POST", path: "/routing/upsert_rule", handler: r_upsert_rule },
+    Route { method: "POST", path: "/routing/delete_rule", handler: r_delete_rule },
+    Route { method: "POST", path: "/routing/move_rule", handler: r_move_rule },
+    Route { method: "POST", path: "/routing/toggle_rule", handler: r_toggle_rule },
 ];
 
 /// The context a service function gets from the core.
@@ -268,6 +290,95 @@ fn r_import_preview(_ctx: &CoreContext, request: &http::Request) -> http::Respon
         Ok::<_, AppError>(svc_import::import_preview(args))
     })
 }
+
+// ---------------------------------------------------------------------------
+// P1 batch C: subscription / ruleset / routing.
+//
+// State-only commands go through `state_route!`. The three that also need the
+// runtime or the proxy are spelled out, exactly like `delete_node` above.
+// ---------------------------------------------------------------------------
+
+fn r_list_subscriptions(ctx: &CoreContext, request: &http::Request) -> http::Response {
+    handle("list_subscriptions", &request.body, |args: EmptyArgs| {
+        Ok::<_, AppError>(svc_subscription::list_subscriptions(&ctx.state, args))
+    })
+}
+state_route!(r_create_subscription, "create_subscription", svc_subscription::CreateSubscriptionArgs, svc_subscription::create_subscription);
+state_route!(r_upsert_subscription, "upsert_subscription", svc_subscription::SubscriptionArgs, svc_subscription::upsert_subscription);
+
+/// Deleting a source may have to stop the kernel running one of its nodes.
+fn r_delete_subscription(ctx: &CoreContext, request: &http::Request) -> http::Response {
+    handle("delete_subscription", &request.body, |args: svc_subscription::IdArgs| {
+        svc_subscription::apply_delete_subscription(&ctx.state, &ctx.runtime, &ctx.proxy, &args.id)
+    })
+}
+
+/// A refresh may stop a kernel whose node the new document dropped.
+fn r_refresh_subscription(ctx: &CoreContext, request: &http::Request) -> http::Response {
+    handle("refresh_subscription", &request.body, |args: svc_subscription::IdArgs| {
+        svc_subscription::refresh_one_blocking(
+            &ctx.state,
+            &ctx.runtime,
+            &ctx.proxy,
+            &args.id,
+            ctx.runtime.status().running,
+        )
+    })
+}
+
+fn r_refresh_due(ctx: &CoreContext, request: &http::Request) -> http::Response {
+    handle("refresh_due", &request.body, |_: EmptyArgs| {
+        let due = svc_subscription::due_subscription_ids(&ctx.state, svc_subscription::now_ms());
+        let mut outcomes = Vec::new();
+        let running = ctx.runtime.status().running;
+        for id in due {
+            match svc_subscription::refresh_one_blocking(
+                &ctx.state,
+                &ctx.runtime,
+                &ctx.proxy,
+                &id,
+                running,
+            ) {
+                Ok(outcome) => outcomes.push(outcome),
+                Err(error) => svc_subscription::record_refresh_error(&ctx.state, &id, &error.to_string()),
+            }
+        }
+        Ok::<_, AppError>(outcomes)
+    })
+}
+
+fn r_list_rule_sets(ctx: &CoreContext, request: &http::Request) -> http::Response {
+    handle("list_rule_sets", &request.body, |args: EmptyArgs| {
+        Ok::<_, AppError>(svc_ruleset::list_rule_sets(&ctx.state, args))
+    })
+}
+state_route!(r_create_rule_set, "create_rule_set", svc_ruleset::CreateRuleSetArgs, svc_ruleset::create_rule_set);
+state_route!(r_upsert_rule_set, "upsert_rule_set", svc_ruleset::RuleSetArgs, svc_ruleset::upsert_rule_set);
+state_route!(r_delete_rule_set, "delete_rule_set", svc_ruleset::IdArgs, svc_ruleset::delete_rule_set);
+state_route!(r_toggle_rule_set, "toggle_rule_set", svc_ruleset::IdArgs, svc_ruleset::toggle_rule_set);
+state_route!(r_set_rule_set_text, "set_rule_set_text", svc_ruleset::SetTextArgs, svc_ruleset::set_rule_set_text);
+state_route!(r_refresh_rule_set, "refresh_rule_set", svc_ruleset::IdArgs, svc_ruleset::refresh_rule_set);
+
+/// Geo commands only need the runtime: the asset directory hangs off it.
+fn r_geo_assets(ctx: &CoreContext, request: &http::Request) -> http::Response {
+    handle("geo_assets", &request.body, |args: EmptyArgs| {
+        svc_ruleset::geo_assets(&ctx.runtime, args)
+    })
+}
+
+fn r_update_geo_assets(ctx: &CoreContext, request: &http::Request) -> http::Response {
+    handle("update_geo_assets", &request.body, |args: EmptyArgs| {
+        svc_ruleset::update_geo_assets(&ctx.runtime, args)
+    })
+}
+
+state_route!(r_list_rules, "list_rules", EmptyArgs, svc_routing::list_rules);
+state_route!(r_test_domain, "test_domain", svc_routing::DomainArgs, svc_routing::test_domain);
+state_route!(r_upsert_rule, "upsert_rule", svc_routing::RuleArgs, svc_routing::upsert_rule);
+state_route!(r_delete_rule, "delete_rule", svc_routing::IdArgs, svc_routing::delete_rule);
+state_route!(r_move_rule, "move_rule", svc_routing::MoveArgs, svc_routing::move_rule);
+state_route!(r_toggle_rule, "toggle_rule", svc_routing::IdArgs, svc_routing::toggle_rule);
+
 
 /// No runtime in this command's signature: the list is compile-time, so it is
 /// served without a [`Ctx`].
@@ -842,7 +953,10 @@ mod tests {
     // deleting a module name from the array.
     // ------------------------------------------------------------------
 
-    const COVERED_MODULES: &[&str] = &["engine", "sysproxy", "node", "group", "process", "import"];
+    const COVERED_MODULES: &[&str] = &[
+        "engine", "sysproxy", "node", "group", "process", "import", "subscription", "ruleset",
+        "routing",
+    ];
 
     /// `(module, command)` for every `commands::<module>::<command>` in
     /// `ipc.rs`. Read as text because that list is the registry the Tauri
@@ -905,8 +1019,8 @@ mod tests {
             );
         }
         assert_eq!(
-            checked, 44,
-            "本批覆盖 engine 22 + sysproxy 2 + node 12 + group 5 + process 1 + import 2 = 44 条命令，实际检查 {checked} 条"
+            checked, 65,
+            "本批覆盖 engine 22 + sysproxy 2 + node 12 + group 5 + process 1 + import 2 + subscription 6 + ruleset 9 + routing 6 = 65 条命令，实际检查 {checked} 条"
         );
     }
 
@@ -1618,5 +1732,126 @@ mod tests {
         let response = dispatch(&ctx, TOKEN, &post("/process/list_processes", TOKEN, ""));
         assert_eq!(response.status, 200, "{}", response.body);
         assert!(body(&response).is_array());
+    }
+
+    // --- subscription -----------------------------------------------------
+
+    #[test]
+    fn create_subscription_route_adds_a_source() {
+        let ctx = context();
+        let payload = json!({"name": "机场", "url": "https://example.com/sub"}).to_string();
+        let response = dispatch(&ctx, TOKEN, &post("/subscription/create_subscription", TOKEN, &payload));
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert_eq!(body(&response).as_array().unwrap().len(), 1);
+        assert_eq!(ctx.state.subscriptions.read().len(), 1);
+    }
+
+    #[test]
+    fn create_subscription_rejects_a_non_http_url() {
+        let ctx = context();
+        let payload = json!({"name": "机场", "url": "not-a-url"}).to_string();
+        let response = dispatch(&ctx, TOKEN, &post("/subscription/create_subscription", TOKEN, &payload));
+        assert_eq!(response.status, 400);
+        assert_eq!(body(&response)["error"]["code"], json!("invalid_input"));
+    }
+
+    #[test]
+    fn list_subscriptions_route_answers_an_empty_list() {
+        let ctx = context();
+        let response = dispatch(&ctx, TOKEN, &post("/subscription/list_subscriptions", TOKEN, ""));
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert_eq!(body(&response), json!([]));
+    }
+
+    #[test]
+    fn deleting_a_missing_subscription_is_404() {
+        let ctx = context();
+        let response = dispatch(&ctx, TOKEN, &post("/subscription/delete_subscription", TOKEN, r#"{"id":"nope"}"#));
+        assert_eq!(response.status, 404);
+        assert_eq!(body(&response)["error"]["code"], json!("not_found"));
+    }
+
+    // --- ruleset ----------------------------------------------------------
+
+    #[test]
+    fn create_rule_set_route_adds_a_set() {
+        let ctx = context();
+        let payload = json!({"name": "geosite", "url": "https://example.com/geosite.srs"}).to_string();
+        let response = dispatch(&ctx, TOKEN, &post("/ruleset/create_rule_set", TOKEN, &payload));
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert_eq!(body(&response).as_array().unwrap().len(), 1);
+        assert_eq!(ctx.state.rule_sets.read().len(), 1);
+    }
+
+    #[test]
+    fn deleting_a_missing_rule_set_is_404() {
+        let ctx = context();
+        let response = dispatch(&ctx, TOKEN, &post("/ruleset/delete_rule_set", TOKEN, r#"{"id":"nope"}"#));
+        assert_eq!(response.status, 404);
+        assert_eq!(body(&response)["error"]["code"], json!("not_found"));
+    }
+
+    #[test]
+    fn set_rule_set_text_on_a_missing_set_is_404() {
+        let ctx = context();
+        let payload = json!({"id": "nope", "text": "example.com"}).to_string();
+        let response = dispatch(&ctx, TOKEN, &post("/ruleset/set_rule_set_text", TOKEN, &payload));
+        assert_eq!(response.status, 404);
+        assert_eq!(body(&response)["error"]["code"], json!("not_found"));
+    }
+
+    #[test]
+    fn geo_assets_route_reports_status_without_network() {
+        // Reads the asset directory only; never fetches.
+        let ctx = context();
+        let response = dispatch(&ctx, TOKEN, &post("/ruleset/geo_assets", TOKEN, ""));
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert!(body(&response).is_array());
+    }
+
+    // --- routing ----------------------------------------------------------
+
+    #[test]
+    fn list_rules_route_answers_an_empty_list() {
+        let ctx = context();
+        let response = dispatch(&ctx, TOKEN, &post("/routing/list_rules", TOKEN, ""));
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert_eq!(body(&response), json!([]));
+    }
+
+    #[test]
+    fn upsert_rule_route_persists_a_rule() {
+        let ctx = context();
+        let payload = json!({
+            "rule": {
+                "id": "r1",
+                "name": "广告直连",
+                "enabled": true,
+                "matcher": {"kind": "domain_suffix", "value": "ads.example.com"},
+                "action": {"kind": "direct"}
+            }
+        })
+        .to_string();
+        let response = dispatch(&ctx, TOKEN, &post("/routing/upsert_rule", TOKEN, &payload));
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert_eq!(body(&response).as_array().unwrap().len(), 1);
+        assert_eq!(ctx.state.rules.read().len(), 1);
+    }
+
+    #[test]
+    fn test_domain_route_rejects_a_blank_domain() {
+        let ctx = context();
+        let payload = json!({"domain": "   "}).to_string();
+        let response = dispatch(&ctx, TOKEN, &post("/routing/test_domain", TOKEN, &payload));
+        assert_eq!(response.status, 400);
+        assert_eq!(body(&response)["error"]["code"], json!("invalid_input"));
+    }
+
+    #[test]
+    fn deleting_a_missing_rule_is_404() {
+        let ctx = context();
+        let response = dispatch(&ctx, TOKEN, &post("/routing/delete_rule", TOKEN, r#"{"id":"nope"}"#));
+        assert_eq!(response.status, 404);
+        assert_eq!(body(&response)["error"]["code"], json!("not_found"));
     }
 }

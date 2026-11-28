@@ -418,7 +418,7 @@ pub fn prepare_start(state: &AppState, kind: EngineKind, node_id: &str) -> AppRe
         rules: state.rules.read().clone(),
         nodes: state.nodes.read().clone(),
         groups: state.groups.read().clone(),
-        rule_sets: crate::commands::ruleset::loaded_sets(state),
+        rule_sets: crate::services::ruleset::loaded_sets(state),
         merge: state.merge.read().clone(),
     })
 }
@@ -595,7 +595,7 @@ pub fn render_preview(
     let settings = state.settings.read().clone();
     let nodes = state.nodes.read().clone();
     let groups = state.groups.read().clone();
-    let rule_sets = crate::commands::ruleset::loaded_sets(state);
+    let rule_sets = crate::services::ruleset::loaded_sets(state);
     let options = RunOptions::from_settings(&settings, &rules)
         .with_catalog(&nodes, &groups)
         .with_rule_sets(&rule_sets)

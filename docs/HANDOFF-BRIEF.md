@@ -9,7 +9,7 @@
 |---|---|
 | 仓库 / 工作区 | `D:\GitHub-Warehouse\X-Matrix-Client-Pro`（Tauri 2 + Vue 3 + TS） |
 | HEAD | 本简报这条 docs 提交；功能提交查 `git log --oneline -- <anchor>` 的第一条：§62 `src/views/SubscriptionsView.vue`、§61 `src-tauri/src/engine/merge.rs`、§60 `src-tauri/src/hotkeys.rs`、§59 `src-tauri/src/store.rs`、§58 `src-tauri/src/engine/singbox.rs`、§57 `src-tauri/src/service.rs`、§56 `src-tauri/src/elevate.rs`、§55 `src-tauri/src/power.rs`、§54 `src-tauri/src/net/webdav.rs`、§53 `src-tauri/src/engine/release.rs`、§52 `src-tauri/src/engine/groupwatch.rs`、§51 `src-tauri/src/sysproc.rs`、§50 `src/services/accent.ts`、§49（S8）、`a794438`（§48）、`6fd790f`（§47） |
-| 规模 | **98** 个 IPC 命令（Vue 版）/ Rust 单测 **622** / vitest **136**（13 文件）/ i18n **873 键 × 3 语言**；Avalonia 壳（`desktop/XMatrix.Desktop`）走 `x-matrix-core.exe --serve`，6 条 HTTP 路由 |
+| 规模 | **98** 个 IPC 命令（Vue 版）/ Rust 单测 **637** / vitest **136**（13 文件）/ i18n **873 键 × 3 语言**；Avalonia 壳（`desktop/XMatrix.Desktop`）走 `x-matrix-core.exe --serve`，6 条 HTTP 路由 |
 | 验收 | `docs/ACCEPTANCE.md` 写到 **§66**，全部是云电脑真机点出来的（各节末尾的「一句实话」列着未验项）；仍未验的集中在 §56（真提权）、§57（SCM 1053 / icacls 失败 / 非管理员）、§58（非管理员拒绝 TUN）、§60（真实按键）、§62（真下载内核、Win10/Win11、升级安装）、§66（RDP 里手动点、真键盘） |
 | 云电脑 | 可用（02:52 已恢复；03:0x 又闪断过一次，重连即通）。末态：`ProxyEnable=0x0`、无 `xm*`/`tunkill`/`xmlisten` 任务、无内核进程、`XMatrixKernel` 服务已卸载 |
 | 构建产物 | `src-tauri/target/release/x-matrix.exe`（11,115,008 B @2026-11-26 15:27，md5 `2b48cd496cca5602f609be5c0d729e25`，含 §62 的订阅刷新修复）；安装包同一次带 bundle 的构建：`bundle/msi/X-Matrix_0.1.0_x64_en-US.msi` 5,156,864 B（md5 `5ded88e8bac04a0d706b446d6fc9916c`）、`bundle/nsis/X-Matrix_0.1.0_x64-setup.exe` 3,587,292 B |
@@ -43,7 +43,7 @@ https_proxy=http://127.0.0.1:10808 git push origin main
 | 阶段 | 状态 | 落点 |
 |---|---|---|
 | P0 通道 + 骨架 | ✅ 已做、已验 | §66；`src-tauri/src/core/`、`desktop/XMatrix.Desktop` |
-| P1 98 条 IPC → HTTP 路由 | 🟡 批次 A+B 完成（44 条）| 每条逐条打通的脚本 `D:/tmp/shots/p1-accept.sh`；Rust 侧 622 测试仍全绿 |
+| P1 98 条 IPC → HTTP 路由 | 🟡 批次 A+B+C 完成（65 条）| 每条逐条打通的脚本 `D:/tmp/shots/p1-accept.sh`；Rust 侧 637 测试仍全绿 |
 | P2 11 个视图迁到 Avalonia | ⬜ | 每页并排比对截图，不达标不算完成 |
 | P3 托盘/单实例/提权/主题/i18n | ⬜ | 规模见 `docs/REWRITE-PLAN.md` |
 | P4 按 §49–§66 重跑真机验收 | ⬜ | 全过之后才删 Vue 前端 |

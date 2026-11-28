@@ -323,7 +323,7 @@ fn start_subscription_sweep(app: AppHandle) {
         let Some(state) = app.try_state::<AppState>() else {
             continue;
         };
-        let now = commands::subscription::now_ms();
+        let now = crate::services::subscription::now_ms();
         let due: Vec<String> = state
             .subscriptions
             .read()
@@ -347,7 +347,7 @@ fn start_subscription_sweep(app: AppHandle) {
             let (Some(kernel), Some(proxy)) = (kernel.as_ref(), proxy.as_ref()) else {
                 break;
             };
-            match commands::subscription::refresh_one_blocking(&state, kernel, proxy, &id, running) {
+            match crate::services::subscription::refresh_one_blocking(&state, kernel, proxy, &id, running) {
                 Ok(outcome) => {
                     println!(
                         "x-matrix: 订阅「{}」已更新，{} 个节点",
@@ -359,7 +359,7 @@ fn start_subscription_sweep(app: AppHandle) {
                     let mut subscriptions = state.subscriptions.write();
                     if let Some(existing) = subscriptions.iter_mut().find(|s| s.id == id) {
                         existing.last_error = Some(error.to_string());
-                        existing.updated_at_ms = Some(commands::subscription::now_ms());
+                        existing.updated_at_ms = Some(crate::services::subscription::now_ms());
                     }
                 }
             }
@@ -367,7 +367,7 @@ fn start_subscription_sweep(app: AppHandle) {
 
         // Rule sets share the tick: they are the same kind of remote document,
         // and a second timer would only be another thing to reason about.
-        for (name, outcome) in commands::ruleset::refresh_due_sets(&state, now) {
+        for (name, outcome) in crate::services::ruleset::refresh_due_sets(&state, now) {
             match outcome {
                 Ok(count) => println!("x-matrix: 规则集「{name}」已更新，{count} 条规则"),
                 Err(error) => eprintln!("x-matrix: 规则集「{name}」更新失败：{error}"),

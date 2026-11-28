@@ -29,6 +29,9 @@ pub mod group;
 pub mod import;
 pub mod node;
 pub mod process;
+pub mod routing;
+pub mod ruleset;
+pub mod subscription;
 pub mod sysproxy;
 
 /// The one side effect that cannot move into the library: telling the UI that

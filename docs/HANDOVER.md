@@ -22,7 +22,7 @@
 | 上一版未提交清单（留档） | `src-tauri/src/domain/settings.rs`、`src-tauri/src/engine/{mod,render,runtime,xray}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§39 分片）；再上一版：`src-tauri/src/engine/{mod,runtime}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§37 统一提示）；再上一版：`src-tauri/src/commands/settings.rs`、`src-tauri/src/commands/sysproxy.rs`、`src/stores/sysproxy.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`、`docs/ACCEPTANCE.md`（§36 系统代理即时生效） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库；之后每次收尾都跟着更新 |
 | IPC 命令 | **98**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
-| Rust 单测 | **622 passed**（`ARCHITECTURE.md:278` 已同步；P0 +25、P1 批次 A +26、批次 B +32） |
+| Rust 单测 | **637 passed**（`ARCHITECTURE.md:278` 已同步；P0 +25、P1 批次 A +26、批次 B +32、批次 C +15） |
 | 前端检查 | `npm run check` 全绿：vue-tsc / architecture（70 文件）/ contract / vitest **136**（13 文件） |
 | i18n | **873** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
 | 桌面产物 | 桌面上的旧副本**已不存在**；产物是 `src-tauri/target/release/x-matrix.exe`（11,115,008 B @2026-11-26 15:27，md5 `2b48cd496cca5602f609be5c0d729e25`，含 §62 那处订阅刷新修复），以及安装包 `src-tauri/target/release/bundle/msi/X-Matrix_0.1.0_x64_en-US.msi`（5,156,864 B，md5 `5ded88e8bac04a0d706b446d6fc9916c`）与 `bundle/nsis/X-Matrix_0.1.0_x64-setup.exe`（3,587,292 B）——两个包都是同一次带 bundle 的构建产的，§62 的 E2E 就是用这个 MSI 验的 |
@@ -612,3 +612,15 @@ scp -i /c/Users/83611/.ssh/id_ed25519_cpc 本地文件 Administrator@100.106.121
 - 遗留：`node_delay_offline` 真起临时内核那条路径未验（本机不许起内核，云电脑这轮没有可连通节点）；`list_processes` 无 Fake 枚举器，单测只验形状；`commands::engine::tests::a_split_pac_takeover_encodes_the_http_port` 有一个既有 flake（并发时单跑失败一次，随后 9 次全绿）。
 
 **计数**：IPC 98（不变）、Rust **622**（+32）、vitest 136（不变）、i18n 873（不变）。
+
+## §0.25 P1 批次 C：subscription / ruleset / routing 的 21 条命令进 HTTP 通道（2026-11-29）
+
+- 新增 `src-tauri/src/services/{subscription,ruleset,routing}.rs`；三个 `commands/*.rs` 变薄壳；`RuleTest`/`GeoUpdate` 从 services 再导出。
+- **分层倒挂消除**：`loaded_sets` 从 `commands/ruleset.rs` 下移到 `services/ruleset.rs`，`services/engine.rs` 的 `prepare_start`/`render_preview` 改为调 `crate::services::ruleset::loaded_sets`；`commands/routing.rs` 不再 `use commands::ruleset::loaded_sets`。`grep -rn "commands::ruleset" src-tauri/src/services` 为空。
+- `core/endpoints.rs` 加 21 条 `POST /<module>/<command_name>` 路由 + 12 条单测；`COVERED_MODULES` 9 个模块、断言 `checked == 65`；`NOT_ROUTED` 零新增（subscription 无 open_url/clipboard，geo 资产只碰本地目录）。
+- 真机：`200=14 non-200=6`（6 条 404 全是我给的不存在 id）；`upsert_rule` 后 `test_domain a.example.org` 命中 `C-RULE`（规则后缀匹配真跑通）；`create_rule_set {"name":"C-SET","url":""}` 与 `create_subscription` 落盘并被 `list` 读回；`geo_assets` 回 6 条 `exists:false`；`refresh_due` 回 `[]`。
+- **未在真机打**：`ruleset/update_geo_assets`（下 MB 级 GeoIP，cloudpc 到 GitHub 5 kB/s，打它会挂三分钟）、`refresh_subscription` 真源导入、`refresh_rule_set` 远程解析。三条单测只覆盖安全分支。
+- 坑记：中文错误消息在冒烟日志里是 cp936 乱码（驱动 `Add-Content` 编码问题，产品发的是 UTF-8）；`create_rule_set` 的 `url` 必须给（空串=本地集）；新建订阅后 `node_count` 仍是 0（core 的 create 不拉取）；`refresh_subscription` 点不到 id 是 404，`refresh_due` 无到期项是 200+`[]`。
+- 验收文档：`docs/ACCEPTANCE.md` §69。
+
+**计数**：IPC 98（不变）、Rust **637**（+15）、vitest 136（不变）、i18n 873（不变）。
