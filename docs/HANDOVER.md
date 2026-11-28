@@ -22,7 +22,7 @@
 | 上一版未提交清单（留档） | `src-tauri/src/domain/settings.rs`、`src-tauri/src/engine/{mod,render,runtime,xray}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§39 分片）；再上一版：`src-tauri/src/engine/{mod,runtime}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§37 统一提示）；再上一版：`src-tauri/src/commands/settings.rs`、`src-tauri/src/commands/sysproxy.rs`、`src/stores/sysproxy.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`、`docs/ACCEPTANCE.md`（§36 系统代理即时生效） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库；之后每次收尾都跟着更新 |
 | IPC 命令 | **98**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
-| Rust 单测 | **590 passed**（`ARCHITECTURE.md:278` 已同步；P0 的 core 通道 +25、P1 批次 A 的路由 +26） |
+| Rust 单测 | **622 passed**（`ARCHITECTURE.md:278` 已同步；P0 +25、P1 批次 A +26、批次 B +32） |
 | 前端检查 | `npm run check` 全绿：vue-tsc / architecture（70 文件）/ contract / vitest **136**（13 文件） |
 | i18n | **873** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
 | 桌面产物 | 桌面上的旧副本**已不存在**；产物是 `src-tauri/target/release/x-matrix.exe`（11,115,008 B @2026-11-26 15:27，md5 `2b48cd496cca5602f609be5c0d729e25`，含 §62 那处订阅刷新修复），以及安装包 `src-tauri/target/release/bundle/msi/X-Matrix_0.1.0_x64_en-US.msi`（5,156,864 B，md5 `5ded88e8bac04a0d706b446d6fc9916c`）与 `bundle/nsis/X-Matrix_0.1.0_x64-setup.exe`（3,587,292 B）——两个包都是同一次带 bundle 的构建产的，§62 的 E2E 就是用这个 MSI 验的 |
@@ -602,3 +602,13 @@ scp -i /c/Users/83611/.ssh/id_ed25519_cpc 本地文件 Administrator@100.106.121
 - 遗留：①「内核没跑」现在是 500 `engine` 而非 409，加分体错误码要与 `bindings.ts`/前端一起改（P2）；② `services::engine` 仍反调 `commands::ruleset::loaded_sets`，等 ruleset 批次消除；③ traffic 日志在窗口与 core 各建一个实例，P2 明确只由 core 写；④ 延迟类命令同步执行最长 5s 占连接线程，客户端要设超时。
 
 **计数**：IPC 98（不变）、Rust **590**（+26）、vitest 136（不变）、i18n 873（不变）。
+
+## §0.24 P1 批次 B：node / group / process / import 的 20 条命令进 HTTP 通道（2026-11-29）
+
+- 新增 `src-tauri/src/services/{node,group,process,import}.rs`；`commands/{node,group,import,process}.rs` 变薄壳，签名与文档一字未改（`probe_nodes` 因为 `lib.rs:308`、`lib.rs:779` 的 `block_on` 编排依赖，留在壳里）。
+- `core/endpoints.rs`：`state_route!` 宏覆盖 15 条形制相同的命令，另 5 条各写 handler；`list_processes` 不要求 `AppState`。覆盖测试 `COVERED_MODULES` 收到 6 个模块、断言 `checked == 44`。
+- 真机（同 §67 的 `p1-accept.sh`，换一份 `p1-routes.txt`）：`200=17 non-200=3`；3 条非 200 是我自己喂了不存在的 id（`delete_nodes` / `test_node_latency` / `node_delay_offline`），产品行为正确；`upsert_group`→`select_group_member`→`toggle_group`→`delete_group` 状态逐条对得上；`export_node_links` 出真 `vless://` 链接；`test_nodes_latency` 实测 `ms:37` 与一条超时；`list_processes` 读到真实进程表；`bindings.ts` 无 diff。
+- 验收文档：`docs/ACCEPTANCE.md` §68（12 行判据 + 4 条坑 + 一句实话）。
+- 遗留：`node_delay_offline` 真起临时内核那条路径未验（本机不许起内核，云电脑这轮没有可连通节点）；`list_processes` 无 Fake 枚举器，单测只验形状；`commands::engine::tests::a_split_pac_takeover_encodes_the_http_port` 有一个既有 flake（并发时单跑失败一次，随后 9 次全绿）。
+
+**计数**：IPC 98（不变）、Rust **622**（+32）、vitest 136（不变）、i18n 873（不变）。

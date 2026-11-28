@@ -25,6 +25,10 @@ use crate::state::AppState;
 use crate::sysproxy::ProxyGuard;
 
 pub mod engine;
+pub mod group;
+pub mod import;
+pub mod node;
+pub mod process;
 pub mod sysproxy;
 
 /// The one side effect that cannot move into the library: telling the UI that

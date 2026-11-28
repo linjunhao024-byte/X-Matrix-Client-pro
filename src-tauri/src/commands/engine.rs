@@ -33,8 +33,7 @@ type Traffic<'a> = State<'a, Arc<TrafficLog>>;
 /// import them through this path, so the move keeps that surface stable
 /// instead of rewriting every caller in the same batch.
 pub(crate) use crate::services::engine::{
-    lookup_node, prepare_start, probe_url, remember_real, remember_session, render_for_preview,
-    start_engine, stop_if_running_node,
+    prepare_start, remember_session, render_for_preview, start_engine, stop_if_running_node,
 };
 
 /// A context with only the runtime: enough for status, binaries, logs and the

@@ -31,6 +31,8 @@ use crate::engine::{EngineKind, EngineStatus};
 use crate::error::{AppError, AppResult};
 use crate::services::engine as svc_engine;
 use crate::services::sysproxy as svc_sysproxy;
+use crate::services::{group as svc_group, import as svc_import, node as svc_node};
+use crate::services::process as svc_process;
 use crate::services::{Ctx, EmptyArgs, NOOP_NOTIFIER};
 
 /// Check the token, then route. Authentication comes first on purpose: an
@@ -110,6 +112,26 @@ pub const ROUTES: &[Route] = &[
     Route { method: "POST", path: "/engine/engine_config_preview", handler: r_engine_config_preview },
     Route { method: "POST", path: "/sysproxy/system_proxy_status", handler: r_system_proxy_status },
     Route { method: "POST", path: "/sysproxy/system_proxy_disable", handler: r_system_proxy_disable },
+    Route { method: "POST", path: "/node/list_nodes", handler: r_list_nodes },
+    Route { method: "POST", path: "/node/upsert_node", handler: r_upsert_node },
+    Route { method: "POST", path: "/node/delete_node", handler: r_delete_node },
+    Route { method: "POST", path: "/node/move_node", handler: r_move_node },
+    Route { method: "POST", path: "/node/delete_nodes", handler: r_delete_nodes },
+    Route { method: "POST", path: "/node/tag_nodes", handler: r_tag_nodes },
+    Route { method: "POST", path: "/node/export_node_links", handler: r_export_node_links },
+    Route { method: "POST", path: "/node/test_node_latency", handler: r_test_node_latency },
+    Route { method: "POST", path: "/node/test_nodes_latency", handler: r_test_nodes_latency },
+    Route { method: "POST", path: "/node/node_probes", handler: r_node_probes },
+    Route { method: "POST", path: "/node/clear_node_probes", handler: r_clear_node_probes },
+    Route { method: "POST", path: "/node/node_delay_offline", handler: r_node_delay_offline },
+    Route { method: "POST", path: "/group/list_groups", handler: r_list_groups },
+    Route { method: "POST", path: "/group/upsert_group", handler: r_upsert_group },
+    Route { method: "POST", path: "/group/delete_group", handler: r_delete_group },
+    Route { method: "POST", path: "/group/select_group_member", handler: r_select_group_member },
+    Route { method: "POST", path: "/group/toggle_group", handler: r_toggle_group },
+    Route { method: "POST", path: "/process/list_processes", handler: r_list_processes },
+    Route { method: "POST", path: "/import/import_preview", handler: r_import_preview },
+    Route { method: "POST", path: "/import/import_nodes", handler: r_import_nodes },
 ];
 
 /// The context a service function gets from the core.
@@ -169,6 +191,16 @@ macro_rules! ctx_route {
     };
 }
 
+/// Wire a service function that only needs the state. Same shape as
+/// [`ctx_route!`], minus the runtime and proxy the command never asked for.
+macro_rules! state_route {
+    ($handler:ident, $command:literal, $args:ty, $run:path) => {
+        fn $handler(ctx: &CoreContext, request: &http::Request) -> http::Response {
+            handle($command, &request.body, |args: $args| $run(&ctx.state, args))
+        }
+    };
+}
+
 ctx_route!(r_engine_status, "engine_status", EmptyArgs, svc_engine::engine_status);
 ctx_route!(r_engine_binaries, "engine_binaries", EmptyArgs, svc_engine::engine_binaries);
 ctx_route!(r_engine_version, "engine_version", svc_engine::KindArgs, svc_engine::engine_version);
@@ -185,6 +217,57 @@ ctx_route!(r_engine_start, "engine_start", svc_engine::StartArgs, svc_engine::en
 ctx_route!(r_engine_apply, "engine_apply", svc_engine::StartArgs, svc_engine::engine_apply);
 ctx_route!(r_engine_stop, "engine_stop", EmptyArgs, svc_engine::engine_stop);
 ctx_route!(r_engine_config_preview, "engine_config_preview", svc_engine::PreviewArgs, svc_engine::engine_config_preview);
+
+state_route!(r_list_nodes, "list_nodes", EmptyArgs, svc_node::list_nodes);
+state_route!(r_upsert_node, "upsert_node", svc_node::NodeArgs, svc_node::upsert_node);
+state_route!(r_move_node, "move_node", svc_node::MoveArgs, svc_node::move_node);
+state_route!(r_tag_nodes, "tag_nodes", svc_node::TagArgs, svc_node::tag_nodes);
+state_route!(r_export_node_links, "export_node_links", svc_node::IdsArgs, svc_node::export_node_links);
+state_route!(r_test_node_latency, "test_node_latency", svc_node::IdArgs, svc_node::test_node_latency);
+state_route!(r_test_nodes_latency, "test_nodes_latency", svc_node::IdsArgs, svc_node::test_nodes_latency);
+state_route!(r_node_probes, "node_probes", EmptyArgs, svc_node::node_probes);
+state_route!(r_clear_node_probes, "clear_node_probes", svc_node::IdsArgs, svc_node::clear_node_probes);
+state_route!(r_list_groups, "list_groups", EmptyArgs, svc_group::list_groups);
+state_route!(r_upsert_group, "upsert_group", svc_group::GroupArgs, svc_group::upsert_group);
+state_route!(r_delete_group, "delete_group", svc_group::IdArgs, svc_group::delete_group);
+state_route!(r_select_group_member, "select_group_member", svc_group::SelectMemberArgs, svc_group::select_group_member);
+state_route!(r_toggle_group, "toggle_group", svc_group::IdArgs, svc_group::toggle_group);
+/// The process list takes no state at all: it is an OS snapshot, like the
+/// compile-time engine list.
+fn r_list_processes(_ctx: &CoreContext, request: &http::Request) -> http::Response {
+    handle("list_processes", &request.body, |args: EmptyArgs| {
+        svc_process::list_processes(args)
+    })
+}
+state_route!(r_import_nodes, "import_nodes", svc_import::TextArgs, svc_import::import_nodes);
+
+/// Deleting a node may have to stop the kernel running it, so the handler hands
+/// over the whole context rather than just the state.
+fn r_delete_node(ctx: &CoreContext, request: &http::Request) -> http::Response {
+    handle("delete_node", &request.body, |args: svc_node::IdArgs| {
+        svc_node::delete_node(&ctx.state, &ctx.runtime, &ctx.proxy, args)
+    })
+}
+
+fn r_delete_nodes(ctx: &CoreContext, request: &http::Request) -> http::Response {
+    handle("delete_nodes", &request.body, |args: svc_node::IdsArgs| {
+        svc_node::delete_nodes(&ctx.state, &ctx.runtime, &ctx.proxy, args)
+    })
+}
+
+/// The offline delay needs the runtime as well: it refuses while a kernel runs.
+fn r_node_delay_offline(ctx: &CoreContext, request: &http::Request) -> http::Response {
+    handle("node_delay_offline", &request.body, |args: svc_node::IdArgs| {
+        svc_node::node_delay_offline(&ctx.state, &ctx.runtime, args)
+    })
+}
+
+/// Previewing never writes, so it cannot fail; the envelope still gets a value.
+fn r_import_preview(_ctx: &CoreContext, request: &http::Request) -> http::Response {
+    handle("import_preview", &request.body, |args: svc_import::TextArgs| {
+        Ok::<_, AppError>(svc_import::import_preview(args))
+    })
+}
 
 /// No runtime in this command's signature: the list is compile-time, so it is
 /// served without a [`Ctx`].
@@ -461,7 +544,7 @@ fn shutdown(ctx: &CoreContext) -> http::Response {
 mod tests {
     use super::*;
     use crate::core::CoreContext;
-    use crate::domain::{Protocol, Security, Transport};
+    use crate::domain::{GroupKind, ProbeKind, Protocol, RuleAction, RuleMatcher, RoutingRule, Security, Transport};
     use crate::engine::EngineRuntime;
     use crate::error::AppResult;
     use crate::state::AppState;
@@ -759,7 +842,7 @@ mod tests {
     // deleting a module name from the array.
     // ------------------------------------------------------------------
 
-    const COVERED_MODULES: &[&str] = &["engine", "sysproxy"];
+    const COVERED_MODULES: &[&str] = &["engine", "sysproxy", "node", "group", "process", "import"];
 
     /// `(module, command)` for every `commands::<module>::<command>` in
     /// `ipc.rs`. Read as text because that list is the registry the Tauri
@@ -822,8 +905,8 @@ mod tests {
             );
         }
         assert_eq!(
-            checked, 24,
-            "本批覆盖 engine 22 + sysproxy 2 = 24 条命令，实际检查 {checked} 条"
+            checked, 44,
+            "本批覆盖 engine 22 + sysproxy 2 + node 12 + group 5 + process 1 + import 2 = 44 条命令，实际检查 {checked} 条"
         );
     }
 
@@ -1129,5 +1212,411 @@ mod tests {
         let response = dispatch(&ctx, TOKEN, &post("/engine/engine_status", TOKEN, "[1]"));
         assert_eq!(response.status, 400);
         assert_eq!(body(&response)["error"]["code"], json!("invalid_input"));
+    }
+
+// ------------------------------------------------------------------
+    // P1 batch B: node / group / process / import.
+    //
+    // Every test builds its own context, so the fake runtime and the
+    // registry-refusing proxy are the only OS touched. Nothing here starts a
+    // kernel: the latency tests listen on a loopback port this process owns,
+    // and the offline-delay tests stop at the refusal path before any temp
+    // kernel could be written.
+    // ------------------------------------------------------------------
+
+    fn node_json(id: &str, name: &str, server: &str, port: u16) -> Value {
+        serde_json::to_value(node(id, name, server, port)).unwrap()
+    }
+
+    #[test]
+    fn node_list_route_answers_the_node_list() {
+        let ctx = context_with_node();
+        let response = dispatch(&ctx, TOKEN, &post("/node/list_nodes", TOKEN, ""));
+        assert_eq!(response.status, 200, "{}", response.body);
+        let value = body(&response);
+        assert_eq!(value.as_array().unwrap().len(), 1);
+        assert_eq!(value[0]["name"], json!("测试节点"));
+    }
+
+    #[test]
+    fn upsert_node_route_adds_then_updates() {
+        let ctx = context();
+        let payload = json!({"node": node_json("n1", "甲", "a.example", 443)}).to_string();
+        let response = dispatch(&ctx, TOKEN, &post("/node/upsert_node", TOKEN, &payload));
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert_eq!(body(&response)[0]["name"], json!("甲"));
+
+        let payload = json!({"node": node_json("n1", "乙", "a.example", 443)}).to_string();
+        let response = dispatch(&ctx, TOKEN, &post("/node/upsert_node", TOKEN, &payload));
+        assert_eq!(response.status, 200, "{}", response.body);
+        let value = body(&response);
+        assert_eq!(value.as_array().unwrap().len(), 1, "same id replaces, not appends");
+        assert_eq!(value[0]["name"], json!("乙"));
+    }
+
+    #[test]
+    fn tag_nodes_route_tags_the_selection() {
+        let ctx = context_with_node();
+        let payload = json!({"ids": ["n1"], "tag": "  trusted  ", "remove": false}).to_string();
+        let response = dispatch(&ctx, TOKEN, &post("/node/tag_nodes", TOKEN, &payload));
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert_eq!(body(&response)[0]["tags"], json!(["trusted"]));
+    }
+
+    #[test]
+    fn an_empty_tag_on_tag_nodes_is_400() {
+        let ctx = context_with_node();
+        let payload = json!({"ids": ["n1"], "tag": "   ", "remove": false}).to_string();
+        let response = dispatch(&ctx, TOKEN, &post("/node/tag_nodes", TOKEN, &payload));
+        assert_eq!(response.status, 400);
+        let value = body(&response);
+        assert_eq!(value["error"]["code"], json!("invalid_input"));
+        assert!(
+            value["error"]["message"]
+                .as_str()
+                .is_some_and(|text| text.contains("标签")),
+            "{value:?}"
+        );
+    }
+
+    #[test]
+    fn move_node_route_swaps_neighbours() {
+        let ctx = context();
+        ctx.state
+            .nodes
+            .write()
+            .extend([node("n1", "一", "a.example", 443), node("n2", "二", "b.example", 443)]);
+
+        let response = dispatch(&ctx, TOKEN, &post("/node/move_node", TOKEN, r#"{"id":"n2","delta":-1}"#));
+
+        assert_eq!(response.status, 200, "{}", response.body);
+        let value = body(&response);
+        assert_eq!(value[0]["id"], json!("n2"));
+        assert_eq!(value[1]["id"], json!("n1"));
+    }
+
+    #[test]
+    fn delete_node_route_removes_it_and_answers_the_rest() {
+        let ctx = context_with_node();
+        let response = dispatch(&ctx, TOKEN, &post("/node/delete_node", TOKEN, r#"{"id":"n1"}"#));
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert_eq!(body(&response), json!([]));
+        assert!(ctx.state.nodes.read().is_empty());
+    }
+
+    #[test]
+    fn deleting_a_missing_node_is_404() {
+        let ctx = context();
+        let response = dispatch(&ctx, TOKEN, &post("/node/delete_node", TOKEN, r#"{"id":"nope"}"#));
+        assert_eq!(response.status, 404);
+        assert_eq!(body(&response)["error"]["code"], json!("not_found"));
+    }
+
+    #[test]
+    fn delete_nodes_route_removes_a_selection() {
+        let ctx = context();
+        ctx.state
+            .nodes
+            .write()
+            .extend([node("n1", "一", "a.example", 443), node("n2", "二", "b.example", 443)]);
+
+        let response = dispatch(&ctx, TOKEN, &post("/node/delete_nodes", TOKEN, r#"{"ids":["n1","n2"]}"#));
+
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert_eq!(body(&response), json!([]));
+    }
+
+    #[test]
+    fn export_node_links_route_writes_one_link_per_line() {
+        let ctx = context_with_node();
+        let response = dispatch(&ctx, TOKEN, &post("/node/export_node_links", TOKEN, r#"{"ids":["n1"]}"#));
+        assert_eq!(response.status, 200, "{}", response.body);
+        let links = body(&response);
+        let text = links.as_str().expect("a single string");
+        assert_eq!(text.lines().count(), 1);
+        assert!(text.starts_with("vless://"), "{text}");
+    }
+
+    #[test]
+    fn export_node_links_without_a_selection_is_400() {
+        let ctx = context();
+        let response = dispatch(&ctx, TOKEN, &post("/node/export_node_links", TOKEN, r#"{"ids":[]}"#));
+        assert_eq!(response.status, 400);
+        assert_eq!(body(&response)["error"]["code"], json!("invalid_input"));
+    }
+
+    #[test]
+    fn test_node_latency_route_measures_a_local_listener() {
+        // A listening socket this process owns: the measurement is real, but it
+        // never leaves loopback and there is no proxy or kernel involved.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let ctx = context();
+        ctx.state
+            .nodes
+            .write()
+            .push(node("n1", "本机", "127.0.0.1", port));
+
+        let response = dispatch(&ctx, TOKEN, &post("/node/test_node_latency", TOKEN, r#"{"id":"n1"}"#));
+
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert!(body(&response).is_number(), "{:?}", body(&response));
+    }
+
+    #[test]
+    fn test_node_latency_for_a_missing_node_is_404() {
+        let ctx = context();
+        let response = dispatch(&ctx, TOKEN, &post("/node/test_node_latency", TOKEN, r#"{"id":"nope"}"#));
+        assert_eq!(response.status, 404);
+        assert_eq!(body(&response)["error"]["code"], json!("not_found"));
+    }
+
+    #[test]
+    fn test_nodes_latency_route_returns_one_row_per_target() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let ctx = context();
+        ctx.state
+            .nodes
+            .write()
+            .push(node("n1", "本机", "127.0.0.1", port));
+
+        let response = dispatch(&ctx, TOKEN, &post("/node/test_nodes_latency", TOKEN, r#"{"ids":["n1"]}"#));
+
+        assert_eq!(response.status, 200, "{}", response.body);
+        let value = body(&response);
+        assert_eq!(value.as_array().unwrap().len(), 1);
+        assert_eq!(value[0]["id"], json!("n1"));
+        assert!(value[0]["ms"].is_number(), "{value:?}");
+        // Remembered as a side effect, so a restart can show the number.
+        assert!(ctx.state.probes.read().contains_key("n1"));
+    }
+
+    #[test]
+    fn node_probes_route_starts_empty() {
+        let ctx = context();
+        let response = dispatch(&ctx, TOKEN, &post("/node/node_probes", TOKEN, ""));
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert_eq!(body(&response), json!({}));
+    }
+
+    #[test]
+    fn clear_node_probes_route_forgets_the_ids() {
+        let ctx = context_with_node();
+        ctx.state
+            .record_probe(&"n1".to_string(), Some(12), ProbeKind::Tcp)
+            .unwrap();
+
+        let response = dispatch(&ctx, TOKEN, &post("/node/clear_node_probes", TOKEN, r#"{"ids":["n1"]}"#));
+
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert_eq!(body(&response), json!({}));
+        assert!(ctx.state.probes.read().is_empty());
+    }
+
+    #[test]
+    fn node_delay_offline_for_a_missing_node_is_404() {
+        // Resolving the node comes first, so this fails before any throwaway
+        // kernel could be configured or spawned.
+        let ctx = context();
+        let response = dispatch(&ctx, TOKEN, &post("/node/node_delay_offline", TOKEN, r#"{"id":"missing"}"#));
+        assert_eq!(response.status, 404);
+        let value = body(&response);
+        assert_eq!(value["error"]["code"], json!("not_found"));
+        assert!(
+            value["error"]["message"]
+                .as_str()
+                .is_some_and(|text| text.contains("missing")),
+            "{value:?}"
+        );
+    }
+
+    #[test]
+    fn node_delay_offline_refuses_while_the_kernel_runs() {
+        let ctx = harness_context();
+        let started = dispatch(
+            &ctx,
+            TOKEN,
+            &post("/engine/engine_start", TOKEN, r#"{"kind":"xray","nodeId":"n1"}"#),
+        );
+        assert_eq!(started.status, 200, "{}", started.body);
+
+        let response = dispatch(&ctx, TOKEN, &post("/node/node_delay_offline", TOKEN, r#"{"id":"n1"}"#));
+
+        assert_eq!(response.status, 400, "{}", response.body);
+        let value = body(&response);
+        assert_eq!(value["error"]["code"], json!("invalid_input"));
+        assert!(
+            value["error"]["message"]
+                .as_str()
+                .is_some_and(|text| text.contains("内核正在运行")),
+            "{value:?}"
+        );
+    }
+
+    #[test]
+    fn group_list_route_starts_empty() {
+        let ctx = context();
+        let response = dispatch(&ctx, TOKEN, &post("/group/list_groups", TOKEN, ""));
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert_eq!(body(&response), json!([]));
+    }
+
+    fn group_json() -> Value {
+        json!({
+            "id": "g1",
+            "name": "手动",
+            "enabled": true,
+            "kind": "select",
+            "members": ["n1", "n2"],
+            "selected": null
+        })
+    }
+
+    #[test]
+    fn upsert_group_route_adds_a_group() {
+        let ctx = context();
+        let payload = json!({"group": group_json()}).to_string();
+        let response = dispatch(&ctx, TOKEN, &post("/group/upsert_group", TOKEN, &payload));
+        assert_eq!(response.status, 200, "{}", response.body);
+        let value = body(&response);
+        assert_eq!(value[0]["name"], json!("手动"));
+        assert_eq!(value[0]["kind"], json!("select"));
+    }
+
+    #[test]
+    fn delete_group_route_rewrites_rules_to_the_active_node() {
+        let ctx = context();
+        ctx.state.groups.write().push(crate::domain::ProxyGroup {
+            id: "g1".into(),
+            name: "手动".into(),
+            enabled: true,
+            kind: GroupKind::Select,
+            members: vec!["n1".into()],
+            selected: None,
+        });
+        ctx.state.rules.write().push(RoutingRule {
+            id: "r1".into(),
+            name: "走组".into(),
+            enabled: true,
+            matcher: RuleMatcher::DomainSuffix { value: "example.com".into() },
+            action: RuleAction::Group { group_id: "g1".into() },
+        });
+
+        let response = dispatch(&ctx, TOKEN, &post("/group/delete_group", TOKEN, r#"{"id":"g1"}"#));
+
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert_eq!(body(&response), json!([]));
+        assert_eq!(ctx.state.rules.read()[0].action, RuleAction::Proxy);
+    }
+
+    #[test]
+    fn select_group_member_route_picks_the_member() {
+        let ctx = context();
+        ctx.state.groups.write().push(crate::domain::ProxyGroup {
+            id: "g1".into(),
+            name: "手动".into(),
+            enabled: true,
+            kind: GroupKind::Select,
+            members: vec!["n1".into(), "n2".into()],
+            selected: None,
+        });
+
+        let response = dispatch(
+            &ctx,
+            TOKEN,
+            &post("/group/select_group_member", TOKEN, r#"{"id":"g1","nodeId":"n2"}"#),
+        );
+
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert_eq!(body(&response)[0]["selected"], json!("n2"));
+    }
+
+    #[test]
+    fn selecting_a_member_outside_the_group_is_400() {
+        let ctx = context();
+        ctx.state.groups.write().push(crate::domain::ProxyGroup {
+            id: "g1".into(),
+            name: "手动".into(),
+            enabled: true,
+            kind: GroupKind::Select,
+            members: vec!["n1".into()],
+            selected: None,
+        });
+
+        let response = dispatch(
+            &ctx,
+            TOKEN,
+            &post("/group/select_group_member", TOKEN, r#"{"id":"g1","nodeId":"n9"}"#),
+        );
+
+        assert_eq!(response.status, 400);
+        assert_eq!(body(&response)["error"]["code"], json!("invalid_input"));
+    }
+
+    #[test]
+    fn toggle_group_route_flips_enabled() {
+        let ctx = context();
+        ctx.state.groups.write().push(crate::domain::ProxyGroup {
+            id: "g1".into(),
+            name: "手动".into(),
+            enabled: true,
+            kind: GroupKind::Select,
+            members: vec!["n1".into()],
+            selected: None,
+        });
+
+        let response = dispatch(&ctx, TOKEN, &post("/group/toggle_group", TOKEN, r#"{"id":"g1"}"#));
+
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert_eq!(body(&response)[0]["enabled"], json!(false));
+    }
+
+    #[test]
+    fn deleting_a_missing_group_is_404() {
+        let ctx = context();
+        let response = dispatch(&ctx, TOKEN, &post("/group/delete_group", TOKEN, r#"{"id":"nope"}"#));
+        assert_eq!(response.status, 404);
+        assert_eq!(body(&response)["error"]["code"], json!("not_found"));
+    }
+
+    #[test]
+    fn import_preview_route_parses_a_share_link() {
+        let ctx = context();
+        let payload = json!({"text": "vless://uuid-1@example.com:443?security=tls&sni=a.example.com"}).to_string();
+        let response = dispatch(&ctx, TOKEN, &post("/import/import_preview", TOKEN, &payload));
+        assert_eq!(response.status, 200, "{}", response.body);
+        let value = body(&response);
+        assert_eq!(value["nodes"].as_array().unwrap().len(), 1);
+        assert_eq!(value["nodes"][0]["server"], json!("example.com"));
+        assert_eq!(value["skipped"], json!([]));
+    }
+
+    #[test]
+    fn import_nodes_route_counts_duplicates_on_the_second_paste() {
+        let ctx = context();
+        let payload = json!({"text": "vless://uuid-1@example.com:443?security=tls&sni=a.example.com"}).to_string();
+
+        let first = dispatch(&ctx, TOKEN, &post("/import/import_nodes", TOKEN, &payload));
+        assert_eq!(first.status, 200, "{}", first.body);
+        let value = body(&first);
+        assert_eq!(value["imported"], json!(1));
+        assert_eq!(value["duplicates"], json!(0));
+
+        let second = dispatch(&ctx, TOKEN, &post("/import/import_nodes", TOKEN, &payload));
+        assert_eq!(second.status, 200, "{}", second.body);
+        let value = body(&second);
+        assert_eq!(value["imported"], json!(0));
+        assert_eq!(value["duplicates"], json!(1));
+        assert_eq!(ctx.state.nodes.read().len(), 1);
+    }
+
+    #[test]
+    fn list_processes_route_answers_a_list() {
+        // Enumeration only: no kernel, no registry, no network.
+        let ctx = context();
+        let response = dispatch(&ctx, TOKEN, &post("/process/list_processes", TOKEN, ""));
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert!(body(&response).is_array());
     }
 }

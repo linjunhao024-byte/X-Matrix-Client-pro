@@ -2440,3 +2440,49 @@ DOTNET_ROOT=D:\CODE.config\dotnet D:\CODE.config\dotnet\dotnet.exe \
 ### 一句实话
 
 23 次 POST 覆盖了本批全部新路由（含 6 条刻意打错的错误分支），P0 那 6 条 GET/POST 路由这一轮没有逐条重打（§66 已验，且本轮 `engine_apply`/`engine_start`/`engine_stop` 走的是新前缀）。**没验**：并发请求、`proxy_latency`/`proxy_speed` 的最长 5 秒同步占连接、以及「内核没跑」返回 500 `engine` 而不是 409 的语义问题（要加分体错误码就得同时改 `bindings.ts` 与前端，留到 P2 一起改）。批次 B/C/D 的 74 条命令同理，每批都要各自跑一遍这个脚本。
+
+## §68 P1 批次 B：node / group / process / import 的 20 条命令进 HTTP 通道
+
+> 2026-11-29。P1 第二批。范围：`node` 12 + `group` 5 + `process` 1 + `import` 2。做完这一批，
+> 通道上有 44 条路由（A 的 24 + B 的 20），覆盖测试同步收紧到 6 个模块。
+
+### 验法
+
+`D:/tmp/shots/p1-accept.sh`（与 §67 同一个，只换 `p1-routes.txt`）：推 core（md5 `500df0355ee3b614daec0f403844aee1`）+ 两节点种子 → 交互会话 `--serve` → 逐条 POST → `/shutdown` 收尾。
+
+本批的正文刻意只用三种形状：存在的 id、不存在的 id、空列表/空文本——既不真的去打外网，也不让一轮跑超过一分钟。因此 3 条 `not_found`（`delete_nodes` 删一个已被前一条删掉的 id、`test_node_latency`、`node_delay_offline`）是**设计内**的，不是缺陷。
+
+### 判据（实测）
+
+| # | 判据 | 实测 |
+|---|---|---|
+| 1 | 20 条新路由全部有响应 | `routes total=20 200=17 non-200=3` |
+| 2 | 3 条非 200 全是我刻意给的错 id | `delete_nodes` → 404 `node b-probe-1`；`test_node_latency` / `node_delay_offline` → 404 `节点 nope 不存在` |
+| 3 | 写命令真的落进 store 并回吐新状态 | `upsert_group` → `[{…"id":"b-grp-1","name":"B-GROUP"…}]`；`select_group_member` → `"selected":"vless-18ea2e7eabfffa7c-0"`；`toggle_group` → `"enabled":false`；`delete_group` → `[]` |
+| 4 | 节点写命令真改了列表 | `upsert_node` 新增 `b-probe-1` → `delete_node` 删掉后列表回到原始两条；`tag_nodes` 返回带新标签的列表；`move_node` 把 HK-02 换到第 1 位 |
+| 5 | 真实延迟探测走通（本批唯一碰网络的读命令） | `test_nodes_latency`（`ids:[]` 时按设置里的节点数补全）→ `[{"id":"vless-18ea2e7eabfffa7c-0","ms":37},{"id":"vless-demo-hk-1","ms":null,"error":"连接 203.0.113.7:8443 失败：connection timed out"}]`；`node_probes` 读出同样两个结果 |
+| 6 | `export_node_links` 生成可用的分享链接 | `"vless://17b94b8f-…@8.134.34.136:10101?encryption=none&flow=xtls-rprx-vision&type=tcp&security=reality&pbk=pyA5wyvd…&sid=00256d&sni=www.sony…"` |
+| 7 | `import_preview` 解析真链接、`import_nodes` 空文本不报错 | `import_preview` → 1 个 `B-IMPORT` 节点（`vless-18ec4dd972ac0f50-0`）；`import_nodes {"text":""}` → `{"imported":0,"duplicates":0}` |
+| 8 | `list_processes` 读到真实进程表 | `[{"name":"AggregatorHost.exe","pids":[4344]},…]`（几十条，含多 pid 归并的 `aiuse-agent-daemon.exe`） |
+| 9 | 覆盖测试收紧到 6 个模块、断言 44 条 | `COVERED_MODULES = ["engine","sysproxy","node","group","process","import"]`、`checked == 44` |
+| 10 | Tauri 契约没被碰坏 | `bindings.ts` 无 diff；`contract up to date` |
+| 11 | 门槛 | `cargo test --lib` **622 passed**（590→622，+32）、`npm run check` 全绿（architecture 70 文件、vitest 136） |
+| 12 | 收尾干净 | `/shutdown` → `endpoint gone: True`；`ProxyEnable=0x0`、无 `xmp1` 任务、无残留进程 |
+
+### 设计理由
+
+- **`state_route!` 宏**：15 条命令的形状完全一样（`fn(state, Args)` + 序列化返回），宏一处展开，路由表就只写「路径 → 处理函数」。剩下 5 条（`delete_node`/`delete_nodes`/`node_delay_offline`/`import_preview`/`list_processes`）形状不同，各写各的 handler。宏只省样板，不省行为。
+- **`probe_nodes` 留在壳里**：`lib.rs:308`、`lib.rs:779` 两处用 `block_on` 调它做「启动前测速」的编排，它本来就不是一条 `#[tauri::command]`。搬进 services 只会让 core 也带上一个没人调用的编排函数。
+- **`list_processes` 不吃 state**：service 签名只有 `EmptyArgs`，handler 也就不该假装需要 `AppState`。
+- **参数名保持 camelCase**：`select_group_member` 的 Rust 字段是 `node_id`，但 `bindings.ts` 里叫 `nodeId`，所以用 `#[serde(rename_all = "camelCase")]` 对齐——契约以 TypeScript 侧为准，Rust 侧服从。
+
+### 坑
+
+1. **我第一版正文有三条写错字段名**：`export_node_links`、`clear_node_probes` 都要 `{ids:[…]}` 而我给了 `{}`，得到 `missing field 'ids'`；`delete_nodes` 给空数组得到「没有选中任何节点」。三条都是 400 `invalid_input`，**产品是对的**，错的是验收数据。改正文重跑后 17 条 200——这类 400 恰恰证明了参数校验在工作，不该为了凑 200 去改产品。
+2. **`clear_node_probes` 只清你点名的 id**：传 A 之后回执里仍能看到 B 的探测结果。这是「按 id 清」，不是「清全部」，读回执时别误判成没生效。
+3. **`test_nodes_latency` 传空数组不是「什么都不测」**：它按设置补全成全部节点，于是这批量到了一次真实外网（37 ms 成功、另一个 `203.0.113.7` 超时）。想完全不碰网络就不能传空数组。
+4. **`cargo test` 偶发一条 flake**：`commands::engine::tests::a_split_pac_takeover_encodes_the_http_port` 在并发时单跑失败过一次，随后连续 9 次全绿——与本批改动无关的既有 flake，已记在这里备查。
+
+### 一句实话
+
+20 条路由逐条打过，17 条 200、3 条是我自己写错 id 的设计内 404。**没验**：`node_delay_offline` 真正起临时内核的那条路径（本机不许起内核，云电脑这轮也没给能连通的节点，只能证明它在「节点不存在」时正确 404、在内核正在运行时正确拒绝）；`list_processes` 的 Fake 枚举器不存在，单测只断言返回数组形状。这两条都写进了 `P1-REPORT.md` §5 的遗留。
