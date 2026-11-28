@@ -22,7 +22,7 @@
 | 上一版未提交清单（留档） | `src-tauri/src/domain/settings.rs`、`src-tauri/src/engine/{mod,render,runtime,xray}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§39 分片）；再上一版：`src-tauri/src/engine/{mod,runtime}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§37 统一提示）；再上一版：`src-tauri/src/commands/settings.rs`、`src-tauri/src/commands/sysproxy.rs`、`src/stores/sysproxy.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`、`docs/ACCEPTANCE.md`（§36 系统代理即时生效） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库；之后每次收尾都跟着更新 |
 | IPC 命令 | **98**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
-| Rust 单测 | **564 passed**（`ARCHITECTURE.md:278` 已同步；P0 的 core 通道 +25 项） |
+| Rust 单测 | **590 passed**（`ARCHITECTURE.md:278` 已同步；P0 的 core 通道 +25、P1 批次 A 的路由 +26） |
 | 前端检查 | `npm run check` 全绿：vue-tsc / architecture（70 文件）/ contract / vitest **136**（13 文件） |
 | i18n | **873** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
 | 桌面产物 | 桌面上的旧副本**已不存在**；产物是 `src-tauri/target/release/x-matrix.exe`（11,115,008 B @2026-11-26 15:27，md5 `2b48cd496cca5602f609be5c0d729e25`，含 §62 那处订阅刷新修复），以及安装包 `src-tauri/target/release/bundle/msi/X-Matrix_0.1.0_x64_en-US.msi`（5,156,864 B，md5 `5ded88e8bac04a0d706b446d6fc9916c`）与 `bundle/nsis/X-Matrix_0.1.0_x64-setup.exe`（3,587,292 B）——两个包都是同一次带 bundle 的构建产的，§62 的 E2E 就是用这个 MSI 验的 |
@@ -591,3 +591,14 @@ scp -i /c/Users/83611/.ssh/id_ed25519_cpc 本地文件 Administrator@100.106.121
 ## 10. 一句话交接
 
 **能用的东西已经都在了，剩下的都是边角。**接着做的人只需要：从 §6 表挑一项，按「实现 → 单测 → `npm run check` → 构建 → 云电脑真机 → 写 ACCEPTANCE → 提交 → 清理」这套流程走完，并且始终记得 §7 里那些验收环境的坑。
+
+## §0.23 P1 批次 A：engine + sysproxy 的 24 条命令进了 core 的 HTTP 通道（2026-11-29）
+
+- 业务体搬到 `src-tauri/src/services/{mod,engine,sysproxy}.rs`，`commands/engine.rs` 与 `commands/sysproxy.rs` 只剩「构造 `Ctx` → 调 service」的薄壳；命令名、参数名、返回类型、`///` 文档一字未改，`src/services/bindings.ts` 逐字节未变。
+- `src-tauri/src/core/endpoints.rs` 改表驱动：`ROUTES`（P0 六条 + `POST /engine/<cmd>` 20 条 + `POST /sysproxy/<cmd>` 2 条）、`NOT_ROUTED`（`pick_engine_binary` 原生对话框、`engine_open_dir` 弹 Explorer）、`handle()`（空体当 `{}`、坏 JSON → 400）。
+- 覆盖测试 `every_ipc_command_has_a_route()` 用 `include_str!("../ipc.rs")` 读注册表，只对 `COVERED_MODULES = ["engine","sysproxy"]` 严格、断言恰好 24 条；后续批次往数组里加模块名即可自动收紧，不得靠删模块名变绿。
+- 真机（cloudpc-test，`D:/tmp/shots/p1-accept.sh`）：无 token/错 token 均 401；23 次 POST 里 `200=17 non-200=6`，6 条非 200 全是设计内错误；`engine_apply` → `xray#3048` + `ProxyEnable=1 ProxyServer=127.0.0.1:7890`，`engine_start` → `xray#6172` 同样成立，两次 `engine_stop` 都回 `kernels=[] ProxyEnable=0`；`/shutdown` 后端点文件消失、无残留进程与任务。
+- 验收文档：`docs/ACCEPTANCE.md` §67（12 行判据 + 6 条坑 + 一句实话，含「core 只读 `Content-Length`，chunked 客户端会得到空正文」这条通道边界）。
+- 遗留：①「内核没跑」现在是 500 `engine` 而非 409，加分体错误码要与 `bindings.ts`/前端一起改（P2）；② `services::engine` 仍反调 `commands::ruleset::loaded_sets`，等 ruleset 批次消除；③ traffic 日志在窗口与 core 各建一个实例，P2 明确只由 core 写；④ 延迟类命令同步执行最长 5s 占连接线程，客户端要设超时。
+
+**计数**：IPC 98（不变）、Rust **590**（+26）、vitest 136（不变）、i18n 873（不变）。

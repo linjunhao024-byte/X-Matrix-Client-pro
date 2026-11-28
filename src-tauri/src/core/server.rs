@@ -248,7 +248,8 @@ mod tests {
             dir.join("proxy-snapshot.json"),
             dir.join("x-matrix.pac"),
         ));
-        Arc::new(CoreContext::new(state, runtime, proxy))
+        let traffic = Arc::new(crate::engine::TrafficLog::new(dir.join("traffic.jsonl")));
+        Arc::new(CoreContext::new(state, runtime, proxy, traffic))
     }
 
     fn wait_for_endpoint(path: &Path) -> CoreEndpoint {

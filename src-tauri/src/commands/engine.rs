@@ -1,9 +1,13 @@
-//! Engine commands — the only door between the UI and a kernel process.
+//! Engine commands — the Tauri door to the engine business layer.
 //!
-//! Everything that can block (spawning, the readiness probe, an HTTP sample)
-//! is pushed onto a blocking thread, so the webview keeps painting while a
-//! kernel boots. The UI never learns about ports, config files or pids beyond
-//! what [`EngineStatus`] reports.
+//! Everything that can block (spawning, the readiness probe, an HTTP sample) is
+//! still pushed onto a blocking thread, so the webview keeps painting while a
+//! kernel boots. The bodies themselves live in [`crate::services::engine`],
+//! shared with the headless core's HTTP channel; this file keeps the command
+//! signatures, the native-dialog commands and the managed-state wiring.
+//!
+//! The UI never learns about ports, config files or pids beyond what
+//! [`EngineStatus`] reports.
 
 use std::sync::Arc;
 
@@ -11,15 +15,12 @@ use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
-use crate::domain::{Node, ProbeKind};
-use crate::engine::stats::{self, TrafficSample};
-use crate::engine::{TrafficLog, TrafficPoint};
-use crate::net::latency;
 use crate::engine::{
-    Endpoints, EngineBinary, EngineKind, EngineRuntime, EngineStatus, RenderInput, RunOptions,
-    StatsChannel,
+    EngineBinary, EngineKind, EngineRuntime, EngineStatus, TrafficLog, TrafficPoint,
 };
 use crate::error::{AppError, AppResult};
+use crate::services::engine as svc;
+use crate::services::{Ctx, EmptyArgs, NOOP_NOTIFIER};
 use crate::state::AppState;
 use crate::sysproxy::ProxyGuard;
 
@@ -27,39 +28,34 @@ pub(crate) type Runtime<'a> = State<'a, Arc<EngineRuntime>>;
 pub(crate) type Proxy<'a> = State<'a, Arc<ProxyGuard>>;
 type Traffic<'a> = State<'a, Arc<TrafficLog>>;
 
-/// Wall clock in unix seconds. The minute buckets are the user's minutes, so
-/// they come from the same clock the UI formats.
-fn now_seconds() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_secs() as i64)
-        .unwrap_or(0)
+/// The business helpers that used to live here are now in
+/// [`crate::services::engine`]. Other command modules and the tray already
+/// import them through this path, so the move keeps that surface stable
+/// instead of rewriting every caller in the same batch.
+pub(crate) use crate::services::engine::{
+    lookup_node, prepare_start, probe_url, remember_real, remember_session, render_for_preview,
+    start_engine, stop_if_running_node,
+};
+
+/// A context with only the runtime: enough for status, binaries, logs and the
+/// config preview.
+fn bare<'a, 'r>(_runtime: &'a Runtime<'r>) -> Ctx<'a> {
+    Ctx {
+        state: None,
+        runtime: _runtime.inner(),
+        proxy: None,
+        notify: &NOOP_NOTIFIER,
+    }
 }
 
-/// Resolve a node by id, or fail with a message the UI can show verbatim.
-pub(crate) fn lookup_node(state: &AppState, node_id: &str) -> AppResult<Node> {
-    state
-        .nodes
-        .read()
-        .iter()
-        .find(|node| node.id == node_id)
-        .cloned()
-        .ok_or_else(|| AppError::NotFound(format!("节点 {node_id} 不存在")))
-}
-
-/// Ports come from the user's settings, validated before anything is spawned.
-///
-/// The `0 = follow mixed_port` fallback lives in [`Endpoints::new`], not here:
-/// rendering, takeover and the port preflight then all read the same resolved
-/// number instead of each redoing the fallback.
-fn endpoints_from(state: &AppState) -> AppResult<Endpoints> {
-    let settings = state.settings.read().clone();
-    Endpoints::new(
-        settings.mixed_port,
-        settings.http_port,
-        settings.socks_port,
-        settings.api_port,
-    )
+/// A context that also carries the application state.
+fn with_state<'a, 'r>(state: &'a State<'r, AppState>, _runtime: &'a Runtime<'r>) -> Ctx<'a> {
+    Ctx {
+        state: Some(state.inner()),
+        runtime: _runtime.inner(),
+        proxy: None,
+        notify: &NOOP_NOTIFIER,
+    }
 }
 
 pub(crate) async fn run_blocking<T, F>(job: F) -> AppResult<T>
@@ -76,21 +72,21 @@ where
 #[tauri::command]
 #[specta::specta]
 pub fn engine_status(runtime: Runtime<'_>) -> EngineStatus {
-    runtime.status()
+    svc::engine_status(&bare(&runtime), EmptyArgs {}).unwrap_or_default()
 }
 
 /// Which kernels this build knows how to drive.
 #[tauri::command]
 #[specta::specta]
 pub fn engine_kinds() -> Vec<EngineKind> {
-    EngineKind::all().to_vec()
+    svc::engine_kinds(EmptyArgs {}).unwrap_or_default()
 }
 
 /// Where each kernel binary is expected, and whether it is actually there.
 #[tauri::command]
 #[specta::specta]
 pub fn engine_binaries(runtime: Runtime<'_>) -> Vec<EngineBinary> {
-    runtime.binaries()
+    svc::engine_binaries(&bare(&runtime), EmptyArgs {}).unwrap_or_default()
 }
 
 /// What version an installed kernel reports.
@@ -105,7 +101,7 @@ pub fn engine_version(runtime: Runtime<'_>, kind: EngineKind) -> AppResult<Strin
     // Deliberately synchronous: `version` is a ~30 ms self-report, and going
     // through `run_blocking` would move the `Runtime` borrow into a `'static`
     // closure it cannot escape.
-    runtime.version(kind)
+    svc::engine_version(&bare(&runtime), svc::KindArgs { kind })
 }
 
 // Opens the native file picker for one kernel and returns the chosen path.
@@ -118,6 +114,9 @@ pub fn engine_version(runtime: Runtime<'_>, kind: EngineKind) -> AppResult<Strin
 // keeps whatever path was already there. A dialog that cannot even be shown
 // panics inside the blocking call, and `spawn_blocking` turns that into a
 // `JoinError` we can hand back as a readable message instead of losing the app.
+//
+// Shell-only: a native dialog belongs to the window process, so this command is
+// listed in `NOT_ROUTED` and never becomes an HTTP route.
 #[tauri::command]
 #[specta::specta]
 pub async fn pick_engine_binary(app: AppHandle, kind: EngineKind) -> AppResult<Option<String>> {
@@ -151,34 +150,16 @@ pub async fn pick_engine_binary(app: AppHandle, kind: EngineKind) -> AppResult<O
 #[tauri::command]
 #[specta::specta]
 pub async fn proxy_speed(state: State<'_, AppState>, runtime: Runtime<'_>) -> AppResult<f64> {
-    let port = {
-        let status = runtime.status();
-        if !status.running {
-            return Err(AppError::Engine(
-                "内核没在运行，测不到速度；先启动内核".to_string(),
-            ));
-        }
-        // The HTTP inbound: that is what an HTTP probe (and the system proxy)
-        // talks to. It equals `mixed_port` unless the two protocols are split.
-        status.http_port
-    };
-    let url = {
-        let settings = state.settings.read();
-        if settings.test_url.trim().is_empty() {
-            latency::PROBE_URL.to_string()
-        } else {
-            settings.test_url.clone()
-        }
-    };
-    let bytes_per_second = run_blocking(move || latency::download_speed_via_proxy(port, &url)).await?;
-    Ok(bytes_per_second as f64)
+    let (port, url) = svc::proxy_speed_target(&with_state(&state, &runtime))?;
+    let bytes_per_second = run_blocking(move || svc::proxy_speed_now(port, &url)).await?;
+    Ok(bytes_per_second)
 }
 
 /// The tail of a kernel log. Empty string means "that kernel never ran".
 #[tauri::command]
 #[specta::specta]
 pub fn engine_log_tail(runtime: Runtime<'_>, kind: EngineKind, lines: u32) -> AppResult<String> {
-    runtime.log_tail(kind, lines as usize)
+    svc::engine_log_tail(&bare(&runtime), svc::LogTailArgs { kind, lines })
 }
 
 /// One page of a kernel log, for the log page's poll loop.
@@ -194,17 +175,20 @@ pub fn engine_log_delta(
 ) -> AppResult<crate::engine::LogDelta> {
     // f64 on the boundary only: TypeScript has no u64, and specta refuses to
     // invent one. A cursor is a byte count, well inside f64's exact range.
-    runtime.log_delta(kind, since.max(0.0) as u64)
+    svc::engine_log_delta(&bare(&runtime), svc::LogDeltaArgs { kind, since })
 }
 
 /// Truncate a kernel's log.
 #[tauri::command]
 #[specta::specta]
 pub fn engine_log_clear(runtime: Runtime<'_>, kind: EngineKind) -> AppResult<()> {
-    runtime.log_clear(kind)
+    svc::engine_log_clear(&bare(&runtime), svc::KindArgs { kind })
 }
 
 /// Open the engines folder in Explorer, so the user can drop a kernel in.
+//
+// Shell-only: it opens a window on the machine that owns the process, which a
+// headless core has no business doing. Listed in `NOT_ROUTED`.
 #[tauri::command]
 #[specta::specta]
 pub fn engine_open_dir(app: AppHandle, runtime: Runtime<'_>) -> AppResult<()> {
@@ -212,163 +196,6 @@ pub fn engine_open_dir(app: AppHandle, runtime: Runtime<'_>) -> AppResult<()> {
     app.opener()
         .open_path(dir, None::<&str>)
         .map_err(|error| AppError::Internal(error.to_string()))
-}
-
-/// Start `node_id` on `kind`. Stops whatever was running first.
-///
-/// If the user asked for the system proxy, it is pointed at the kernel *after*
-/// the readiness probe passes — never before, or every request during boot
-/// would hit a port with no listener. A failed proxy takeover tears the kernel
-/// back down rather than leaving the UI claiming something that is not true.
-/// Everything the start sequence needs, read off the shared state.
-///
-/// Pulled out of the command so the same sequence can run without a webview
-/// asking for it — that is how "connect on launch" works, and it keeps exactly
-/// one code path that decides the config, the proxy order and the rollback.
-pub struct StartRequest {
-    pub kind: EngineKind,
-    pub node: Node,
-    pub endpoints: Endpoints,
-    pub settings: crate::domain::Settings,
-    pub rules: Vec<crate::domain::RoutingRule>,
-    pub nodes: Vec<Node>,
-    pub groups: Vec<crate::domain::ProxyGroup>,
-    pub rule_sets: Vec<crate::engine::LoadedRuleSet>,
-    /// The active profile's YAML overlay. Read here rather than inside
-    /// `start_engine` so every entry point (the window, the tray, reconnect on
-    /// launch) starts from the same document, and an overlay that fails to
-    /// merge stops the launch before anything is spawned.
-    pub merge: String,
-}
-
-/// Read the shared state into a [`StartRequest`]. Cheap: read locks only.
-pub fn prepare_start(
-    state: &AppState,
-    kind: EngineKind,
-    node_id: &str,
-) -> AppResult<StartRequest> {
-    Ok(StartRequest {
-        kind,
-        node: lookup_node(state, node_id)?,
-        endpoints: endpoints_from(state)?,
-        settings: state.settings.read().clone(),
-        rules: state.rules.read().clone(),
-        nodes: state.nodes.read().clone(),
-        groups: state.groups.read().clone(),
-        rule_sets: crate::commands::ruleset::loaded_sets(state),
-        merge: state.merge.read().clone(),
-    })
-}
-
-/// Why a TUN start needs something this process does not have, if it does.
-///
-/// Pulled out of [`start_engine`] so the answer can be tested without a UAC
-/// token: the machine that runs the tests is usually already elevated, and a
-/// test that only ever sees `true` proves nothing about the refusal.
-fn tun_permission_note(elevated: bool, has_service: bool) -> Option<&'static str> {
-    if elevated || has_service {
-        None
-    } else {
-        Some(
-            "开 TUN 需要管理员权限：先在「权限」里点「以管理员身份重启」，或者装上内核服务让它以 SYSTEM 启动。",
-        )
-    }
-}
-
-/// Spawn the kernel, then point the system proxy at it.
-///
-/// The proxy is taken over *after* the readiness probe passes — never before,
-/// or every request during boot would hit a port with no listener. A failed
-/// takeover tears the kernel back down rather than leaving the UI claiming
-/// something that is not true.
-pub fn start_engine(
-    runtime: &Arc<EngineRuntime>,
-    proxy: &Arc<ProxyGuard>,
-    request: StartRequest,
-) -> AppResult<EngineStatus> {
-    // TUN has to be refused here, before a config is rendered or a process is
-    // spawned. The kernel cannot make any of these three true once it is up:
-    // a config with a TUN inbound and a system proxy set routes every request
-    // back through loopback, Xray has no TUN inbound at all, and an
-    // unelevated TUN start dies inside the kernel with only its own log to
-    // explain why. Every start path — commands, tray, auto-connect — comes
-    // through this function, so one gate covers all of them.
-    if request.settings.tun_enabled {
-        if request.settings.system_proxy {
-            return Err(AppError::InvalidInput(
-                "TUN 和系统代理不能同时开：TUN 已经在网卡层接管，系统代理只会把流量再绕回本机一遍。关掉其中一个再启动。"
-                    .into(),
-            ));
-        }
-        if request.kind != EngineKind::SingBox {
-            return Err(AppError::InvalidInput(
-                "Xray 内核没有 TUN 入站：TUN 只对 sing-box 做了支持。切到 sing-box，或者关掉 TUN。"
-                    .into(),
-            ));
-        }
-        if let Some(note) =
-            tun_permission_note(crate::elevate::is_elevated(), runtime.has_service())
-        {
-            return Err(AppError::InvalidInput(note.into()));
-        }
-    }
-    // Only check when we are idle: while our own kernel runs, it *is* the
-    // thing holding the port, and preflighting then would refuse every node
-    // switch. Checking from idle is the case that matters anyway — the user
-    // just closed another client, or forgot to.
-    if !runtime.status().running {
-        // A split gives the kernel two inbound ports, so the preflight has to
-        // cover both — and each refusal names the port it actually refused,
-        // instead of telling the user about a "mixed port" that no longer
-        // exists.
-        if request.endpoints.split() {
-            crate::net::ports::ensure_free(request.endpoints.http_port, "HTTP 端口")?;
-            crate::net::ports::ensure_free(request.endpoints.socks_port, "SOCKS 端口")?;
-        } else {
-            crate::net::ports::ensure_free(request.endpoints.mixed_port, "混合端口")?;
-        }
-        crate::net::ports::ensure_free(request.endpoints.api_port, "控制端口")?;
-    }
-    let options = RunOptions::from_settings(&request.settings, &request.rules)
-        .with_catalog(&request.nodes, &request.groups)
-        .with_rule_sets(&request.rule_sets)
-        .with_merge(request.merge);
-    let status = runtime.start(request.kind, &request.node, request.endpoints, options)?;
-    if request.settings.system_proxy {
-        let bypass = request.settings.proxy_bypass.as_str();
-        let applied = if request.settings.pac_enabled {
-            // The script encodes the port itself, so it is rendered from the
-            // endpoint that is actually listening — not from the saved setting.
-            // With a split that endpoint is the HTTP one: a PAC script hands
-            // the browser `PROXY host:port`, which it resolves over HTTP.
-            let script = crate::sysproxy::pac::render(
-                request.endpoints.proxy_port(),
-                bypass,
-                &crate::sysproxy::pac::direct_patterns(&request.rules),
-            );
-            proxy.enable_pac(request.endpoints.proxy_port(), bypass, &script)
-        } else {
-            proxy.enable_with_bypass("127.0.0.1", request.endpoints.proxy_port(), bypass)
-        };
-        if let Err(error) = applied {
-            let _ = runtime.stop();
-            return Err(error);
-        }
-    }
-    Ok(status)
-}
-
-/// Remember what is running, so a later launch can offer to reconnect and the
-/// UI can preselect the same node.
-pub fn remember_session(state: &AppState, kind: EngineKind, node_id: &str) {
-    {
-        let mut settings = state.settings.write();
-        settings.last_node_id = Some(node_id.to_string());
-        settings.last_engine = Some(kind.as_str().to_string());
-    }
-    if let Err(error) = state.persist() {
-        eprintln!("x-matrix: 记住上次使用的节点失败：{error}");
-    }
 }
 
 /// Start `node_id` on `kind`. Stops whatever was running first.
@@ -382,11 +209,11 @@ pub async fn engine_start(
     runtime: Runtime<'_>,
     proxy: Proxy<'_>,
 ) -> AppResult<EngineStatus> {
-    let request = prepare_start(&state, kind, &node_id)?;
+    let request = svc::prepare_start(state.inner(), kind, &node_id)?;
     let runtime = Arc::clone(runtime.inner());
     let proxy = Arc::clone(proxy.inner());
-    let status = run_blocking(move || start_engine(&runtime, &proxy, request)).await?;
-    remember_session(&state, kind, &node_id);
+    let status = run_blocking(move || svc::start_engine(&runtime, &proxy, request)).await?;
+    svc::remember_session(state.inner(), kind, &node_id);
     // The tray's toggle says what the next click does, so it has to follow.
     crate::refresh_tray(&app);
     Ok(status)
@@ -406,16 +233,16 @@ pub(crate) async fn apply_engine(
     runtime: Arc<EngineRuntime>,
     proxy: Arc<ProxyGuard>,
 ) -> AppResult<EngineStatus> {
-    let request = prepare_start(state, kind, node_id)?;
+    let request = svc::prepare_start(state, kind, node_id)?;
     let was_running = runtime.status().running;
     let status = run_blocking(move || {
         if was_running {
             runtime.stop()?;
         }
-        start_engine(&runtime, &proxy, request)
+        svc::start_engine(&runtime, &proxy, request)
     })
     .await?;
-    remember_session(state, kind, node_id);
+    svc::remember_session(state, kind, node_id);
     crate::refresh_tray(app);
     Ok(status)
 }
@@ -439,7 +266,7 @@ pub async fn engine_apply(
 ) -> AppResult<EngineStatus> {
     let runtime = Arc::clone(runtime.inner());
     let proxy = Arc::clone(proxy.inner());
-    apply_engine(&app, kind, &node_id, &state, runtime, proxy).await
+    apply_engine(&app, kind, &node_id, state.inner(), runtime, proxy).await
 }
 
 /// Stop the kernel, giving the system proxy back first.
@@ -452,43 +279,9 @@ pub async fn engine_stop(
 ) -> AppResult<EngineStatus> {
     let runtime = Arc::clone(runtime.inner());
     let proxy = Arc::clone(proxy.inner());
-    let status = run_blocking(move || {
-        // Order matters: hand the proxy back before the port disappears.
-        proxy.disable()?;
-        runtime.stop()?;
-        Ok(runtime.status())
-    })
-    .await?;
+    let status = run_blocking(move || svc::engine_stop_now(&runtime, &proxy)).await?;
     crate::refresh_tray(&app);
     Ok(status)
-}
-
-/// Stop the kernel if it is running one of these nodes, and hand the system
-/// proxy back first so the machine is never left pointing at a dead port.
-///
-/// Called when a node the kernel was started with is about to stop existing —
-/// deleted by the user, or dropped by a subscription refresh that replaced the
-/// batch it came from. Left alone, the kernel would keep proxying through a node
-/// the UI can neither render nor switch to.
-///
-/// Returns whether a kernel was stopped: `false` means nothing was running, or
-/// the running node is not among `gone`, and the proxy was therefore not touched.
-pub(crate) fn stop_if_running_node(
-    runtime: &EngineRuntime,
-    proxy: &ProxyGuard,
-    gone: &[String],
-) -> AppResult<bool> {
-    let Some(running_id) = runtime.status().node_id else {
-        return Ok(false);
-    };
-    if !gone.iter().any(|id| id == &running_id) {
-        return Ok(false);
-    }
-    // Order matters, as in `engine_stop`: hand the proxy back before the port
-    // it points at disappears.
-    proxy.disable()?;
-    runtime.stop()?;
-    Ok(true)
 }
 
 /// One statistics sample. `None` means "nothing is running", which the UI shows
@@ -498,24 +291,10 @@ pub(crate) fn stop_if_running_node(
 pub async fn traffic_sample(
     runtime: Runtime<'_>,
     log: Traffic<'_>,
-) -> AppResult<Option<TrafficSample>> {
+) -> AppResult<Option<crate::engine::stats::TrafficSample>> {
     let runtime = Arc::clone(runtime.inner());
     let log = Arc::clone(log.inner());
-    run_blocking(move || {
-        let Some(channel) = runtime.stats_channel() else {
-            return Ok(None);
-        };
-        let sample = match channel {
-            StatsChannel::XrayExpVar { port } => stats::read_xray(port)?,
-            StatsChannel::ClashApi { port } => stats::read_clash(port)?,
-        };
-        // Every live sample is also history in the making. Doing it here means
-        // the record is exactly as complete as the chart the user is watching —
-        // there is no second timer that could miss minutes.
-        log.observe(sample.up_total, sample.down_total, now_seconds());
-        Ok(Some(sample))
-    })
-    .await
+    run_blocking(move || svc::traffic_sample_now(&runtime, &log)).await
 }
 
 /// Per-minute history, oldest first. `minutes <= 0` returns everything kept
@@ -523,13 +302,13 @@ pub async fn traffic_sample(
 #[tauri::command]
 #[specta::specta]
 pub fn traffic_history(log: Traffic<'_>, minutes: f64) -> Vec<TrafficPoint> {
-    log.points(minutes as i64, now_seconds())
+    svc::traffic_history(log.inner(), svc::MinutesArgs { minutes }).unwrap_or_default()
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn traffic_clear_history(log: Traffic<'_>) -> AppResult<()> {
-    log.clear()
+    svc::traffic_clear_history(log.inner(), EmptyArgs {})
 }
 
 /// The exact document that *would* be handed to the kernel.
@@ -544,66 +323,10 @@ pub fn engine_config_preview(
     state: State<'_, AppState>,
     runtime: Runtime<'_>,
 ) -> AppResult<String> {
-    render_preview(kind, &node_id, &state, &runtime)
-}
-
-/// The same document for the node the app would start next.
-///
-/// The diagnostics report needs the config the user is *actually* about to run,
-/// which is whatever the engine selection and last node say — not a node id the
-/// caller had to invent.
-pub(crate) fn render_for_preview(
-    state: &AppState,
-    runtime: &EngineRuntime,
-) -> AppResult<String> {
-    let (kind, node_id) = {
-        let settings = state.settings.read();
-        let kind = settings
-            .last_engine
-            .as_deref()
-            .and_then(EngineKind::parse)
-            .unwrap_or(EngineKind::Xray);
-        let node_id = settings
-            .last_node_id
-            .clone()
-            .or_else(|| state.nodes.read().first().map(|node| node.id.clone()));
-        (kind, node_id)
-    };
-    let node_id = node_id.ok_or_else(|| AppError::InvalidInput("还没有任何节点".into()))?;
-    render_preview(kind, &node_id, state, runtime)
-}
-
-fn render_preview(
-    kind: EngineKind,
-    node_id: &str,
-    state: &AppState,
-    runtime: &EngineRuntime,
-) -> AppResult<String> {
-    let node = lookup_node(state, node_id)?;
-    let endpoints = endpoints_from(state)?;
-    let engine = kind.engine();
-    engine.validate_node(&node)?;
-    let rules = state.rules.read().clone();
-    let settings = state.settings.read().clone();
-    let nodes = state.nodes.read().clone();
-    let groups = state.groups.read().clone();
-    let rule_sets = crate::commands::ruleset::loaded_sets(state);
-    let options = RunOptions::from_settings(&settings, &rules)
-        .with_catalog(&nodes, &groups)
-        .with_rule_sets(&rule_sets)
-        // The preview claims to show what the kernel would get, so it must
-        // carry the overlay the start path carries.
-        .with_merge(state.merge.read().clone());
-
-    let mut input = RenderInput::new(&node, endpoints).with_options(options);
-    // Show the same document the kernel would get, including the rule-set paths
-    // sing-box will be pointed at.
-    let rule_set_dir = (kind == EngineKind::SingBox).then(|| runtime.rule_set_dir());
-    if let Some(dir) = rule_set_dir.as_deref() {
-        input = input.with_rule_set_dir(dir);
-    }
-    let config = engine.render_config(&input)?;
-    serde_json::to_string_pretty(&config).map_err(|error| AppError::Internal(error.to_string()))
+    svc::engine_config_preview(
+        &with_state(&state, &runtime),
+        svc::PreviewArgs { kind, node_id },
+    )
 }
 
 /// Real delay: one HTTP request through the running engine's mixed port.
@@ -617,44 +340,15 @@ pub async fn proxy_latency(
     state: State<'_, AppState>,
     runtime: Runtime<'_>,
 ) -> AppResult<u32> {
-    let status = runtime.status();
-    if !status.running {
-        return Err(AppError::Engine(
-            "内核没在运行，测不到真实延迟；先启动内核".to_string(),
-        ));
-    }
-    // The HTTP inbound, not the configured mixed port: with a split the mixed
-    // port has no listener and the probe would fail on a healthy kernel.
-    let port = status.http_port;
-    // The probe URL is a setting because gstatic is blocked on some networks —
-    // a latency button that always fails is worse than no button.
-    let url = {
-        let settings = state.settings.read();
-        if settings.test_url.trim().is_empty() {
-            latency::PROBE_URL.to_string()
-        } else {
-            settings.test_url.clone()
-        }
-    };
-    tauri::async_runtime::spawn_blocking(move || latency::http_latency_via_proxy(port, &url))
-    .await
-    .map_err(|error| AppError::Internal(format!("测速任务没有跑完：{error}")))?
+    let (port, url) = svc::proxy_latency_target(&with_state(&state, &runtime))?;
+    run_blocking(move || svc::proxy_latency_now(port, &url)).await
 }
 
 /// Drop one live connection (sing-box only — Xray has no connection table).
 #[tauri::command]
 #[specta::specta]
 pub fn close_connection(runtime: Runtime<'_>, id: String) -> AppResult<()> {
-    let status = runtime.status();
-    if !status.running {
-        return Err(AppError::Engine("内核没在运行，没有连接可断开".to_string()));
-    }
-    if status.kind != Some(EngineKind::SingBox) {
-        return Err(AppError::Engine(
-            "Xray 不提供连接列表，断不开单个连接".to_string(),
-        ));
-    }
-    stats::close_connection(status.api_port, &id)
+    svc::close_connection(&bare(&runtime), svc::IdArgs { id })
 }
 
 /// Drop several connections at once; an empty list means all of them.
@@ -665,76 +359,8 @@ pub fn close_connection(runtime: Runtime<'_>, id: String) -> AppResult<()> {
 #[tauri::command]
 #[specta::specta]
 pub fn close_connections(runtime: Runtime<'_>, ids: Vec<String>) -> AppResult<()> {
-    let status = runtime.status();
-    if !status.running {
-        return Err(AppError::Engine("内核没在运行，没有连接可断开".to_string()));
-    }
-    if status.kind != Some(EngineKind::SingBox) {
-        return Err(AppError::Engine(
-            "Xray 不提供连接列表，断不开连接".to_string(),
-        ));
-    }
-    stats::close_connections(status.api_port, &ids)
+    svc::close_connections(&bare(&runtime), svc::IdsArgs { ids })
 }
-
-/// What came back from one real-delay attempt, with the distinction that
-/// matters once results are remembered.
-///
-/// A refusal (no kernel running, or a kernel without a Clash API) says nothing
-/// about the node's latency — writing it down as "测不到" would replace a real
-/// measurement with a fact about the app's own state. A failure does say the
-/// node answered nothing, so it belongs in the record.
-enum DelayAttempt {
-    Measured(u32),
-    Failed(AppError),
-    Refused(AppError),
-}
-
-/// How long the kernel takes to reach the probe through one outbound.
-///
-/// This goes through the Clash API instead of the mixed port, which is what
-/// makes a *group* measurable: the kernel dials through the group's own tag,
-/// so the number describes the path that group would take, not the path the
-/// running config happens to use. Only sing-box exposes the endpoint.
-fn probe_delay(runtime: &EngineRuntime, tag: &str, url: &str) -> DelayAttempt {
-    let status = runtime.status();
-    if !status.running {
-        return DelayAttempt::Refused(AppError::Engine(
-            "内核没在运行，测不到真实延迟；先启动内核".to_string(),
-        ));
-    }
-    if status.kind != Some(EngineKind::SingBox) {
-        return DelayAttempt::Refused(AppError::Engine(
-            "Xray 没有 Clash API，分组延迟只能在 sing-box 内核下测".to_string(),
-        ));
-    }
-    match stats::clash_delay(status.api_port, tag, url, DELAY_BUDGET_MS) {
-        Ok(ms) => DelayAttempt::Measured(ms),
-        Err(error) => DelayAttempt::Failed(error),
-    }
-}
-
-/// The same attempt, for callers that only care whether it worked.
-fn delay_of(runtime: &EngineRuntime, tag: &str, url: &str) -> AppResult<u32> {
-    match probe_delay(runtime, tag, url) {
-        DelayAttempt::Measured(ms) => Ok(ms),
-        DelayAttempt::Failed(error) | DelayAttempt::Refused(error) => Err(error),
-    }
-}
-
-/// The probe URL, or the built-in one when the setting is blank.
-pub(crate) fn probe_url(state: &AppState) -> String {
-    let settings = state.settings.read();
-    if settings.test_url.trim().is_empty() {
-        latency::PROBE_URL.to_string()
-    } else {
-        settings.test_url.clone()
-    }
-}
-
-/// Kernel-side delay budget. Long enough for a slow overseas hop, short enough
-/// that a dead node answers instead of hanging the button forever.
-const DELAY_BUDGET_MS: u64 = 5000;
 
 /// Real delay of one strategy group, measured by the running sing-box.
 #[tauri::command]
@@ -744,23 +370,9 @@ pub async fn group_delay(
     runtime: Runtime<'_>,
     id: String,
 ) -> AppResult<u32> {
-    let group = state
-        .groups
-        .read()
-        .iter()
-        .find(|group| group.id == id)
-        .cloned()
-        .ok_or_else(|| AppError::NotFound(format!("策略组 {id} 不存在")))?;
-    if group.members.is_empty() {
-        return Err(AppError::InvalidInput(format!(
-            "策略组「{}」没有成员，没什么可测的",
-            group.name
-        )));
-    }
-    let tag = group.tag();
-    let url = probe_url(&state);
+    let (tag, url) = svc::group_delay_target(&with_state(&state, &runtime), &id)?;
     let runtime = Arc::clone(runtime.inner());
-    run_blocking(move || delay_of(&runtime, &tag, &url)).await
+    run_blocking(move || svc::group_delay_now(&runtime, &tag, &url)).await
 }
 
 /// Real delay of one node, measured by the running sing-box.
@@ -775,49 +387,10 @@ pub async fn node_delay(
     runtime: Runtime<'_>,
     id: String,
 ) -> AppResult<u32> {
-    let node = lookup_node(&state, &id)?;
-    let active = state.settings.read().last_node_id.clone();
-    let in_group = state
-        .groups
-        .read()
-        .iter()
-        .any(|group| group.enabled && group.members.iter().any(|member| member == &node.id));
-    let tag = if active.as_deref() == Some(node.id.as_str()) {
-        "proxy".to_string()
-    } else if in_group {
-        format!("node:{}", node.id)
-    } else {
-        return Err(AppError::InvalidInput(format!(
-            "「{}」既不是当前节点，也不在任何启用的策略组里，内核里没有它的出站可测；先用首页把它设为当前节点",
-            node.name
-        )));
-    };
-    let url = probe_url(&state);
+    let (tag, url, node_id) = svc::node_delay_target(&with_state(&state, &runtime), &id)?;
     let runtime = Arc::clone(runtime.inner());
-    let node_id = node.id.clone();
-    let outcome = run_blocking(move || Ok(probe_delay(&runtime, &tag, &url))).await?;
-
-    let delay_ms = match outcome {
-        DelayAttempt::Measured(ms) => Some(ms),
-        // The attempt happened and produced nothing: that is exactly the
-        // "测不到" state, worth keeping until the next attempt replaces it.
-        DelayAttempt::Failed(error) => {
-            remember_real(&state, &node_id, None);
-            return Err(error);
-        }
-        // Not a measurement at all, so the stored number stays as it was.
-        DelayAttempt::Refused(error) => return Err(error),
-    };
-    remember_real(&state, &node_id, delay_ms);
-    Ok(delay_ms.unwrap_or_default())
-}
-
-/// Store a real-delay result without letting a disk problem hide the number the
-/// measurement already produced.
-pub(crate) fn remember_real(state: &AppState, id: &str, delay_ms: Option<u32>) {
-    if let Err(error) = state.record_probe(&id.to_string(), delay_ms, ProbeKind::Real) {
-        eprintln!("记不住真实延迟：{error}");
-    }
+    let outcome = run_blocking(move || Ok(svc::node_delay_probe(&runtime, &tag, &url))).await?;
+    svc::node_delay_finish(state.inner(), &node_id, outcome)
 }
 
 #[cfg(test)]
@@ -827,7 +400,8 @@ pub(crate) mod tests {
 
     use parking_lot::Mutex;
 
-    use super::{start_engine, stop_if_running_node, tun_permission_note, StartRequest};
+    use super::{start_engine, stop_if_running_node};
+    use crate::services::engine::{tun_permission_note, StartRequest};
     use crate::engine::runtime::tests::{harness, node, Harness};
     use crate::engine::{Endpoints, EngineKind, RunOptions};
     use crate::error::AppResult;

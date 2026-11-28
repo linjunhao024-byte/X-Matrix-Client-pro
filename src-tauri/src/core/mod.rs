@@ -6,7 +6,7 @@
 //! the user is browsing should not take the tunnel with it, and an Avalonia
 //! window should not have to link Tauri to start a kernel. So the core owns the
 //! long-lived things ([`AppState`], [`EngineRuntime`], [`ProxyGuard`]) and the
-//! window is a client of the five routes in [`endpoints`].
+//! window is a client of the routes in [`endpoints`].
 //!
 //! What this module deliberately does *not* do: call `ProxyGuard::recover()`.
 //! Recovery writes the system proxy registry, and a core that can be started
@@ -27,7 +27,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::domain::Settings;
-use crate::engine::EngineRuntime;
+use crate::engine::{EngineRuntime, TrafficLog};
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::store::Store;
@@ -39,16 +39,25 @@ pub struct CoreContext {
     pub state: AppState,
     pub runtime: Arc<EngineRuntime>,
     pub proxy: Arc<ProxyGuard>,
+    /// One line per minute, kept across restarts. The traffic routes read the
+    /// same file the window's chart writes, so both show one history.
+    pub traffic: Arc<TrafficLog>,
     /// Set by `POST /shutdown`; the accept loop polls it and then drains.
     shutdown: AtomicBool,
 }
 
 impl CoreContext {
-    pub fn new(state: AppState, runtime: Arc<EngineRuntime>, proxy: Arc<ProxyGuard>) -> Self {
+    pub fn new(
+        state: AppState,
+        runtime: Arc<EngineRuntime>,
+        proxy: Arc<ProxyGuard>,
+        traffic: Arc<TrafficLog>,
+    ) -> Self {
         Self {
             state,
             runtime,
             proxy,
+            traffic,
             shutdown: AtomicBool::new(false),
         }
     }
@@ -94,7 +103,8 @@ pub fn serve(args: &[String]) -> AppResult<()> {
         base.join("x-matrix.pac"),
     ));
 
-    let context = Arc::new(CoreContext::new(state, runtime, proxy));
+    let traffic = Arc::new(TrafficLog::new(base.join("traffic.jsonl")));
+    let context = Arc::new(CoreContext::new(state, runtime, proxy, traffic));
     server::serve(&context, port, &base.join("core.endpoint"))
 }
 

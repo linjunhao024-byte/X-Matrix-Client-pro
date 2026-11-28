@@ -2388,3 +2388,55 @@ DOTNET_ROOT=D:\CODE.config\dotnet D:\CODE.config\dotnet\dotnet.exe \
 5. **壳在后台启动时，第一次 `mouse_event` 只把窗口拉到前台**：必须先点一次页面（例如「订阅」→「节点」）再点真正的按钮，否则永远 `(no kernel yet)`，而且日志上看起来与「按钮没响应」一模一样。
 
 **一句实话**：窗口在 844 宽的这台虚拟桌面上右沿仍会压出去 6–15 px（记 I-05），按钮可靠 UIA 拿到、自动化点得中，但人手在屏幕最右侧可能看不到「启动内核」——这是 P2 响应式布局要解决的，不是 P0 的判据 8 能掩盖的。
+
+## §67 P1 批次 A：engine 与 sysproxy 的 24 条命令搬进 core 的 HTTP 通道
+
+> 2026-11-29。重写计划的第一个功能性批次（`docs/REWRITE-PLAN.md` 的 P1）。这一节只证明
+> 「命令能被 HTTP 完整地打一遍，行为与 Tauri 版一致」，不证明 GUI 已经用上它们——那是 P2。
+
+### 验法
+
+一条命令跑完，`D:/tmp/shots/p1-accept.sh`：
+
+1. 清掉上一轮的内核、`xmp1` 计划任务与残留 `C:\p1`；
+2. 推 `src-tauri/target/release/x-matrix.exe`（md5 `80da74fe3d8cde5602ce44e069ded637`）与一份带两个节点的种子 store 到 `C:\p1`，种进 `%APPDATA%\com.xmatrix.client\store.json`（`system_proxy=true`、`last_node_id=vless-18ea2e7eabfffa7c-0`、`mixed_port=7890`）；
+3. 用 `schtasks /sc once /st 23:57 /it` 在**交互会话**里跑 `run-p1.bat`（`start "" C:\p1\x-matrix.exe --serve`，然后跑驱动）；
+4. 驱动等 `core.endpoint` 出现，读端口与 token，先验「无 token / 错 token → 401」，再按 `C:\p1\routes.txt` 的 `路径|JSON 体` 逐条 POST，记状态码与正文前缀；`engine_apply`/`engine_start` 之后停 4 秒记内核 PID 与注册表，`engine_stop` 之后停 2 秒再记一次；
+5. 结束后用 `/shutdown` 让**产品自己**还原代理，再核对 `ProxyEnable`、残留进程与计划任务，最后 `cleanup.sh`。
+
+### 判据（实测）
+
+| # | 判据 | 实测 |
+|---|---|---|
+| 1 | 无 token 访问 `/status` 被拒 | `A1 no token: 401` |
+| 2 | 错 token 被拒 | `A2 wrong token: 401` |
+| 3 | 22 条新路由都有响应，且 17 条成功 | `routes total=23 200=17 non-200=6` |
+| 4 | 6 条非 200 全是**设计内**的错误分支 | `proxy_latency`/`proxy_speed`/`close_connection`/`close_connections` → 500 `{"code":"engine",…}`（内核没跑）；`group_delay`/`node_delay` → 404 `{"code":"not_found",…}` |
+| 5 | 只读路由返回真数据 | `engine_version` → `"Xray 26.10.31 (Xray, Penetrates Everything.) a4a3dff (go1.27.3 windows/amd64)"`；`engine_binaries` → 两条 `present:true`；`engine_log_tail` → 内核真日志；`engine_config_preview` → 完整 xray 配置 |
+| 6 | `engine_apply` 真的起了内核并接管代理 | `after /engine/engine_apply: kernels=[xray#3048] ProxyEnable=1 ProxyServer=127.0.0.1:7890` |
+| 7 | `engine_start` 同样成立（第二次） | `after /engine/engine_start: kernels=[xray#6172] ProxyEnable=1 ProxyServer=127.0.0.1:7890` |
+| 8 | `engine_stop` 真的停内核并还原代理 | `after /engine/engine_stop: kernels=[] ProxyEnable=0 ProxyServer=`（两次都对） |
+| 9 | 覆盖测试是机器判定，不是人眼比对清单 | `every_ipc_command_has_a_route()` 对 `COVERED_MODULES=["engine","sysproxy"]` 严格、断言恰好 24 条；`NOT_ROUTED` 两条（`pick_engine_binary`、`engine_open_dir`）必须写理由 |
+| 10 | Tauri 版的契约没被这套改动碰坏 | `src/services/bindings.ts` 逐字节未变（子代理重新生成后 diff 为空），`check:contract` 通过 |
+| 11 | 门槛 | `cargo test --lib` **590 passed**（564→590，+26）、`npm run check` 全绿（architecture 70 文件、vitest **136**） |
+| 12 | 退出后不留痕 | `/shutdown` → `endpoint gone: True`；末态 `ProxyEnable REG_DWORD 0x0`、无 `xmp1` 任务、无 `x-matrix/xray/sing-box` 进程 |
+
+### 设计理由
+
+- **路由表是唯一事实源**：`core/endpoints.rs` 的 `ROUTES: &[Route]` 同时被 `dispatch()` 和覆盖测试读，所以不会出现「测试绿但真路由没接」。路径就用 `ipc.rs` 里的函数名（`POST /engine/engine_start`），不转连字符、不复数化——名字一致才能用机器比对 98 条是否搬完。
+- **薄壳不碰签名**：22+2 条命令的名字、参数名、返回类型、`///` 文档一字未改，业务体搬进 `src-tauri/src/services/`。这样 P1 期间 Vue 版继续能用、`bindings.ts` 不漂移，而 core 拿到同一份业务代码——两套传输共享一份实现，是这次重写能「不重写业务」的前提。
+- **`Ctx` 的 state/proxy 是可选的**：不是每条命令都要窗口状态或代理守卫，缺了返回 `AppError::Internal` 而不是 panic；`Notifier` 在 core 侧是 `NoopNotifier`（这批命令原本零 `app.emit`，加 `AppHandle` 版就是死代码）。
+- **`NOT_ROUTED` 必须写理由**：`pick_engine_binary`（原生文件对话框）与 `engine_open_dir`（弹 Explorer）是**窗口进程的壳动作**，headless core 没有窗口可弹。留白名单而不是硬塞路由，避免为了凑数把 UI 语义塞进服务端。
+
+### 坑
+
+1. **PowerShell 5.1 会把原生命令参数里的双引号吃掉**：`curl --data-binary '{"kind":"xray"}'` 到 core 变成 `{kind:xray}`，报 `key must be a string at line 1 column 2`。改成把正文写进 `C:/p1/body.json` 再 `--data-binary '@C:/p1/body.json'`。
+2. **`Invoke-WebRequest` 在 5.1 上读不到 4xx/5xx 的正文**（`ErrorDetails` 与 `Response` 流都可能空），错误分支等于没法验。整条驱动改用 `curl.exe`（Server 2022 自带）+ `-w "\n%{http_code}"`，一次拿到正文与状态码。
+3. **我自己写脚本时把 `\b` 写成了真退格**：`'C:\p1\body.json'` 在生成脚本的那一层被当转义，落到盘上的是 `C:\p1` + 退格 + `ody.json`，curl 报 `Failed to open C:\p1ody.json`。凡是 Windows 路径，脚本里一律用正斜杠 `C:/p1/...`。
+4. **core 只按 `Content-Length` 读正文**：发 chunked 的客户端（.NET `PostAsJsonAsync` 就是这样）会得到「正文为空」。P0 已经因此栽过一次，这批验收脚本与将来的桌面客户端都必须发定长正文——这是通道的已知边界，记进 P2 的检查项。
+5. **`p1.txt` 是追加写的，`findstr === DONE` 会命中上一轮**：驱动一启动就先 `Set-Content` 清空日志，`run-p1.bat` 里也先 `del /q`，否则 runner 5 秒就「完成」，只收到半轮结果。
+6. **`run-p1.bat` 必须自己 `start` core**：第一次跑忘了，驱动等 120 次 `core.endpoint` 都没出现，日志只有一行 `FATAL core endpoint never appeared`——看起来像 core 起不来，其实是没人起它。
+
+### 一句实话
+
+23 次 POST 覆盖了本批全部新路由（含 6 条刻意打错的错误分支），P0 那 6 条 GET/POST 路由这一轮没有逐条重打（§66 已验，且本轮 `engine_apply`/`engine_start`/`engine_stop` 走的是新前缀）。**没验**：并发请求、`proxy_latency`/`proxy_speed` 的最长 5 秒同步占连接、以及「内核没跑」返回 500 `engine` 而不是 409 的语义问题（要加分体错误码就得同时改 `bindings.ts` 与前端，留到 P2 一起改）。批次 B/C/D 的 74 条命令同理，每批都要各自跑一遍这个脚本。

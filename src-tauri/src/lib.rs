@@ -9,6 +9,7 @@ mod engine;
 mod error;
 mod hotkeys;
 pub mod ipc;
+pub mod services;
 mod import;
 mod net;
 mod power;

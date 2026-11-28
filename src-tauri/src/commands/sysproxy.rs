@@ -8,12 +8,16 @@
 //! through [`crate::sysproxy::ProxyGuard`]). That is the same contract v2rayN
 //! and Clash Verge use, and the one place where the ownership question has an
 //! obvious answer.
+//!
+//! The bodies live in [`crate::services::sysproxy`]; these wrappers keep the
+//! Tauri signature (`State<Arc<ProxyGuard>>`) and nothing else.
 
 use std::sync::Arc;
 
 use tauri::State;
 
 use crate::error::AppResult;
+use crate::services::{sysproxy as svc, EmptyArgs};
 use crate::sysproxy::{ProxyGuard, SystemProxyStatus};
 
 type Guard<'a> = State<'a, Arc<ProxyGuard>>;
@@ -22,7 +26,7 @@ type Guard<'a> = State<'a, Arc<ProxyGuard>>;
 #[tauri::command]
 #[specta::specta]
 pub fn system_proxy_status(guard: Guard<'_>) -> AppResult<SystemProxyStatus> {
-    guard.status()
+    svc::system_proxy_status(guard.inner(), EmptyArgs {})
 }
 
 /// Restore whatever was configured before X-Matrix took over.
@@ -31,6 +35,5 @@ pub fn system_proxy_status(guard: Guard<'_>) -> AppResult<SystemProxyStatus> {
 #[tauri::command]
 #[specta::specta]
 pub fn system_proxy_disable(guard: Guard<'_>) -> AppResult<SystemProxyStatus> {
-    guard.disable()?;
-    guard.status()
+    svc::system_proxy_disable(guard.inner(), EmptyArgs {})
 }

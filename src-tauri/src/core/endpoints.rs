@@ -1,8 +1,14 @@
-//! The five routes the P0 UI needs, plus `POST /shutdown`.
+//! The routing table: the six P0 routes, plus one `POST /<module>/<command>`
+//! route per command whose body now lives in [`crate::services`].
 //!
 //! Every handler is a plain function over [`CoreContext`], so the routing table
 //! and the error envelope are testable without binding a socket. The server
 //! thread only parses HTTP, checks the token and hands the request here.
+//!
+//! Two commands are deliberately *not* here: `pick_engine_binary` (a native
+//! file dialog) and `engine_open_dir` (it opens Explorer). Both are shell
+//! actions on the machine that owns the window; a headless core has no window
+//! to show and no business popping one. They are named in [`NOT_ROUTED`].
 //!
 //! Error envelope (shared with the whole channel):
 //!
@@ -23,6 +29,9 @@ use crate::domain::node::Protocol;
 use crate::domain::Node;
 use crate::engine::{EngineKind, EngineStatus};
 use crate::error::{AppError, AppResult};
+use crate::services::engine as svc_engine;
+use crate::services::sysproxy as svc_sysproxy;
+use crate::services::{Ctx, EmptyArgs, NOOP_NOTIFIER};
 
 /// Check the token, then route. Authentication comes first on purpose: an
 /// unknown path without a token is still a 401, because a caller that has not
@@ -32,19 +41,213 @@ pub fn dispatch(ctx: &CoreContext, token: &str, request: &http::Request) -> http
         return failure(401, "unauthorized", "X-Core-Token 缺失或不匹配");
     }
 
-    match (request.method.as_str(), request.path.as_str()) {
-        ("GET", "/health") => health(),
-        ("GET", "/status") => status(ctx),
-        ("GET", "/nodes") => nodes(ctx),
-        ("POST", "/engine/start") => engine_start(ctx, request),
-        ("POST", "/engine/stop") => engine_stop(ctx),
-        ("POST", "/shutdown") => shutdown(ctx),
-        (method, path) => failure(
+    let route = ROUTES.iter().find(|route| {
+        route.method == request.method.as_str() && route.path == request.path.as_str()
+    });
+    match route {
+        Some(route) => (route.handler)(ctx, request),
+        None => failure(
             404,
             "not_found",
-            &format!("未知路由：{method} {path}"),
+            &format!("未知路由：{} {}", request.method, request.path),
         ),
     }
+}
+
+/// One row of the routing table.
+pub struct Route {
+    pub method: &'static str,
+    pub path: &'static str,
+    handler: Handler,
+}
+
+type Handler = fn(&CoreContext, &http::Request) -> http::Response;
+
+/// Commands that intentionally have no route, with the reason they do not.
+///
+/// The coverage test treats these as covered, so the list cannot grow silently:
+/// an entry only earns its place when the command is a shell action, not
+/// business.
+pub const NOT_ROUTED: &[(&str, &str)] = &[
+    (
+        "pick_engine_binary",
+        "Tauri 原生文件选择对话框：属于窗口进程，headless core 没有窗口可弹",
+    ),
+    (
+        "engine_open_dir",
+        "在所属机器上打开 Explorer：属于窗口进程的壳动作，headless core 不该弹窗",
+    ),
+];
+
+/// Everything the core answers, in one table so the coverage test has a single
+/// source of truth. The six P0 routes stay exactly as they were.
+pub const ROUTES: &[Route] = &[
+    Route { method: "GET", path: "/health", handler: h_health },
+    Route { method: "GET", path: "/status", handler: h_status },
+    Route { method: "GET", path: "/nodes", handler: h_nodes },
+    Route { method: "POST", path: "/engine/start", handler: h_legacy_engine_start },
+    Route { method: "POST", path: "/engine/stop", handler: h_legacy_engine_stop },
+    Route { method: "POST", path: "/shutdown", handler: h_shutdown },
+    Route { method: "POST", path: "/engine/engine_status", handler: r_engine_status },
+    Route { method: "POST", path: "/engine/engine_kinds", handler: r_engine_kinds },
+    Route { method: "POST", path: "/engine/engine_binaries", handler: r_engine_binaries },
+    Route { method: "POST", path: "/engine/engine_version", handler: r_engine_version },
+    Route { method: "POST", path: "/engine/engine_log_tail", handler: r_engine_log_tail },
+    Route { method: "POST", path: "/engine/engine_log_delta", handler: r_engine_log_delta },
+    Route { method: "POST", path: "/engine/engine_log_clear", handler: r_engine_log_clear },
+    Route { method: "POST", path: "/engine/proxy_latency", handler: r_proxy_latency },
+    Route { method: "POST", path: "/engine/proxy_speed", handler: r_proxy_speed },
+    Route { method: "POST", path: "/engine/group_delay", handler: r_group_delay },
+    Route { method: "POST", path: "/engine/node_delay", handler: r_node_delay },
+    Route { method: "POST", path: "/engine/close_connection", handler: r_close_connection },
+    Route { method: "POST", path: "/engine/close_connections", handler: r_close_connections },
+    Route { method: "POST", path: "/engine/engine_start", handler: r_engine_start },
+    Route { method: "POST", path: "/engine/engine_apply", handler: r_engine_apply },
+    Route { method: "POST", path: "/engine/engine_stop", handler: r_engine_stop },
+    Route { method: "POST", path: "/engine/traffic_sample", handler: r_traffic_sample },
+    Route { method: "POST", path: "/engine/traffic_history", handler: r_traffic_history },
+    Route { method: "POST", path: "/engine/traffic_clear_history", handler: r_traffic_clear_history },
+    Route { method: "POST", path: "/engine/engine_config_preview", handler: r_engine_config_preview },
+    Route { method: "POST", path: "/sysproxy/system_proxy_status", handler: r_system_proxy_status },
+    Route { method: "POST", path: "/sysproxy/system_proxy_disable", handler: r_system_proxy_disable },
+];
+
+/// The context a service function gets from the core.
+fn command_ctx(ctx: &CoreContext) -> Ctx<'_> {
+    Ctx {
+        state: Some(&ctx.state),
+        runtime: &ctx.runtime,
+        proxy: Some(&ctx.proxy),
+        notify: &NOOP_NOTIFIER,
+    }
+}
+
+/// Parse `body` into the command's argument struct, call the service, and turn
+/// either half into the shared envelope.
+///
+/// An empty body is `{}`, not an error: commands with no arguments are called
+/// with `POST` and nothing to say. A body that will not deserialize is a 400 —
+/// the caller sent the wrong shape, and retrying it unchanged will not help.
+fn handle<A, T>(command: &str, body: &str, run: impl FnOnce(A) -> AppResult<T>) -> http::Response
+where
+    A: serde::de::DeserializeOwned,
+    T: Serialize,
+{
+    let body = if body.trim().is_empty() { "{}" } else { body };
+    let args: A = match serde_json::from_str(body) {
+        Ok(args) => args,
+        Err(error) => {
+            return failure(
+                400,
+                "invalid_input",
+                &format!("{command}: 参数不合法：{error}"),
+            )
+        }
+    };
+    match run(args) {
+        Ok(value) => match serde_json::to_value(value) {
+            Ok(value) => http::Response::json(200, value),
+            Err(error) => failure(
+                500,
+                "internal",
+                &format!("{command}: 结果序列化失败：{error}"),
+            ),
+        },
+        Err(error) => from_error(&error),
+    }
+}
+
+/// Wire one service function into the table. The argument type is spelled out
+/// because it is also the wire contract: `camelCase` in the struct, `{}` for
+/// no arguments.
+macro_rules! ctx_route {
+    ($handler:ident, $command:literal, $args:ty, $run:path) => {
+        fn $handler(ctx: &CoreContext, request: &http::Request) -> http::Response {
+            let context = command_ctx(ctx);
+            handle($command, &request.body, |args: $args| $run(&context, args))
+        }
+    };
+}
+
+ctx_route!(r_engine_status, "engine_status", EmptyArgs, svc_engine::engine_status);
+ctx_route!(r_engine_binaries, "engine_binaries", EmptyArgs, svc_engine::engine_binaries);
+ctx_route!(r_engine_version, "engine_version", svc_engine::KindArgs, svc_engine::engine_version);
+ctx_route!(r_engine_log_tail, "engine_log_tail", svc_engine::LogTailArgs, svc_engine::engine_log_tail);
+ctx_route!(r_engine_log_delta, "engine_log_delta", svc_engine::LogDeltaArgs, svc_engine::engine_log_delta);
+ctx_route!(r_engine_log_clear, "engine_log_clear", svc_engine::KindArgs, svc_engine::engine_log_clear);
+ctx_route!(r_proxy_latency, "proxy_latency", EmptyArgs, svc_engine::proxy_latency);
+ctx_route!(r_proxy_speed, "proxy_speed", EmptyArgs, svc_engine::proxy_speed);
+ctx_route!(r_group_delay, "group_delay", svc_engine::IdArgs, svc_engine::group_delay);
+ctx_route!(r_node_delay, "node_delay", svc_engine::IdArgs, svc_engine::node_delay);
+ctx_route!(r_close_connection, "close_connection", svc_engine::IdArgs, svc_engine::close_connection);
+ctx_route!(r_close_connections, "close_connections", svc_engine::IdsArgs, svc_engine::close_connections);
+ctx_route!(r_engine_start, "engine_start", svc_engine::StartArgs, svc_engine::engine_start);
+ctx_route!(r_engine_apply, "engine_apply", svc_engine::StartArgs, svc_engine::engine_apply);
+ctx_route!(r_engine_stop, "engine_stop", EmptyArgs, svc_engine::engine_stop);
+ctx_route!(r_engine_config_preview, "engine_config_preview", svc_engine::PreviewArgs, svc_engine::engine_config_preview);
+
+/// No runtime in this command's signature: the list is compile-time, so it is
+/// served without a [`Ctx`].
+fn r_engine_kinds(_ctx: &CoreContext, request: &http::Request) -> http::Response {
+    handle("engine_kinds", &request.body, |args: EmptyArgs| {
+        svc_engine::engine_kinds(args)
+    })
+}
+
+/// The traffic commands use the traffic log, which is not part of the service
+/// bundle, so they are wired to the log they actually use.
+fn r_traffic_sample(ctx: &CoreContext, request: &http::Request) -> http::Response {
+    handle("traffic_sample", &request.body, |_: EmptyArgs| {
+        svc_engine::traffic_sample_now(&ctx.runtime, &ctx.traffic)
+    })
+}
+
+fn r_traffic_history(ctx: &CoreContext, request: &http::Request) -> http::Response {
+    handle("traffic_history", &request.body, |args: svc_engine::MinutesArgs| {
+        svc_engine::traffic_history(&ctx.traffic, args)
+    })
+}
+
+fn r_traffic_clear_history(ctx: &CoreContext, request: &http::Request) -> http::Response {
+    handle("traffic_clear_history", &request.body, |args: EmptyArgs| {
+        svc_engine::traffic_clear_history(&ctx.traffic, args)
+    })
+}
+
+fn r_system_proxy_status(ctx: &CoreContext, request: &http::Request) -> http::Response {
+    handle("system_proxy_status", &request.body, |args: EmptyArgs| {
+        svc_sysproxy::system_proxy_status(&ctx.proxy, args)
+    })
+}
+
+fn r_system_proxy_disable(ctx: &CoreContext, request: &http::Request) -> http::Response {
+    handle("system_proxy_disable", &request.body, |args: EmptyArgs| {
+        svc_sysproxy::system_proxy_disable(&ctx.proxy, args)
+    })
+}
+
+fn h_health(_ctx: &CoreContext, _request: &http::Request) -> http::Response {
+    health()
+}
+
+fn h_status(ctx: &CoreContext, _request: &http::Request) -> http::Response {
+    status(ctx)
+}
+
+fn h_nodes(ctx: &CoreContext, _request: &http::Request) -> http::Response {
+    nodes(ctx)
+}
+
+fn h_legacy_engine_start(ctx: &CoreContext, request: &http::Request) -> http::Response {
+    legacy_engine_start(ctx, request)
+}
+
+fn h_legacy_engine_stop(ctx: &CoreContext, _request: &http::Request) -> http::Response {
+    legacy_engine_stop(ctx)
+}
+
+fn h_shutdown(ctx: &CoreContext, _request: &http::Request) -> http::Response {
+    shutdown(ctx)
 }
 
 /// Turn a handler failure into the shared envelope. `NotFound` is a 404, bad
@@ -192,7 +395,7 @@ fn nodes(ctx: &CoreContext) -> http::Response {
 
 /// `POST /engine/start` — the same prepare/start path the Tauri command takes,
 /// so the headless core cannot drift from the window it will serve.
-fn engine_start(ctx: &CoreContext, request: &http::Request) -> http::Response {
+fn legacy_engine_start(ctx: &CoreContext, request: &http::Request) -> http::Response {
     let body: Value = match serde_json::from_str(&request.body) {
         Ok(value) => value,
         Err(error) => {
@@ -236,7 +439,7 @@ fn engine_start(ctx: &CoreContext, request: &http::Request) -> http::Response {
 /// `POST /engine/stop` — proxy back first, then the kernel, exactly the order
 /// [`crate::commands::engine::engine_stop`] uses: the machine must never point
 /// at a port that is already gone.
-fn engine_stop(ctx: &CoreContext) -> http::Response {
+fn legacy_engine_stop(ctx: &CoreContext) -> http::Response {
     if let Err(error) = ctx.proxy.disable() {
         return from_error(&error);
     }
@@ -303,8 +506,24 @@ mod tests {
     }
 
     fn context() -> CoreContext {
+        build_context(false)
+    }
+
+    /// A context that also knows one node, for the routes that resolve a node
+    /// before they can do anything (preview, start).
+    fn context_with_node() -> CoreContext {
+        build_context(true)
+    }
+
+    fn build_context(with_node: bool) -> CoreContext {
         let dir = temp_dir("routes");
         let state = AppState::load(Store::new(dir.join("store.json")));
+        if with_node {
+            state
+                .nodes
+                .write()
+                .push(node("n1", "测试节点", "example.com", 443));
+        }
         let runtime = Arc::new(EngineRuntime::new(
             dir.join("engines"),
             dir.join("configs"),
@@ -315,7 +534,36 @@ mod tests {
             dir.join("proxy-snapshot.json"),
             dir.join("x-matrix.pac"),
         ));
-        CoreContext::new(state, runtime, proxy)
+        let traffic = Arc::new(crate::engine::TrafficLog::new(dir.join("traffic.jsonl")));
+        CoreContext::new(state, runtime, proxy, traffic)
+    }
+
+    /// A context wired to the fake engine runtime: spawning, probing and port
+    /// binding are all injected, so no kernel process or listening socket is
+    /// created by these tests.
+    fn harness_context() -> CoreContext {
+        let seed = crate::engine::runtime::tests::harness(true, false);
+        let state = AppState::load(Store::new(seed.dir.join("store.json")));
+        state.nodes.write().push(crate::engine::runtime::tests::node());
+        // Default ports belong to a real user's session; the fake runtime never
+        // binds them, but `ensure_free` still refuses a port that is taken.
+        {
+            let mut settings = state.settings.write();
+            settings.mixed_port = free_port();
+            settings.api_port = free_port();
+        }
+        let proxy = Arc::new(ProxyGuard::new(
+            Box::new(OffProxy),
+            seed.dir.join("proxy-snapshot.json"),
+            seed.dir.join("x-matrix.pac"),
+        ));
+        let traffic = Arc::new(crate::engine::TrafficLog::new(seed.dir.join("traffic.jsonl")));
+        CoreContext::new(state, Arc::clone(&seed.runtime), proxy, traffic)
+    }
+
+    fn free_port() -> u16 {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.local_addr().unwrap().port()
     }
 
     fn node(id: &str, name: &str, server: &str, port: u16) -> Node {
@@ -493,6 +741,392 @@ mod tests {
     fn a_malformed_json_body_is_400_with_the_envelope() {
         let ctx = context();
         let response = dispatch(&ctx, TOKEN, &post("/engine/start", TOKEN, "{nope"));
+        assert_eq!(response.status, 400);
+        assert_eq!(body(&response)["error"]["code"], json!("invalid_input"));
+    }
+
+    // ------------------------------------------------------------------
+    // P1 batch A: every migrated command answers on
+    // `POST /<module>/<command_name>`.
+    //
+    // Coverage is progressive on purpose. The rewrite moves one command
+    // module per batch, so a route is only demanded for the modules named in
+    // `COVERED_MODULES`. Modules not named there are still pure-Tauri and are
+    // skipped, not silently "passed": when a later batch migrates one, its
+    // name is added below and this test starts failing until every command it
+    // registers owns a `ROUTES` row (or an explicit `NOT_ROUTED` entry with a
+    // reason). A red run is fixed by adding the missing routes — never by
+    // deleting a module name from the array.
+    // ------------------------------------------------------------------
+
+    const COVERED_MODULES: &[&str] = &["engine", "sysproxy"];
+
+    /// `(module, command)` for every `commands::<module>::<command>` in
+    /// `ipc.rs`. Read as text because that list is the registry the Tauri
+    /// layer really uses; a second hand-maintained list here would drift.
+    fn registered_commands(source: &str) -> Vec<(String, String)> {
+        let mut commands = Vec::new();
+        for line in source.lines() {
+            let Some(rest) = line.trim().strip_prefix("commands::") else {
+                continue;
+            };
+            let mut parts = rest.split("::");
+            let module = parts.next().unwrap_or("").trim();
+            let command = parts.next().unwrap_or("").trim_end_matches(',').trim();
+            if module.is_empty() || command.is_empty() {
+                continue;
+            }
+            commands.push((module.to_string(), command.to_string()));
+        }
+        commands
+    }
+
+    #[test]
+    fn every_ipc_command_has_a_route() {
+        let registered = registered_commands(include_str!("../ipc.rs"));
+        assert!(
+            registered.len() >= 24,
+            "解析 ipc.rs 只得到 {} 条命令，解析规则可能已过期",
+            registered.len()
+        );
+
+        // The whitelist must not outlive its commands: a stale entry would
+        // hide a missing route just as well as a fake pass.
+        for (command, reason) in NOT_ROUTED {
+            assert!(
+                !reason.trim().is_empty(),
+                "NOT_ROUTED 里的 {command} 必须写清为什么没有路由"
+            );
+            assert!(
+                registered.iter().any(|(_, name)| name == command),
+                "NOT_ROUTED 里的 {command} 不在 ipc.rs 的注册表中"
+            );
+        }
+
+        let mut checked = 0usize;
+        for (module, command) in &registered {
+            if !COVERED_MODULES.contains(&module.as_str()) {
+                continue;
+            }
+            checked += 1;
+            if NOT_ROUTED.iter().any(|(name, _)| name == command) {
+                continue;
+            }
+            let path = format!("/{module}/{command}");
+            assert!(
+                ROUTES
+                    .iter()
+                    .any(|route| route.method == "POST" && route.path == path),
+                "命令 {module}::{command} 已注册，但 POST {path} 没有路由：\
+                 在 ROUTES 里补一条，或（仅限壳动作）写进 NOT_ROUTED 并说明理由"
+            );
+        }
+        assert_eq!(
+            checked, 24,
+            "本批覆盖 engine 22 + sysproxy 2 = 24 条命令，实际检查 {checked} 条"
+        );
+    }
+
+    #[test]
+    fn no_two_routes_share_a_method_and_path() {
+        for (index, route) in ROUTES.iter().enumerate() {
+            for other in &ROUTES[index + 1..] {
+                assert!(
+                    !(route.method == other.method && route.path == other.path),
+                    "重复路由：{} {}",
+                    route.method,
+                    route.path
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn engine_status_route_answers_the_idle_status() {
+        let ctx = context();
+        let response = dispatch(&ctx, TOKEN, &post("/engine/engine_status", TOKEN, ""));
+        assert_eq!(response.status, 200, "{}", response.body);
+        let value = body(&response);
+        assert_eq!(value["running"], json!(false));
+        assert_eq!(value["kind"], Value::Null);
+    }
+
+    #[test]
+    fn engine_kinds_route_lists_both_kernels() {
+        let ctx = context();
+        let response = dispatch(&ctx, TOKEN, &post("/engine/engine_kinds", TOKEN, ""));
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert_eq!(body(&response), json!(["xray", "sing-box"]));
+    }
+
+    #[test]
+    fn engine_binaries_route_reports_paths_and_absence() {
+        let ctx = context();
+        let response = dispatch(&ctx, TOKEN, &post("/engine/engine_binaries", TOKEN, ""));
+        assert_eq!(response.status, 200, "{}", response.body);
+        let value = body(&response);
+        let list = value.as_array().unwrap();
+        assert_eq!(list.len(), 2);
+        for entry in list {
+            assert!(entry["path"].is_string());
+            assert_eq!(entry["present"], json!(false));
+        }
+    }
+
+    #[test]
+    fn engine_version_for_a_missing_binary_is_404() {
+        let ctx = context();
+        let response = dispatch(
+            &ctx,
+            TOKEN,
+            &post("/engine/engine_version", TOKEN, r#"{"kind":"xray"}"#),
+        );
+        assert_eq!(response.status, 404);
+        assert_eq!(body(&response)["error"]["code"], json!("not_found"));
+    }
+
+    #[test]
+    fn engine_log_tail_route_reads_an_empty_log() {
+        let ctx = context();
+        let response = dispatch(
+            &ctx,
+            TOKEN,
+            &post("/engine/engine_log_tail", TOKEN, r#"{"kind":"xray","lines":20}"#),
+        );
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert_eq!(body(&response), json!(""));
+    }
+
+    #[test]
+    fn engine_log_delta_route_returns_the_zero_delta() {
+        let ctx = context();
+        let response = dispatch(
+            &ctx,
+            TOKEN,
+            &post("/engine/engine_log_delta", TOKEN, r#"{"kind":"xray","since":0}"#),
+        );
+        assert_eq!(response.status, 200, "{}", response.body);
+        let value = body(&response);
+        assert_eq!(value["text"], json!(""));
+        assert_eq!(value["reset"], json!(false));
+    }
+
+    #[test]
+    fn engine_log_clear_route_is_ok_without_a_log_file() {
+        let ctx = context();
+        let response = dispatch(
+            &ctx,
+            TOKEN,
+            &post("/engine/engine_log_clear", TOKEN, r#"{"kind":"xray"}"#),
+        );
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert_eq!(body(&response), Value::Null);
+    }
+
+    #[test]
+    fn engine_config_preview_route_renders_for_a_known_node() {
+        let ctx = context_with_node();
+        let response = dispatch(
+            &ctx,
+            TOKEN,
+            &post(
+                "/engine/engine_config_preview",
+                TOKEN,
+                r#"{"kind":"xray","nodeId":"n1"}"#,
+            ),
+        );
+        assert_eq!(response.status, 200, "{}", response.body);
+        let rendered = body(&response);
+        let text = rendered.as_str().unwrap_or("");
+        assert!(text.contains("example.com"), "预览应包含节点服务器：{text}");
+    }
+
+    #[test]
+    fn proxy_latency_route_without_a_kernel_is_a_500_engine_error() {
+        let ctx = context();
+        let response = dispatch(&ctx, TOKEN, &post("/engine/proxy_latency", TOKEN, ""));
+        assert_eq!(response.status, 500);
+        assert_eq!(body(&response)["error"]["code"], json!("engine"));
+    }
+
+    #[test]
+    fn proxy_speed_route_without_a_kernel_is_a_500_engine_error() {
+        let ctx = context();
+        let response = dispatch(&ctx, TOKEN, &post("/engine/proxy_speed", TOKEN, ""));
+        assert_eq!(response.status, 500);
+        assert_eq!(body(&response)["error"]["code"], json!("engine"));
+    }
+
+    #[test]
+    fn close_connection_route_without_a_kernel_is_a_500_engine_error() {
+        let ctx = context();
+        let response = dispatch(
+            &ctx,
+            TOKEN,
+            &post("/engine/close_connection", TOKEN, r#"{"id":"c1"}"#),
+        );
+        assert_eq!(response.status, 500);
+        assert_eq!(body(&response)["error"]["code"], json!("engine"));
+    }
+
+    #[test]
+    fn close_connections_route_without_a_kernel_is_a_500_engine_error() {
+        let ctx = context();
+        let response = dispatch(
+            &ctx,
+            TOKEN,
+            &post("/engine/close_connections", TOKEN, r#"{"ids":["c1"]}"#),
+        );
+        assert_eq!(response.status, 500);
+        assert_eq!(body(&response)["error"]["code"], json!("engine"));
+    }
+
+    #[test]
+    fn group_delay_for_a_missing_group_is_404() {
+        let ctx = context();
+        let response = dispatch(
+            &ctx,
+            TOKEN,
+            &post("/engine/group_delay", TOKEN, r#"{"id":"missing"}"#),
+        );
+        assert_eq!(response.status, 404);
+        assert_eq!(body(&response)["error"]["code"], json!("not_found"));
+    }
+
+    #[test]
+    fn node_delay_for_a_missing_node_is_404() {
+        let ctx = context();
+        let response = dispatch(
+            &ctx,
+            TOKEN,
+            &post("/engine/node_delay", TOKEN, r#"{"id":"missing"}"#),
+        );
+        assert_eq!(response.status, 404);
+        assert_eq!(body(&response)["error"]["code"], json!("not_found"));
+    }
+
+    #[test]
+    fn traffic_sample_route_is_null_without_a_stats_channel() {
+        let ctx = context();
+        let response = dispatch(&ctx, TOKEN, &post("/engine/traffic_sample", TOKEN, ""));
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert_eq!(body(&response), Value::Null);
+    }
+
+    #[test]
+    fn traffic_history_route_starts_empty() {
+        let ctx = context();
+        let response = dispatch(
+            &ctx,
+            TOKEN,
+            &post("/engine/traffic_history", TOKEN, r#"{"minutes":10}"#),
+        );
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert_eq!(body(&response), json!([]));
+    }
+
+    #[test]
+    fn traffic_clear_history_route_answers_null() {
+        let ctx = context();
+        let response = dispatch(
+            &ctx,
+            TOKEN,
+            &post("/engine/traffic_clear_history", TOKEN, ""),
+        );
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert_eq!(body(&response), Value::Null);
+    }
+
+    #[test]
+    fn engine_start_and_stop_routes_drive_the_fake_runtime() {
+        let ctx = harness_context();
+        let start = dispatch(
+            &ctx,
+            TOKEN,
+            &post("/engine/engine_start", TOKEN, r#"{"kind":"xray","nodeId":"n1"}"#),
+        );
+        assert_eq!(start.status, 200, "{}", start.body);
+        assert_eq!(body(&start)["running"], json!(true));
+        assert_eq!(body(&start)["node_id"], json!("n1"));
+
+        let stop = dispatch(&ctx, TOKEN, &post("/engine/engine_stop", TOKEN, ""));
+        assert_eq!(stop.status, 200, "{}", stop.body);
+        assert_eq!(body(&stop)["running"], json!(false));
+        assert!(!ctx.runtime.status().running);
+    }
+
+    #[test]
+    fn engine_apply_route_starts_the_node() {
+        let ctx = harness_context();
+        let response = dispatch(
+            &ctx,
+            TOKEN,
+            &post("/engine/engine_apply", TOKEN, r#"{"kind":"xray","nodeId":"n1"}"#),
+        );
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert_eq!(body(&response)["running"], json!(true));
+        assert_eq!(ctx.runtime.status().node_id.as_deref(), Some("n1"));
+    }
+
+    #[test]
+    fn system_proxy_status_route_reports_inactive() {
+        let ctx = context();
+        let response = dispatch(
+            &ctx,
+            TOKEN,
+            &post("/sysproxy/system_proxy_status", TOKEN, ""),
+        );
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert_eq!(body(&response)["active"], json!(false));
+    }
+
+    #[test]
+    fn system_proxy_disable_route_is_idempotent() {
+        let ctx = context();
+        let response = dispatch(
+            &ctx,
+            TOKEN,
+            &post("/sysproxy/system_proxy_disable", TOKEN, ""),
+        );
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert_eq!(body(&response)["active"], json!(false));
+    }
+
+    #[test]
+    fn a_missing_kind_on_engine_log_tail_is_400() {
+        let ctx = context();
+        let response = dispatch(
+            &ctx,
+            TOKEN,
+            &post("/engine/engine_log_tail", TOKEN, r#"{"lines":10}"#),
+        );
+        assert_eq!(response.status, 400);
+        let value = body(&response);
+        assert_eq!(value["error"]["code"], json!("invalid_input"));
+        assert!(
+            value["error"]["message"]
+                .as_str()
+                .is_some_and(|text| text.contains("engine_log_tail")),
+            "消息应点名命令：{value:?}"
+        );
+    }
+
+    #[test]
+    fn ids_must_be_a_list_on_close_connections() {
+        let ctx = context();
+        let response = dispatch(
+            &ctx,
+            TOKEN,
+            &post("/engine/close_connections", TOKEN, r#"{"ids":"c1"}"#),
+        );
+        assert_eq!(response.status, 400);
+        assert_eq!(body(&response)["error"]["code"], json!("invalid_input"));
+    }
+
+    #[test]
+    fn a_non_object_body_is_400_even_for_a_no_arg_command() {
+        let ctx = context();
+        let response = dispatch(&ctx, TOKEN, &post("/engine/engine_status", TOKEN, "[1]"));
         assert_eq!(response.status, 400);
         assert_eq!(body(&response)["error"]["code"], json!("invalid_input"));
     }
