@@ -1,6 +1,9 @@
 using System.Collections.ObjectModel;
+using System.Runtime.InteropServices;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using Avalonia.Media;
 using XMatrix.Desktop.Models;
 using XMatrix.Desktop.Services;
@@ -59,6 +62,26 @@ public partial class MainWindow : Window
             {
                 Note(error);
             }
+
+            // The platform applies Width/Height asynchronously and lays the
+            // content out once at the old size. Measured: the right-aligned
+            // toolbar stayed outside the visible area after the shrink until a
+            // second layout pass ran. Settle again after the dust does.
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+            timer.Tick += (_, _) =>
+            {
+                timer.Stop();
+                try
+                {
+                    SettlePlacement();
+                    UpdateLayout();
+                }
+                catch (Exception error)
+                {
+                    Note(error);
+                }
+            };
+            timer.Start();
         };
     }
 
@@ -71,14 +94,23 @@ public partial class MainWindow : Window
     /// </summary>
     private bool FitsScreen()
     {
-        var screen = Screens.ScreenFromWindow(this) ?? Screens.Primary;
-        if (screen is null)
+        // Avalonia's Screen.WorkingArea lies on this box: it reports a
+        // 1920×1140 desktop while the real display is 1280×800 at 1.5×, so a
+        // 1120-wide window "fits" and gets pushed off the left edge — measured,
+        // the nav column sat at x = -42. Ask Win32 for the physical work area
+        // instead, shrink against that, and place the window inside it here;
+        // this is the only place that knows both units.
+        var host = Screens.ScreenFromWindow(this) ?? Screens.Primary;
+        var scale = host is null || host.Scaling <= 0 ? 1 : host.Scaling;
+
+        var work = WorkArea();
+        if (work.Width <= 0 || work.Height <= 0)
         {
             return true;
         }
-        var scale = screen.Scaling <= 0 ? 1 : screen.Scaling;
-        var maxWidth = screen.WorkingArea.Width / scale;
-        var maxHeight = screen.WorkingArea.Height / scale;
+
+        var maxWidth = work.Width / scale;
+        var maxHeight = work.Height / scale;
         MinWidth = Math.Min(MinWidth, maxWidth);
         MinHeight = Math.Min(MinHeight, maxHeight);
         if (Width > maxWidth)
@@ -89,7 +121,142 @@ public partial class MainWindow : Window
         {
             Height = Math.Max(MinHeight, maxHeight);
         }
+
+        var physicalWidth = (int)Math.Round(Width * scale);
+        var physicalHeight = (int)Math.Round(Height * scale);
+        Position = new PixelPoint(
+            work.X + Math.Max(0, (work.Width - physicalWidth) / 2),
+            work.Y + Math.Max(0, (work.Height - physicalHeight) / 2));
+        SettlePlacement();
         return Width <= maxWidth && Height <= maxHeight;
+    }
+
+    private const int SmCxScreen = 0;
+    private const int SmCyScreen = 1;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int GetSystemMetrics(int index);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool GetWindowRect(IntPtr handle, out NativeRect rect);
+
+    /// <summary>
+    /// Measured, not assumed. On the test box Avalonia's Scaling said 1.5 while
+    /// the window rendered 1 pixel per DIP, so Width x scale overshot the display
+    /// by 15 px: the right edge was cut at 844 and the nav sat at x = 0. Ask for
+    /// the real window rect and the real screen, then shrink and nudge until it
+    /// genuinely fits.
+    /// </summary>
+    private void SettlePlacement()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var handle = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+        var screenWidth = GetSystemMetrics(SmCxScreen);
+        var screenHeight = GetSystemMetrics(SmCyScreen);
+        if (handle == IntPtr.Zero || screenWidth <= 0 || screenHeight <= 0)
+        {
+            return;
+        }
+
+        // A shrunk window still measured its content at the old width on the
+        // test box (right-aligned toolbar off-screen). Maximizing hands both the
+        // size and the layout pass to Windows, which is what the design size
+        // assumes anyway on a display this small.
+        if (screenWidth < 1140 || screenHeight < 760)
+        {
+            if (WindowState != WindowState.Maximized)
+            {
+                WindowState = WindowState.Maximized;
+            }
+            return;
+        }
+
+        for (var pass = 0; pass < 3; pass++)
+        {
+            if (!GetWindowRect(handle, out var rect))
+            {
+                return;
+            }
+
+            // Compare the real rect against the real screen: a window can be
+            // narrower than the display and still hang off the right edge
+            // (measured 841 px wide at x = 9 on an 844 px screen).
+            var overRight = rect.Right - screenWidth;
+            var overBottom = rect.Bottom - screenHeight;
+            var underLeft = -rect.Left;
+            var underTop = -rect.Top;
+            if (overRight <= 0 && overBottom <= 0 && underLeft <= 0 && underTop <= 0)
+            {
+                return;
+            }
+
+            var width = rect.Right - rect.Left;
+            var height = rect.Bottom - rect.Top;
+            var dipWidth = Bounds.Width <= 1 ? width : Bounds.Width;
+            var dipHeight = Bounds.Height <= 1 ? height : Bounds.Height;
+            var factorX = width / dipWidth;
+            var factorY = height / dipHeight;
+
+            if (overRight > 0 && factorX > 0)
+            {
+                var target = Math.Max(320, Math.Floor(dipWidth - (overRight + 10) / factorX));
+                MinWidth = Math.Min(MinWidth, target);
+                Width = target;
+            }
+
+            if (overBottom > 0 && factorY > 0)
+            {
+                var target = Math.Max(240, Math.Floor(dipHeight - (overBottom + 10) / factorY));
+                MinHeight = Math.Min(MinHeight, target);
+                Height = target;
+            }
+
+            Position = new PixelPoint(
+                Math.Max(0, Position.X - Math.Max(0, underLeft)),
+                Math.Max(0, Position.Y - Math.Max(0, underTop)));
+            UpdateLayout();
+            Dispatcher.UIThread.RunJobs();
+        }
+    }
+
+    private const uint SpiGetWorkArea = 0x0030;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SystemParametersInfo(uint action, uint param, out NativeRect data, uint winIni);
+
+    /// <summary>
+    /// The physical work area, excluding the taskbar. Falls back to whatever
+    /// Avalonia thinks when the call is unavailable.
+    /// </summary>
+    private PixelRect WorkArea()
+    {
+        if (OperatingSystem.IsWindows()
+            && SystemParametersInfo(SpiGetWorkArea, 0, out var native, 0)
+            && native.Right > native.Left
+            && native.Bottom > native.Top)
+        {
+            return new PixelRect(
+                native.Left,
+                native.Top,
+                native.Right - native.Left,
+                native.Bottom - native.Top);
+        }
+
+        var screen = Screens.ScreenFromWindow(this) ?? Screens.Primary;
+        return screen?.WorkingArea ?? default;
     }
 
     /// <summary>

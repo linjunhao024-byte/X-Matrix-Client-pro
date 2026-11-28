@@ -290,6 +290,8 @@
 
 ### 0.22 P0 桌面壳（Avalonia）与 Rust core 通道（2026-11-28）
 
+**窗口定位补记（19:00）**：P0 判据 8 通过后我自己又跑了一遍整机验收，发现窗口压在屏幕外（UIA 给出的按钮横坐标是 `-42`）。改成实测：`SettlePlacement()` 用 `GetWindowRect` + `GetSystemMetrics(SM_CXSCREEN)` 回算要缩多少 DIP，最多三轮，屏幕小于设计尺寸（1120×720）时直接最大化。实测 `827×757 @ 10,17`（屏幕 `844×795`）、`D1/E1 converged: True`。这台机器上 Avalonia 的 `WorkingArea`（1920×1140@1.5）、`GetSystemMetrics`（1280×800）与截图（844×795）是三套不同的数字，所以只信量出来的矩形。残差：右沿仍可能压出 6–15 px（记 `docs/ISSUES.md` I-05），按钮 UIA `Invoke` 抛异常记 I-04；两件都留到 P2 的响应式布局解决。计数不变（Rust 564 / vitest 136 / i18n 873）。
+
 **为什么做**：用户在真人实测里提出「不要 Tauri 形式，要 Clash 那种原生控件的质感」，选定 Avalonia + Rust sidecar（`docs/REWRITE-PLAN.md`）。P1–P4 都要建在「界面能跟 core 说话」这条通道上，所以先把通道做出来并让它自证。
 
 **做了什么**：

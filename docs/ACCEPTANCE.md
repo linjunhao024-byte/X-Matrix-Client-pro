@@ -2360,3 +2360,31 @@ DOTNET_ROOT=D:\CODE.config\dotnet D:\CODE.config\dotnet\dotnet.exe \
 - 壳里 UIA 能看到 `NodeItem { Id = …, Name = … }` 这种调试串（`ItemsControl` 把对象 `ToString()` 挂成了 Name），P2 要压掉，否则读屏软件会念出类型名。
 - 自包含发布 101 MB / 219 文件，没有做单文件裁剪、没有签名、没有安装包；托盘、单实例、提权、深色主题都还没进 Avalonia 壳。
 - 判据 8 的两次成功是同一台机器、同一个账号、非 RDP 会话（`schtasks /it` 起的交互会话）。**RDP 里手动点**没验；真键盘也没验（与 §60 同一个口子）。
+
+### 补记（2026-11-28 19:00）：第 9 条「窗口必须落在屏幕内」
+
+判据 8 那次通过之后我自己又跑了一轮整机验收，才发现窗口本身压在了屏幕外：UIA 报出的按钮横坐标是负数（`btn 首页 rect -42,108`），截图里标题栏只剩 `trix` 三个字母。这条不修，判据 8 的「点得到」就只是自动化脚本碰巧点到了，人手在屏幕上找不到按钮。
+
+**验法**：`D:/tmp/shots/p0-acc3.sh`（`-Label` 给个名字）在云电脑上跑一遍六段：A core 通道（端点文件 / `/health` / `/nodes` / 401 / 404）→ B 窗口几何（`GetWindowRect` + `GetSystemMetrics` + 全量按钮坐标）→ C 四页导航并逐页截图 → D 窗内点「启动内核」后每秒轮询到 core 与注册表一致 → E 窗内点「停止内核」同样轮询 → F `/shutdown` 后核对端点文件消失、进程归零、代理复原。
+
+**判据与实测（`acc6`，2026-11-28 18:53）**：
+
+| # | 判据 | 实测 |
+|---|---|---|
+| 9.1 | 窗口矩形完整落在屏幕内 | `B1 window rect: 10,17 to 837,774 (827x757)`，`B2 screen: 844x795` |
+| 9.2 | 侧栏与页内按钮的坐标全为正、在屏幕内 | `首页 32,127` … `去节点页 269,298`；`启动内核` 点中的是 `686,149` |
+| 9.3 | 窗内启动 → 内核起来、代理被接管 | `D1 converged: True`，`xray#10076`，`ProxyEnable=1 ProxyServer=127.0.0.1:7890` |
+| 9.4 | 窗内停止 → 内核退出、代理复原 | `E1 converged: True`，内核空、`ProxyEnable=0` |
+| 9.5 | 退出后 core 归零、端点文件消失 | `F2 endpoint gone: True`、`F3 core processes left: 0`、`F5 kernels at exit: []` |
+
+**设计理由**：窗口定位不能靠推算。这台机器上 Avalonia 的 `Screen.WorkingArea` 报 `1920×1140 @1.5`、`GetSystemMetrics` 报 `1280×800`、而截图与 UIA 看到的是 `844×795`——三套数字互不相同，任何「按 96/120 DPI 换算应该放得下」的算式都会算错。所以 `desktop/XMatrix.Desktop/MainWindow.axaml.cs` 的 `SettlePlacement()` 改成量出来的结果说话：`GetWindowRect` 拿真实矩形、`GetSystemMetrics(SM_CXSCREEN)` 拿真实屏幕，按「右沿/下沿超出多少」回算要缩多少 DIP，最多三轮；屏幕比设计尺寸（1120×720）还小时直接 `WindowState = Maximized`，把尺寸与布局都交给 Windows。
+
+**坑**：
+
+1. **`GetWindowRect` 的两种写法只有一个能用**：PowerShell 里 `Add-Type -MemberDefinition` 的 `out RECT` 恒返回 `0,0 0x0`；C# 里用 `[DllImport]` + `[StructLayout(Sequential)]` 就正常。同一个 API，两种 P/Invoke 声明方式结果不同。
+2. **窗口宽度改变后内容不会自动重排一次**：`Width = target` 之后必须 `UpdateLayout()`（必要时再 500 ms 后补一次 `SettlePlacement()`），否则右对齐的工具栏还留在旧宽度上——截图上看起来像「按钮丢了」。
+3. **`D1 converged` 判据自己写错过两回**：`[bool]$Kernels` 里 `$Kernels` 是变量不是函数调用（恒 `$null` → 恒 False）；一次性 `-and` 长链在这版 PowerShell 里也不可靠。改成逐项 `$haveKernel / $isRunning / $proxyOn` 三个布尔再与，才对得上日志里已经成立的 `running=true proxy=1`。
+4. **截图文件名不要用中文**：`scp "…/acc-首页.png"` 在 cmd 语义下静默失败，回拉目录里什么都没有；改成 `acc-home/acc-subs/acc-settings/acc-nodes` 之后一次就到位（要中文名也行，用 `C:/...` 正斜杠并单独重拉）。
+5. **壳在后台启动时，第一次 `mouse_event` 只把窗口拉到前台**：必须先点一次页面（例如「订阅」→「节点」）再点真正的按钮，否则永远 `(no kernel yet)`，而且日志上看起来与「按钮没响应」一模一样。
+
+**一句实话**：窗口在 844 宽的这台虚拟桌面上右沿仍会压出去 6–15 px（记 I-05），按钮可靠 UIA 拿到、自动化点得中，但人手在屏幕最右侧可能看不到「启动内核」——这是 P2 响应式布局要解决的，不是 P0 的判据 8 能掩盖的。

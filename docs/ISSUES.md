@@ -49,3 +49,17 @@
 ## 待登记
 
 （用户后续实测发现的问题按 I-03、I-04 … 继续往下写。）
+
+## I-04 Avalonia 壳里的按钮不响应 UI Automation 的 Invoke
+
+- **现象**：`InvokePattern.Invoke()` 抛 `使用"0"个参数调用"Invoke"时发生异常`；`LegacyIAccessiblePattern.DoDefaultAction()` 不报错但什么也不做。按钮只能靠鼠标坐标点。
+- **影响**：读屏软件与自动化点不动「启动内核 / 停止内核 / 刷新」；鼠标正常。P0 验收脚本因此必须先点一次页面再点按钮（见 §66 坑 5）。
+- **出处**：`desktop/XMatrix.Desktop`（Avalonia 11.3.23），2026-11-28 在 cloudpc-test 上实测。
+- **状态**：未修。P2 做视图时优先改用 Avalonia 的 `AutomationProperties.AutomationId`，并确认 `Button` 的 peer 实现了 `IInvokeProvider`。
+
+## I-05 小屏（844×795 的注入桌面）上窗口右沿压出屏幕
+
+- **现象**：`SettlePlacement()` 已按实测矩形收缩（`827×757`，左沿 10），右沿仍到 837–850；`801` 以右的内容被屏幕切掉。
+- **影响**：人手在屏幕最右可能看不到「启动内核」；UIA 与鼠标自动化仍能点中（判据 8 的证据来自这里）。
+- **原因**：Avalonia 的 `Screen.WorkingArea`（1920×1140 @1.5）、`GetSystemMetrics`（1280×800）、截图实际（844×795）三套数字不一致，收缩量按哪一套算都会差几像素到十几像素。
+- **状态**：未修。P2 改响应式布局（`Grid` 的 `MinWidth` 随窗口走、工具栏换行）时一并解决，不做像素级修补。
