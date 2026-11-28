@@ -17,16 +17,16 @@
 
 | 项 | 值 |
 |---|---|
-| 代码 HEAD | 「feat(profiles): several configurations, one kernel at a time」，含 §59（S7 多配置）；前一条是「feat(tun): take over the machine at the adapter, and only when sing-box and admin can do it」（§58）；前一条是「feat(service): let a Windows service own the kernel, so it can run as SYSTEM」（§57）；再往前：§56（S4a 提权）、§54（S6，查 `src-tauri/src/engine/release.rs`/`net/webdav.rs`）、§53（S3，查 `src-tauri/src/engine/release.rs`）、§52（S9）、§51（S11）、§50（S10）、§49（S8）、`a794438`（§48）、`6fd790f`（§47） |
-| 未提交 | 无。§61（覆盖层 merge + 服务日志路径）的代码、构建、`docs/ACCEPTANCE.md` §61 都在同一次提交里（见 §0.17）；§61 的真机验收已补上（`61-merge-accept.sh m20`，判据 1–8 全过，9/10 仍未验） |
+| 代码 HEAD | 本简报这条 `feat(core)` 提交（§66 P0：`src-tauri/src/core/` + `desktop/XMatrix.Desktop`）；再往前是「feat(profiles): several configurations, one kernel at a time」，含 §59（S7 多配置）；前一条是「feat(tun): take over the machine at the adapter, and only when sing-box and admin can do it」（§58）；前一条是「feat(service): let a Windows service own the kernel, so it can run as SYSTEM」（§57）；再往前：§56（S4a 提权）、§54（S6，查 `src-tauri/src/engine/release.rs`/`net/webdav.rs`）、§53（S3，查 `src-tauri/src/engine/release.rs`）、§52（S9）、§51（S11）、§50（S10）、§49（S8）、`a794438`（§48）、`6fd790f`（§47） |
+| 未提交 | 无。P0（`src-tauri/src/core/`、`desktop/`、`P0-REPORT.md`、`docs/REWRITE-P0-TASK.md`）在「feat(core)」那一次提交里，见 §0.22 |
 | 上一版未提交清单（留档） | `src-tauri/src/domain/settings.rs`、`src-tauri/src/engine/{mod,render,runtime,xray}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§39 分片）；再上一版：`src-tauri/src/engine/{mod,runtime}.rs`、`src/services/bindings.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`（§37 统一提示）；再上一版：`src-tauri/src/commands/settings.rs`、`src-tauri/src/commands/sysproxy.rs`、`src/stores/sysproxy.ts`、`src/views/SettingsView.vue`、`src/i18n/{zh,en}.ts`、`scripts/i18n-pairs.json`、`docs/ACCEPTANCE.md`（§36 系统代理即时生效） |
 | 本文档 | 随 `docs: a handover map of what is done, what is half done, and what is next` 提交入库；之后每次收尾都跟着更新 |
 | IPC 命令 | **98**（`README.md:81`/`ARCHITECTURE.md:277` 已同步） |
-| Rust 单测 | **539 passed**（`ARCHITECTURE.md:278` 已同步） |
+| Rust 单测 | **564 passed**（`ARCHITECTURE.md:278` 已同步；P0 的 core 通道 +25 项） |
 | 前端检查 | `npm run check` 全绿：vue-tsc / architecture（70 文件）/ contract / vitest **136**（13 文件） |
 | i18n | **873** 键 × 3 份字典（简/繁/英，`scripts/i18n-pairs.json` → `python scripts/gen_i18n.py`） |
 | 桌面产物 | 桌面上的旧副本**已不存在**；产物是 `src-tauri/target/release/x-matrix.exe`（11,115,008 B @2026-11-26 15:27，md5 `2b48cd496cca5602f609be5c0d729e25`，含 §62 那处订阅刷新修复），以及安装包 `src-tauri/target/release/bundle/msi/X-Matrix_0.1.0_x64_en-US.msi`（5,156,864 B，md5 `5ded88e8bac04a0d706b446d6fc9916c`）与 `bundle/nsis/X-Matrix_0.1.0_x64-setup.exe`（3,587,292 B）——两个包都是同一次带 bundle 的构建产的，§62 的 E2E 就是用这个 MSI 验的 |
-| 验收文档 | `docs/ACCEPTANCE.md` §0–§65（§7 历史空缺，编号不连续但内容完整） |
+| 验收文档 | `docs/ACCEPTANCE.md` §0–§66（§7 历史空缺，编号不连续但内容完整；§66 是 Avalonia P0） |
 | 云电脑 | 干净：`ProxyEnable=0x0`、无 X-Matrix/sing-box/xray 进程、无 `xm*` 计划任务 |
 
 **下一步的确定顺序**（做完一条打一个勾，别跳）：
@@ -51,6 +51,7 @@
 - [x] 20. §59（S7）多配置：`store.json` v2（激活内联 + 非激活每份一个文件）+ 五条 profile 命令 + `ProfilesView` + 备份带全部配置 → 构建 → 云电脑 v1 升级/两向切换/云备份三段验收 → 写 §59 → 提交（2026-11-25 18:4x）
 - [x] 22. §61（代码缺口）覆盖层 merge + 服务日志路径：代码/门槛已过，真机待补（测试机掉线）
 - [x] 25. §64（关于页能力表）TUN 与内核更新从「不支持」翻成「支持」：`64-about-accept.sh about1`，UIA 文本 + 截图双证，865 键不变
+- [x] 27. §66（P0 Avalonia 壳 + Rust core 通道）`core.endpoint` + 六条路由 + `desktop/XMatrix.Desktop` 四项导航/节点页/启停；云电脑真点「启动内核」→ `xray#2424` + `ProxyEnable=1`；坑 1–4 是本项真正的收获（`os error 10035`、chunked 正文、连接复用、错误被刷新抹掉）。**旧产物仍然是 2026-11-27 22:13 那个（不含 P0，Vue 版行为没变）**
 - [x] 26. §65（缺内核提示条 + 启动查更新）新建 `src/services/kernelupdate.ts`（24h 闸、失败不落闸、开关先返回）+ 20 条 vitest；`65-accept.sh hint2` 8 次启动：提示条三按钮、关掉重启不再出现、`发现新内核 99.9.9` 只出现一次、镜像日志整个 run 只 1 个 `200`；`65-off.sh` 证开关 On→Off 并跨重启保持；vitest 136 / i18n 873
 - [x] 24. §63（长跑/压力）同一实例启停内核 20+40 轮：`0 失败`、无残留内核/代理、工作集 13.5–14.9 MB、句柄 512→527（未证泄漏）
 - [x] 23. §62（安装包 E2E）MSI 装/首启/订阅即拉节点/系统代理/卸载：`62-msi-e2e.sh e2e10`+`e2e11`，11 行判据全过（真下载内核、Win10/Win11、升级安装未验）
@@ -287,6 +288,22 @@
 
 ---
 
+### 0.22 P0 桌面壳（Avalonia）与 Rust core 通道（2026-11-28）
+
+**为什么做**：用户在真人实测里提出「不要 Tauri 形式，要 Clash 那种原生控件的质感」，选定 Avalonia + Rust sidecar（`docs/REWRITE-PLAN.md`）。P1–P4 都要建在「界面能跟 core 说话」这条通道上，所以先把通道做出来并让它自证。
+
+**做了什么**：
+
+- Rust：新 `src-tauri/src/core/{mod,http,endpoints,server}.rs`；`main.rs` 在 `run()` 前分流 `--serve`（也保留 `--export-contract`）。端点文件 `%APPDATA%\com.xmatrix.client\core.endpoint`（`{"port","token","pid"}`，tmp+rename），token 先验再路由（未知路径也 401），路由 `GET /health` `/status` `/nodes`、`POST /engine/start`（`{kind, nodeId}`）`/engine/stop` `POST /shutdown`。
+- Avalonia：新 `desktop/XMatrix.Desktop`（Avalonia 11.3.23 / net10.0），四项导航 + 节点页读 core 真数据 + 窗内启停内核 + 底部状态栏；`Services/CoreClient.cs` 管端点与 token。
+- 顺手修掉四个真缺陷（详细见 §66 坑 1–4）：Windows 上 `listener.set_nonblocking(true)` 被 accept 的 socket 继承（`os error 10035`）；`PostAsJsonAsync` 发 chunked 而 core 只按 `Content-Length` 读；`HttpClient` 连接复用写进正在关闭的 socket；错误行被 `/status` 刷新抹掉。
+
+**验收**：§66，八条判据全过（端点文件、`/health`、`/nodes`、401、`/shutdown`、壳读真数据、状态栏、窗内启停 → `xray#2424` + `ProxyEnable=1 ProxyServer=127.0.0.1:7890`）。**没验**：RDP 里手动点、真键盘、排水超时分支、其余 10 个视图（P2）。
+
+**计数**：IPC 98（Vue 版不变）、Rust **564**（+25）、vitest 136（不变）、i18n 873（不变）。
+
+---
+
 ## 1. 项目坐标与命令
 
 | 项 | 值 |
@@ -299,10 +316,10 @@
 | 后端测试 | `cd src-tauri && cargo test --lib` |
 | 契约重生成 | `npm run gen:contract`（改了命令签名就必须跑，`check:contract` 会拦） |
 | 桌面产物 | `/c/Users/83611/Desktop/X-Matrix.exe`、`/c/Users/83611/Desktop/X-Matrix_0.1.0_x64-setup.exe` |
-| 当前构建产物 | `src-tauri/target/release/x-matrix.exe` **11,116,544 B @2026-11-27 22:13，md5 `caffebb7bc58e891fdd572de27a3838a`**（含 §21–§65）；安装包同一次构建：MSI 5,156,864 B（md5 `aff0e4b5ffc18f39e83111eb2ce6f4c9`）、NSIS 3,589,171 B（md5 `218e660cc13b9a53478d824ea3af2791`） |
+| 当前构建产物 | Vue 版（Tauri，用户实测在用）：`src-tauri/target/release/x-matrix.exe` **11,116,544 B @2026-11-27 22:13，md5 `caffebb7bc58e891fdd572de27a3838a`**（含 §21–§65）；安装包同一次构建：MSI 5,156,864 B（md5 `aff0e4b5ffc18f39e83111eb2ce6f4c9`）、NSIS 3,589,171 B（md5 `218e660cc13b9a53478d824ea3af2791`）。P0 之后另有一个 core 构建：`x-matrix.exe` **10,816,512 B md5 `501aebe113cc9b8f20ed065b40f2f6c0`**（带 `--serve`），Avalonia 壳 `dotnet publish` 自包含 219 文件 / 101 MB（未打包、未签名） |
 
-**计数基线（改动后记得同步文档）**：命令 **98**、`cargo test --lib` **539**、vitest **136**（13 个文件）、i18n **873** 键。
-> `README.md:81` 与 `ARCHITECTURE.md:277-278` 已同步为 98 条命令 / 539 项测试。
+**计数基线（改动后记得同步文档）**：命令 **98**、`cargo test --lib` **564**、vitest **136**（13 个文件）、i18n **873** 键。
+> `README.md:81` 与 `ARCHITECTURE.md:277-278` 已同步为 98 条命令 / 564 项测试（P0 的 core 通道加了 25 项，`desktop/` 里的 C# 暂不计数）。
 
 命令数核算法：
 
@@ -355,7 +372,7 @@ awk '/collect_commands!/,/^];/' src-tauri/src/ipc.rs | grep -o "commands::[a-z_]
 
 ## 4. 已完成的功能与验收索引
 
-`docs/ACCEPTANCE.md` 是**唯一可信的进度表**（§0–§64 共 64 节，每节都有「验法 + 判据 + 设计理由 + 坑」）：
+`docs/ACCEPTANCE.md` 是**唯一可信的进度表**（§0–§66 共 66 节，每节都有「验法 + 判据 + 设计理由 + 坑」）：
 
 | 节 | 内容 |
 |---|---|

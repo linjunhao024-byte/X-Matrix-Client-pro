@@ -1,0 +1,4 @@
+# Avalonia shell: build output and the local breadcrumb log
+bin/
+obj/
+shell.log

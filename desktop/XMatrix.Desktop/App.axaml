@@ -1,0 +1,112 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="XMatrix.Desktop.App"
+             RequestedThemeVariant="Light">
+
+  <!-- Every value here is copied from `src/styles/tokens.css` (light theme).
+       The desktop window is a second renderer of the same design, so a colour
+       is changed there first and carried over, never invented here. -->
+  <Application.Resources>
+    <SolidColorBrush x:Key="BgBase" Color="#F2F3F8" />
+    <SolidColorBrush x:Key="SurfaceSolid" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="SurfaceSidebar" Color="#FBFBFD" />
+    <SolidColorBrush x:Key="SurfaceRaised" Color="#F4F5F8" />
+    <SolidColorBrush x:Key="SurfaceHover" Color="#EDEEF4" />
+    <SolidColorBrush x:Key="TextPrimary" Color="#14161C" />
+    <SolidColorBrush x:Key="TextSecondary" Color="#4B5263" />
+    <SolidColorBrush x:Key="TextTertiary" Color="#6B7280" />
+    <SolidColorBrush x:Key="Accent" Color="#5B5BD6" />
+    <SolidColorBrush x:Key="AccentHover" Color="#4A4AC4" />
+    <SolidColorBrush x:Key="AccentSoft" Color="#E9E9FB" />
+    <SolidColorBrush x:Key="Success" Color="#15803D" />
+    <SolidColorBrush x:Key="Warning" Color="#B45309" />
+    <SolidColorBrush x:Key="Danger" Color="#B91C1C" />
+    <SolidColorBrush x:Key="BorderSubtle" Color="#E8EAF0" />
+    <SolidColorBrush x:Key="BorderStrong" Color="#D5D9E2" />
+  </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme />
+
+    <!-- Navigation: flat rows, accent only on the active one. -->
+    <Style Selector="Button.nav">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="Padding" Value="14,0" />
+      <Setter Property="Height" Value="42" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Button.nav:pointerover">
+      <Setter Property="Background" Value="{StaticResource SurfaceHover}" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+    </Style>
+    <Style Selector="Button.nav.active">
+      <Setter Property="Background" Value="{StaticResource AccentSoft}" />
+      <Setter Property="Foreground" Value="{StaticResource Accent}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="{StaticResource Accent}" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="Height" Value="36" />
+      <Setter Property="Padding" Value="16,0" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Button.primary:pointerover">
+      <Setter Property="Background" Value="{StaticResource AccentHover}" />
+    </Style>
+    <Style Selector="Button.primary:disabled">
+      <Setter Property="Opacity" Value="0.45" />
+    </Style>
+
+    <Style Selector="Button.ghost">
+      <Setter Property="Background" Value="{StaticResource SurfaceSolid}" />
+      <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderSubtle}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Height" Value="36" />
+      <Setter Property="Padding" Value="14,0" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector="Button.ghost:pointerover">
+      <Setter Property="Background" Value="{StaticResource SurfaceRaised}" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+    </Style>
+
+    <!-- Rows: 42px, 10px corners, accent-soft selected. -->
+    <Style Selector="ListBoxItem">
+      <Setter Property="Padding" Value="14,8" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Margin" Value="0,0,0,6" />
+    </Style>
+    <Style Selector="ListBoxItem:pointerover">
+      <Setter Property="Background" Value="{StaticResource SurfaceHover}" />
+    </Style>
+    <Style Selector="ListBoxItem:selected">
+      <Setter Property="Background" Value="{StaticResource AccentSoft}" />
+    </Style>
+
+    <Style Selector="TextBlock.page-title">
+      <Setter Property="FontSize" Value="22" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+    </Style>
+    <Style Selector="TextBlock.section-title">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+    </Style>
+    <Style Selector="TextBlock.muted">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{StaticResource TextTertiary}" />
+    </Style>
+  </Application.Styles>
+</Application>

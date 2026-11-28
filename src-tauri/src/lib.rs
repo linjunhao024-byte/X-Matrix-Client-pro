@@ -1,4 +1,5 @@
 mod commands;
+pub mod core;
 mod diagnostics;
 mod documents;
 mod export;

@@ -84,3 +84,4 @@
 |---|---|---|---|
 | 2026-11-28 | 决策 | 用户选定 Avalonia + Rust sidecar；本文件建立 | — |
 | 2026-11-28 | 记账 | 实测问题 I-01（闪黑窗）、I-02（剪贴板权限气泡）、I-03（回首页再闪两次）登记在 `docs/ISSUES.md` | — |
+| 2026-11-28 | **P0 完成** | `x-matrix-core.exe --serve`：端点文件（tmp+rename）+ token 校验 + `/health` `/status` `/nodes` `/engine/start` `/engine/stop` `/shutdown`；Avalonia 壳（`desktop/XMatrix.Desktop`）四项导航 + 节点页读真数据 + 窗内启停内核；顺手挖出四个真缺陷（core 继承 `set_nonblocking`、`PostAsJsonAsync` 的 chunked 正文、`HttpClient` 连接复用、错误行被刷新抹掉） | §66 八条判据全过：`xray#2424` + `ProxyEnable=1 ProxyServer=127.0.0.1:7890` + `/status running=True`；停止后全复原。本机 `cargo test --lib` 564 / `npm run check` 136 |

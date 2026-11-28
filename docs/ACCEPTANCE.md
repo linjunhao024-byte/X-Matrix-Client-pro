@@ -2293,3 +2293,70 @@ bash /d/tmp/shots/64-about-accept.sh about1
 - 提示条与横幅只验了**简体中文**；英文/繁体只保证键存在、渲染没逐条看（与 §64 同一个口子）。
 - 「打开目录」按钮点了存在、点了不报错，但**没有验资源管理器真的弹到那个目录**——`explorer.exe` 在新会话里起来后很可能在别的桌面，UIA 也看不见它。
 - 关掉提示后的「不再烦」只验了同一次安装配置（`localStorage` 持久）；换用户、换机器不保证。
+
+## 66. P0 桌面壳（Avalonia）+ Rust core 通道：窗口里的「启动内核」真的把内核拉起来了（2026-11-28，云电脑 cloudpc-test）
+
+**为什么有这一节**：用户 2026-11-28 决定「按 Clash 的 UI 质感、用原生框架重写」，选定 **Avalonia + Rust sidecar**（`docs/REWRITE-PLAN.md`）。P0 的任务书是 `docs/REWRITE-P0-TASK.md`：Rust 侧多一个 `x-matrix-core.exe --serve` headless 通道（`/health` `/status` `/nodes` `/engine/start` `/engine/stop` `/shutdown`，回环 + token），Avalonia 侧一个能自证「它真的在跟 core 说话」的壳。这一节只证 P0 那 8 条判据，不证观感（P2 的事）。
+
+### 验法
+
+本机（两道门槛 + 两个构建）：
+
+```bash
+cd src-tauri && cargo test --lib              # 564 passed
+cd .. && npm run check                        # vitest 136（13 文件）
+cargo build --release --manifest-path src-tauri/Cargo.toml
+DOTNET_ROOT=D:\CODE.config\dotnet D:\CODE.config\dotnet\dotnet.exe \
+  publish desktop/XMatrix.Desktop -c Release -r win-x64 --self-contained true -o /d/tmp/p0pub
+```
+
+云电脑（`D:/tmp/shots/p0-accept.sh <label>` + `p0-e2e4.ps1`，另一份 `D:/tmp/shots/startclick.ps1` 专门点按钮）：
+
+1. tar 管道推 `C:\p0`（219 文件 / 101 MB），scp `x-matrix.exe`（core）与种子 `store-p0.json`（两节点、`system_proxy=true`、`mixed_port=7890`、`last_engine=xray`）。
+2. `schtasks /it` 起应用（会话 1 才有窗口）。
+3. core 侧：读 `%APPDATA%\com.xmatrix.client\core.endpoint`（`port/token/pid`），打 `/health`、`/nodes`、无 token 的 `/nodes`、`/shutdown`，再读端点文件是否消失。
+4. 窗口侧：UIA 读四项导航、节点行、状态栏；再**真鼠标点**「启动内核」「停止内核」，每一步查 `Get-Process xray,sing-box`、`/status`、注册表 `ProxyEnable/ProxyServer`、`Get-NetTCPConnection -LocalPort 7890`。
+5. 收尾 `cleanup.sh`，确认 `ProxyEnable=0x0`、无 `xm*` 计划任务。
+
+### 判据
+
+| # | 判据 | 结果 |
+|---|---|---|
+| 1 | `--serve` 不发窗口、只发端点文件 | ✅ 起 core 后 `MainWindowHandle=0`；端点 `port=1993 pid=9984 tokenLen=32`（每轮端口都不同：1069/12186/14436/14666/1993…） |
+| 2 | `/health` 回 `{"ok":true,"version":"0.1.0"}` | ✅ |
+| 3 | `/nodes` 回两节点且只含名字/协议/地址 | ✅ `[{"host":"8.134.34.136","id":"vless-18ea2e7eabfffa7c-0","name":"The-One-Line-in-US","port":10101,"protocol":"vless"},{…"香港-HK-02"…}]` |
+| 4 | 不带 token 一律 401（未知路径也是） | ✅ `dispatch()` 先验 token 再路由；`token_matches` 异或累加常数时间 |
+| 5 | `/shutdown` 先排水再删端点 | ✅ 返回 `{"ok":true}` 后 `endpoint gone: True`，代理复原 |
+| 6 | Avalonia 壳四项导航 + 节点页读 core 真实数据 | ✅ 文本 `core 已连接`、`2 个节点`、两行 `The-One-Line-in-US / 8.134.34.136:10101 / VLESS`、`香港-HK-02 / 203.0.113.7:8443 / VLESS` |
+| 7 | 底部状态栏显示内核与代理实况 | ✅ `内核：未运行 · 系统代理：关`、`127.0.0.1:1993 · pid 9984` |
+| 8 | 窗口里点「启动内核」→ 内核真起来 + 系统代理被接管；点「停止内核」→ 都退回去 | ✅ 点后 `xray#2424`、`ProxyEnable=1 ProxyServer=127.0.0.1:7890`、`/status running=True kind=xray node=The-One-Line-in-US pid=2424 mixed=7890`、`listener 7890: 2424`；点停止后内核空、`ProxyEnable=0 ProxyServer=` |
+
+产物：`src-tauri/target/release/x-matrix.exe` 10,816,512 B md5 `501aebe113cc9b8f20ed065b40f2f6c0`；`dotnet publish` 219 文件 / 101 MB（自包含，含 .NET 运行时）。
+
+### 设计理由
+
+- **core 与界面之间只走回环 HTTP/JSON**，不引 axum/hyper，手写的那一小段 HTTP/1.1 只做三件事：一行状态行、`Content-Length`、`Connection: close`。界面换框架（现在是 Avalonia，将来还可能换）时，协议不用动；协议越窄，换壳的成本越低。
+- **token 走文件不走命令行**：`core.endpoint` 只有当前用户可读，`{"port","token","pid"}` 用 `tmp` + rename 落盘。命令行参数会出现在别的进程的 `Get-CommandLine` 里，文件不会。
+- **先验 token 再路由**：未知路径也回 401，避免把「有哪些路由」这个信息泄露给本机上的其它进程。
+- **窗口先按屏幕收一次**：`FitsScreen()` 用 `WorkingArea / Scaling` 算 DIP 上限并压 `MinWidth/MinHeight`。云电脑 1920×1080@150%、实际可视 1280×800，按 1120×720 DIP 摆会有一个按钮在屏幕外——那不是审美问题，是「点不到」。
+- **失败要被看见**：`RunBusyAsync` 先 `RefreshAsync()` 再写错误行。反过来写会被 `/status` 那一次渲染立刻覆盖，用户看到的就是「点了没反应」——真机上确实如此，见坑 4。
+
+### 坑
+
+1. **Windows 上 `listener.set_nonblocking(true)` 会被 accept 出来的 socket 继承**。`read_request` 的 `stream.read()` 于是在数据还没到时返回 `WSAEWOULDBLOCK`（os error 10035），界面读到的是 500 正文 `无法立即完成一个非阻止性套接字操作。`。数据恰好在缓冲区时又能成功——所以 curl/PowerShell「多数时候是通的」，只有界面一直失败。修法：`handle_connection` 开头显式 `stream.set_nonblocking(false)`。这一条是本项目最像「玄学」的 bug，判据 3 之前的所有尝试都栽在它上面。
+2. **.NET 的 `PostAsJsonAsync` 发的是 chunked**（长度未知），而 core 只按 `Content-Length` 读正文 → 正文为空 → 400 `请求体不是合法 JSON：EOF while parsing a value at line 1 column 0`。修法：`JsonSerializer.Serialize` + `StringContent`（长度已知）。**「HTTP 能通」不等于「正文能通」**，这一次是通道本身在说谎。
+3. **HttpClient 会复用连接，而 core 一次连一个请求**。复用让它把第二个请求写到正在关闭的 socket 上，客户端看到 `Unable to read data from the transport connection: 你的主机中的软件中止了一个已建立的连接`。修法：客户端 `ConnectionClose = true` + 服务端写完 `shutdown(Write)`（让 FIN 先走，而不是直接 drop 触发 RST）。
+4. **错误行会被下一次刷新抹掉**：`catch` 里先写 `操作失败：…` 再 `await RefreshAsync()`，刷新按 `/status` 重画状态行 → 错误只活了 0 毫秒。真机上表现为「点了没反应、也没有报错」。修法：先刷新，再写错误。
+5. **XAML 里字符串中间的 `{...}` 不是转义**：`Text="系统代理状态：{StatusText} 在…"` 会把原文整句画出来。修法是把它写成一句正常的话，状态只从底部状态栏看。
+6. **`FitsScreen()` 抛异常会连带吞掉首次刷新**：`Opened += async` 里先 `try { FitsScreen() } catch` 再 `await RefreshAsync()`。原先是「尺寸修不好 → 首次读取也没发生」，表现为启动后节点列表空、点「刷新」才有——看起来像 core 没数据，其实是界面没读。
+7. **注入的鼠标点击第一次只激活窗口**：`schtasks` 起的壳在后台，第一次 `mouse_event` 落在非前台窗口上只把它拉到前台，按钮不响应。`startclick.ps1` 的顺序是「先点一次侧栏『订阅』→ 再点『节点』→ 再点『启动内核』」；单点一次按钮会得到 `clicked … (no kernel yet)` 而看不出原因。`SetForegroundWindow` + `GetForegroundWindow` 对得上也不够，必须真有一次点击。
+8. **Avalonia 的 `InvokePattern.Invoke()` 在这台机器上不可用**（PowerShell 里抛 `使用"0"个参数调用"Invoke"时发生异常`），而 `LegacyIAccessible.DoDefaultAction()` 也不报错但没效果。按钮只能靠坐标点；而 `GetWindowRect` 用 `Add-Type -MemberDefinition` 的 `out RECT` 会恒返回 `0,0 0x0`——坐标只能取 UIA 的 `BoundingRectangle`，这个窗口的 DIP 与物理像素恰好 1:1（`1135×757` 对 `1120×720`），所以这一步没有缩放问题。
+9. **accept 循环里的 `active` 计数**、`/shutdown` 排水 3 秒：如果客户端在排水窗口里写响应，会拿到 `{"ok":true}`；超出窗口才可能被切断。P0 没验「排水超时」那条分支。
+
+### 一句实话
+
+- P0 **只**做到「通道 + 四项导航 + 节点页 + 启停」。其余 10 个视图、托盘、单实例、提权、订阅/规则/日志/设置全都还在 Vue 版里；core 现在只有 6 条路由，P1 要把 98 条 IPC 一条条映射过来。
+- core 复用的是 Tauri 版的业务体（`commands::engine::prepare_start/start_engine`、`sysproxy`、`store`），但 `commands/` 里的函数仍然吃 `tauri::State`/`AppHandle`。P0 用 `CoreContext` 把状态拿出来，P1 还得把业务体从 Tauri 壳里彻底剥开——**现在两边不是一份代码，是一份代码的两个入口**。
+- 壳里 UIA 能看到 `NodeItem { Id = …, Name = … }` 这种调试串（`ItemsControl` 把对象 `ToString()` 挂成了 Name），P2 要压掉，否则读屏软件会念出类型名。
+- 自包含发布 101 MB / 219 文件，没有做单文件裁剪、没有签名、没有安装包；托盘、单实例、提权、深色主题都还没进 Avalonia 壳。
+- 判据 8 的两次成功是同一台机器、同一个账号、非 RDP 会话（`schtasks /it` 起的交互会话）。**RDP 里手动点**没验；真键盘也没验（与 §60 同一个口子）。

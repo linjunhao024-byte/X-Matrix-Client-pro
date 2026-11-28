@@ -9,8 +9,8 @@
 |---|---|
 | 仓库 / 工作区 | `D:\GitHub-Warehouse\X-Matrix-Client-Pro`（Tauri 2 + Vue 3 + TS） |
 | HEAD | 本简报这条 docs 提交；功能提交查 `git log --oneline -- <anchor>` 的第一条：§62 `src/views/SubscriptionsView.vue`、§61 `src-tauri/src/engine/merge.rs`、§60 `src-tauri/src/hotkeys.rs`、§59 `src-tauri/src/store.rs`、§58 `src-tauri/src/engine/singbox.rs`、§57 `src-tauri/src/service.rs`、§56 `src-tauri/src/elevate.rs`、§55 `src-tauri/src/power.rs`、§54 `src-tauri/src/net/webdav.rs`、§53 `src-tauri/src/engine/release.rs`、§52 `src-tauri/src/engine/groupwatch.rs`、§51 `src-tauri/src/sysproc.rs`、§50 `src/services/accent.ts`、§49（S8）、`a794438`（§48）、`6fd790f`（§47） |
-| 规模 | **98** 个 IPC 命令 / Rust 单测 **539** / vitest **136**（13 文件）/ i18n **873 键 × 3 语言** |
-| 验收 | `docs/ACCEPTANCE.md` 写到 **§62**，全部是云电脑真机点出来的（各节末尾的「一句实话」列着未验项）；§61 判据 1–8、§62 判据 11 行已过；仍未验的集中在 §56（真提权）、§57（SCM 1053 / icacls 失败 / 非管理员）、§58（非管理员拒绝 TUN）、§60（真实按键）、§62（真下载内核、Win10/Win11、升级安装） |
+| 规模 | **98** 个 IPC 命令（Vue 版）/ Rust 单测 **564** / vitest **136**（13 文件）/ i18n **873 键 × 3 语言**；Avalonia 壳（`desktop/XMatrix.Desktop`）走 `x-matrix-core.exe --serve`，6 条 HTTP 路由 |
+| 验收 | `docs/ACCEPTANCE.md` 写到 **§66**，全部是云电脑真机点出来的（各节末尾的「一句实话」列着未验项）；仍未验的集中在 §56（真提权）、§57（SCM 1053 / icacls 失败 / 非管理员）、§58（非管理员拒绝 TUN）、§60（真实按键）、§62（真下载内核、Win10/Win11、升级安装）、§66（RDP 里手动点、真键盘） |
 | 云电脑 | 可用（02:52 已恢复；03:0x 又闪断过一次，重连即通）。末态：`ProxyEnable=0x0`、无 `xm*`/`tunkill`/`xmlisten` 任务、无内核进程、`XMatrixKernel` 服务已卸载 |
 | 构建产物 | `src-tauri/target/release/x-matrix.exe`（11,115,008 B @2026-11-26 15:27，md5 `2b48cd496cca5602f609be5c0d729e25`，含 §62 的订阅刷新修复）；安装包同一次带 bundle 的构建：`bundle/msi/X-Matrix_0.1.0_x64_en-US.msi` 5,156,864 B（md5 `5ded88e8bac04a0d706b446d6fc9916c`）、`bundle/nsis/X-Matrix_0.1.0_x64-setup.exe` 3,587,292 B |
 | 目标 | 功能追平 V2RayN / Clash、二者互补，并把各功能之间**说得清、配合得上**（用户原话，长期有效） |
@@ -36,24 +36,21 @@ https_proxy=http://127.0.0.1:10808 git push origin main
 
 改 Rust 的 `#[tauri::command]` 签名后必须 `npm run gen:contract`；新增 i18n 键必须走 `scripts/i18n-pairs.json` + `python scripts/gen_i18n.py`（三份字典会一起生成）。
 
-## 3. 下一个任务：队列是空的（1、2、4 已完成；3 由用户自测）
+## 3. 下一个任务：P1（把 98 条 IPC 映射成 core 路由）
 
-用户 2026-11-26 的原话：「那就先做 1 和 2，3 我之后自己测试，4 你也可以在做完 1 和 2 之后做」。三项的落点：
+2026-11-28 用户改主意：**按 Clash 的 UI 质感、用原生框架重写**，选定 Avalonia + Rust sidecar。路线与判据在 `docs/REWRITE-PLAN.md`，P0 已完成（§66）。
 
-| 项 | 状态 | 证据 |
+| 阶段 | 状态 | 落点 |
 |---|---|---|
-| 1 服务日志回填 + merge 覆盖层 | ✅ 已做、已验 | `docs/ACCEPTANCE.md` §61；`src-tauri/src/engine/merge.rs`、`commands/profile.rs` 的 `profile_merge_set` |
-| 2 MSI 安装包 + 全新安装 E2E | ✅ 已做、已验 | §62；`D:\tmp\shots\62-msi-e2e.sh e2e10`/`e2e11`；E2E 抓出并修掉「新建订阅不拉节点」 |
-| 4 长跑/压力 | ✅ 已做、已验 | §63；`D:\tmp\shots\63-soak.ps1` + `63-soak-accept.sh`，20+40 轮 0 失败 |
-| 3 真键盘/UAC/真 WebDAV | ⏸ 用户自测 | 需要真实按键、真实管理员令牌、真实 WebDAV 服务器 |
-| 附：关于页能力表纠正 | ✅ 已做、已验 | §64；`64-about-accept.sh about1`；TUN 与内核在线更新两行从「不支持」翻绿 |
-| 附：缺内核提示条 + 启动查更新 | ✅ 已做、已验 | §65；`65-accept.sh hint2` + `65-off.sh`；24h 闸、只提示不自动换、开关真能关 |
+| P0 通道 + 骨架 | ✅ 已做、已验 | §66；`src-tauri/src/core/`、`desktop/XMatrix.Desktop` |
+| P1 98 条 IPC → HTTP 路由 | ⬜ 下一步 | 一条脚本逐条打通（含错误分支）；Rust 侧 564 测试必须仍全绿 |
+| P2 11 个视图迁到 Avalonia | ⬜ | 每页并排比对截图，不达标不算完成 |
+| P3 托盘/单实例/提权/主题/i18n | ⬜ | 规模见 `docs/REWRITE-PLAN.md` |
+| P4 按 §49–§66 重跑真机验收 | ⬜ | 全过之后才删 Vue 前端 |
 
-**§63 的结论（一句话）**：同一实例里走界面启停内核 60 轮，没有残留内核、没有残留系统代理、PID 不复用、工作集 13.5–14.9 MB 稳定；句柄 512–517 → 收敛 527（最大 533），只判到「60 轮内未证泄漏」，没到「证明不泄漏」。
+未提交的 Vue 版遗留问题（`docs/ISSUES.md`）：I-01 启动闪黑窗（两处缺 `CREATE_NO_WINDOW`：`src-tauri/src/engine/runtime.rs:1012`、`src-tauri/src/commands/kernel.rs:134`）、I-02 剪贴板权限气泡（`src/components/ImportDialog.vue:62` 换成已装的 `@tauri-apps/plugin-clipboard-manager`）、I-03 回首页再闪两次。这三条要么在 Vue 版修掉、要么随 P2 一起消失——**开工前先问用户走哪条**。
 
-**没有真节点也能压的东西已经压完了**（进程启停、端口重绑、内存/句柄、系统代理接管与还原、store 刷新）。压不出的仍是真网络层（RTT/抖动/丢包、TLS/QUIC、真订阅 URL、真 DNS/geoip）与真键盘/UAC——都在用户自测的第 3 项里。
-
-**开工前先问用户要做什么**，不要自己从候选表里挑：`docs/CANDIDATES-PLAN.md` 里 N4/N8 已在 §60 做完、其余条目逐条核查过（多为「已落地」），真正的下一批应该由用户指定。
+**注意**：P0–P2 期间 Tauri 版必须保持可构建、可安装（用户还在用它实测）；重写期间不再往 Vue 里加新功能。
 
 ## 4. 云电脑（真机验收的唯一场所）
 

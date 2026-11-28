@@ -1,0 +1,201 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:models="using:XMatrix.Desktop.Models"
+        x:Class="XMatrix.Desktop.MainWindow"
+        Title="X-Matrix"
+        Width="1120" Height="720"
+        MinWidth="960" MinHeight="640"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource BgBase}"
+        FontFamily="Segoe UI Variable Text, Microsoft YaHei UI, Segoe UI">
+
+  <Grid ColumnDefinitions="208,*">
+
+    <!-- Sidebar: 208px, the same width tokens.css declares. -->
+    <Border Grid.Column="0"
+            Background="{StaticResource SurfaceSidebar}"
+            BorderBrush="{StaticResource BorderSubtle}"
+            BorderThickness="0,0,1,0">
+      <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="16,20,16,16">
+
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="10" Margin="6,0,0,24">
+          <Border Width="12" Height="12" CornerRadius="6"
+                  Background="{StaticResource Accent}" VerticalAlignment="Center" />
+          <StackPanel Spacing="1">
+            <TextBlock Text="X-Matrix" FontSize="15" FontWeight="SemiBold"
+                       Foreground="{StaticResource TextPrimary}" />
+            <TextBlock Text="Client Pro" FontSize="11" Foreground="{StaticResource TextTertiary}" />
+          </StackPanel>
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" Spacing="4">
+          <Button x:Name="NavHome" Classes="nav" Content="首页" Tag="home" Click="OnNavClick" />
+          <Button x:Name="NavNodes" Classes="nav" Content="节点" Tag="nodes" Click="OnNavClick" />
+          <Button x:Name="NavSubscriptions" Classes="nav" Content="订阅" Tag="subscriptions" Click="OnNavClick" />
+          <Button x:Name="NavSettings" Classes="nav" Content="设置" Tag="settings" Click="OnNavClick" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="3" Spacing="6" Margin="6,0,0,0">
+          <TextBlock Text="P0 · 桌面壳" FontSize="11" Foreground="{StaticResource TextTertiary}" />
+          <TextBlock Text="core 独立运行" FontSize="11" Foreground="{StaticResource TextTertiary}" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- Main column: header, swappable page, status bar. -->
+    <Grid Grid.Column="1" RowDefinitions="Auto,*,Auto">
+
+      <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="24,20,24,16">
+        <StackPanel Spacing="3">
+          <TextBlock x:Name="PageTitle" Classes="page-title" Text="首页" />
+          <TextBlock x:Name="PageSubtitle" Classes="muted" Text="core 通道与节点页" />
+        </StackPanel>
+        <Border Grid.Column="1" x:Name="StatusPill" CornerRadius="999" Padding="12,6"
+                Background="{StaticResource AccentSoft}" VerticalAlignment="Center">
+          <TextBlock x:Name="StatusPillText" Text="未连接" FontSize="12"
+                     Foreground="{StaticResource Accent}" />
+        </Border>
+      </Grid>
+
+      <Grid x:Name="PageHost" Grid.Row="1" Margin="24,0,24,16">
+
+        <!-- HOME -->
+        <Grid x:Name="HomePage" RowDefinitions="Auto,*">
+          <StackPanel Spacing="12">
+            <Border Background="{StaticResource SurfaceSolid}" CornerRadius="14" Padding="20"
+                    BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1">
+              <StackPanel Spacing="14">
+                <TextBlock Text="P0 通道已就绪" Classes="section-title" />
+                <TextBlock Text="桌面端不再嵌在 Tauri 里：core 以独立进程运行，界面通过带 token 的 loopback 路由读取节点、启停内核。"
+                           FontSize="13" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" />
+                <Grid ColumnDefinitions="*,*">
+                  <StackPanel Spacing="2">
+                    <TextBlock Text="节点" Classes="muted" />
+                    <TextBlock x:Name="HomeNodeCount" Text="—" FontSize="26" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimary}" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Spacing="2">
+                    <TextBlock Text="内核" Classes="muted" />
+                    <TextBlock x:Name="HomeEngineText" Text="—" FontSize="18" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimary}" />
+                  </StackPanel>
+                </Grid>
+                <Button Classes="primary" Content="去节点页" Click="OnGoNodes" HorizontalAlignment="Left" />
+              </StackPanel>
+            </Border>
+            <TextBlock Text="系统代理状态在底部状态栏实时显示，这里不重复。"
+                       Classes="muted" TextWrapping="Wrap" />
+          </StackPanel>
+        </Grid>
+
+        <!-- NODES -->
+        <Grid x:Name="NodesPage" RowDefinitions="Auto,Auto,*" IsVisible="False">
+          <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+            <StackPanel Spacing="3">
+              <TextBlock Text="节点" Classes="section-title" />
+              <TextBlock Text="GET /nodes 的真实数据；列表只含名字、协议与地址，不含凭据。"
+                         Classes="muted" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+              <Button x:Name="RefreshButton" Classes="ghost" Content="刷新" Click="OnRefresh" />
+              <Button x:Name="StopButton" Classes="ghost" Content="停止内核" Click="OnStop" />
+              <Button x:Name="StartButton" Classes="primary" Content="启动内核" Click="OnStart" />
+            </StackPanel>
+          </Grid>
+
+          <Border Grid.Row="1" Background="{StaticResource SurfaceSolid}" CornerRadius="14"
+                  BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1"
+                  Padding="16" Margin="0,14,0,0">
+            <Grid ColumnDefinitions="Auto,*">
+              <TextBlock Text="启动使用选中节点，内核固定 Xray；P1 再开放引擎选择。"
+                         Classes="muted" VerticalAlignment="Center" />
+              <TextBlock x:Name="NodesHint" Grid.Column="1" Classes="muted"
+                         HorizontalAlignment="Right" VerticalAlignment="Center" Text="" />
+            </Grid>
+          </Border>
+
+          <Grid Grid.Row="2" Margin="0,12,0,0">
+            <ListBox x:Name="NodeList" Background="Transparent" BorderThickness="0"
+                     SelectionMode="Single" Padding="0">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="models:NodeItem">
+                  <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
+                    <Border Width="8" Height="8" CornerRadius="4"
+                            Background="{StaticResource Accent}" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1" Margin="12,0,0,0" Spacing="2">
+                      <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"
+                                 Foreground="{StaticResource TextPrimary}" />
+                      <TextBlock Text="{Binding Address}" FontSize="12"
+                                 Foreground="{StaticResource TextTertiary}" />
+                    </StackPanel>
+                    <Border Grid.Column="2" Background="{StaticResource SurfaceRaised}"
+                            CornerRadius="999" Padding="10,4" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding ProtocolLabel}" FontSize="11" FontWeight="SemiBold"
+                                 Foreground="{StaticResource TextSecondary}" />
+                    </Border>
+                  </Grid>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+            <TextBlock x:Name="EmptyNodes" Text="没有节点：先在 core 的 store.json 里放节点，再刷新。"
+                       Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center"
+                       IsVisible="False" />
+          </Grid>
+        </Grid>
+
+        <!-- SUBSCRIPTIONS -->
+        <Grid x:Name="SubscriptionsPage" RowDefinitions="Auto,*" IsVisible="False">
+          <StackPanel Spacing="3">
+            <TextBlock Text="订阅" Classes="section-title" />
+            <TextBlock Text="订阅管理仍在 Vue 端（P1 迁入桌面端），P0 只验证通道。" Classes="muted" />
+          </StackPanel>
+          <Border Grid.Row="1" Background="{StaticResource SurfaceSolid}" CornerRadius="14"
+                  BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1"
+                  Padding="24" Margin="0,14,0,0" VerticalAlignment="Top">
+            <TextBlock Text="P0 未实现。这里不放假开关。"
+                       FontSize="13" Foreground="{StaticResource TextSecondary}" />
+          </Border>
+        </Grid>
+
+        <!-- SETTINGS -->
+        <Grid x:Name="SettingsPage" RowDefinitions="Auto,*" IsVisible="False">
+          <StackPanel Spacing="3">
+            <TextBlock Text="设置" Classes="section-title" />
+            <TextBlock Text="只读地显示 core 是怎么连上的；真正的设置编辑在 P1。" Classes="muted" />
+          </StackPanel>
+          <Border Grid.Row="1" Background="{StaticResource SurfaceSolid}" CornerRadius="14"
+                  BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1"
+                  Padding="20" Margin="0,14,0,0" VerticalAlignment="Top">
+            <StackPanel Spacing="14">
+              <StackPanel Spacing="2">
+                <TextBlock Text="core 端点文件" Classes="muted" />
+                <TextBlock x:Name="SettingsEndpoint" Text="—" FontSize="13"
+                           Foreground="{StaticResource TextPrimary}" TextWrapping="Wrap" />
+              </StackPanel>
+              <StackPanel Spacing="2">
+                <TextBlock Text="启动方式" Classes="muted" />
+                <TextBlock Text="x-matrix.exe --serve --port 47100" FontSize="13"
+                           Foreground="{StaticResource TextPrimary}" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+        </Grid>
+      </Grid>
+
+      <!-- Status line: the one place the window tells the truth every tick. -->
+      <Border Grid.Row="2" Background="{StaticResource SurfaceSolid}"
+              BorderBrush="{StaticResource BorderSubtle}" BorderThickness="0,1,0,0"
+              Padding="24,10">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="{StaticResource TextTertiary}"
+                   VerticalAlignment="Center" />
+          <TextBlock x:Name="StatusText" Grid.Column="1" Margin="10,0,0,0"
+                     Text="正在查找 core…" FontSize="12"
+                     Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center" />
+          <TextBlock x:Name="EndpointText" Grid.Column="2" Text="" FontSize="11"
+                     Foreground="{StaticResource TextTertiary}" VerticalAlignment="Center" />
+        </Grid>
+      </Border>
+    </Grid>
+  </Grid>
+</Window>
