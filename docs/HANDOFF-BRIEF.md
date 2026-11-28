@@ -1,7 +1,7 @@
 # 新窗口开工简报（X-Matrix Client Pro）
 
 > 写于 2026-11-27 17:0x（§64 这一版：S1–S14 全部完成并真机验收；用户点名的 1/2/4 都做完；「关于」页 TUN 与内核更新两行从「不支持」纠正为「支持」；只剩用户自测的第 3 项，队列是空的）
-> 长文档：`docs/HANDOVER.md`（地图、候选表、云电脑手册）、`docs/ACCEPTANCE.md`（每条功能的判据与踩坑）、`docs/PARITY-PLAN.md`（S1–S14 计划与进度表）、`docs/CANDIDATES-PLAN.md`（两张候选表逐条核查的结论）、`docs/ISSUES.md`（真人实测发现的问题台账，I-01…）。
+> 长文档：`docs/HANDOVER.md`（地图、候选表、云电脑手册）、`docs/ACCEPTANCE.md`（每条功能的判据与踩坑）、`docs/PARITY-PLAN.md`（S1–S14 计划与进度表）、`docs/CANDIDATES-PLAN.md`（两张候选表逐条核查的结论）、`docs/ISSUES.md`（真人实测发现的问题台账，I-01…）、`docs/REWRITE-PLAN.md`（转向 Avalonia + Rust sidecar 的路线与判据）。
 
 ## 1. 三十秒现状
 
